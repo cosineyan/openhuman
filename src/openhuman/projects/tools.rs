@@ -393,7 +393,7 @@ mod tests {
         let result = tool.execute(json!({})).await.unwrap();
         assert!(!result.is_error, "expected success, got: {}", result.output());
         // Should be a JSON array of bucket-with-tasks
-        let arr: serde_json::Value = serde_json::from_str(result.output()).unwrap();
+        let arr: serde_json::Value = serde_json::from_str(&result.output()).unwrap();
         assert!(arr.is_array());
     }
 
@@ -440,7 +440,7 @@ mod tests {
             .unwrap();
         assert!(!result.is_error, "create failed: {}", result.output());
 
-        let task: serde_json::Value = serde_json::from_str(result.output()).unwrap();
+        let task: serde_json::Value = serde_json::from_str(&result.output()).unwrap();
         let task_id = task["id"].as_str().unwrap();
         let bucket_id = task["bucket_id"].as_str().unwrap();
 
@@ -469,7 +469,7 @@ mod tests {
             .await
             .unwrap();
         assert!(!result.is_error);
-        let task: serde_json::Value = serde_json::from_str(result.output()).unwrap();
+        let task: serde_json::Value = serde_json::from_str(&result.output()).unwrap();
         let task_id = task["id"].as_str().unwrap();
 
         // No done bucket exists by default → expect a clear error
