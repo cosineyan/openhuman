@@ -187,7 +187,11 @@ impl EventMapper {
                 self.blocks.insert(
                     index,
                     BlockState {
-                        kind: if is_mcp { BlockKind::Tool } else { BlockKind::CcBuiltin },
+                        kind: if is_mcp {
+                            BlockKind::Tool
+                        } else {
+                            BlockKind::CcBuiltin
+                        },
                         call_id: Some(call_id.clone()),
                         tool_name: Some(tool_name.clone()),
                         text_accum: String::new(),

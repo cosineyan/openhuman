@@ -24,9 +24,11 @@ pub fn build_stdin(messages: &[ChatMessage], is_new_session: bool) -> Vec<u8> {
         // The CC CLI requires the first message to have role "user"; an
         // opening assistant greeting (e.g. the agent's welcome message)
         // causes exit(1) with "Expected message role 'user', got 'assistant'".
-        let filtered: Vec<&ChatMessage> =
-            messages.iter().filter(|m| m.role != "system").collect();
-        let first_user = filtered.iter().position(|m| m.role == "user").unwrap_or(filtered.len());
+        let filtered: Vec<&ChatMessage> = messages.iter().filter(|m| m.role != "system").collect();
+        let first_user = filtered
+            .iter()
+            .position(|m| m.role == "user")
+            .unwrap_or(filtered.len());
         filtered[first_user..].to_vec()
     } else {
         // Resume: only the trailing user turn matters.

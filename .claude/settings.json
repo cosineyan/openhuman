@@ -49,7 +49,10 @@
       "Read(//Users/i517429/Documents/src/openai/vikunja/pkg/**)",
       "Bash(sed -n '39,100p' /Users/i517429/Documents/src/openai/vikunja/pkg/models/project.go)",
       "Bash(sed -n '63,160p' /Users/i517429/Documents/src/openai/vikunja/pkg/models/tasks.go)",
-      "Bash(git remote *)"
+      "Bash(git remote *)",
+      "Bash(git push *)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ]
   }
 }

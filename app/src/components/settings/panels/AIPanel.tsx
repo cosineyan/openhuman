@@ -2489,115 +2489,113 @@ const GlobalOwnModelSelector = ({
 
       <>
         <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-stone-700 dark:text-neutral-200">
-                {t('settings.ai.globalModel.provider')}
-              </label>
-              <select
-                value={
-                  source
-                    ? `${source.kind}:${source.kind === 'cloud' ? source.providerSlug : ''}`
-                    : ''
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-stone-700 dark:text-neutral-200">
+              {t('settings.ai.globalModel.provider')}
+            </label>
+            <select
+              value={
+                source ? `${source.kind}:${source.kind === 'cloud' ? source.providerSlug : ''}` : ''
+              }
+              onChange={e => {
+                const colonIdx = e.target.value.indexOf(':');
+                const kind = e.target.value.slice(0, colonIdx);
+                const slug = e.target.value.slice(colonIdx + 1);
+                if (kind === 'local') {
+                  const nextSource = { kind: 'local' } as const;
+                  const nextModel = localModels[0]?.id ?? '';
+                  setSource(nextSource);
+                  setModel(nextModel);
+                } else if (kind === 'claude-code') {
+                  setSource({ kind: 'claude-code' });
+                  setModel(CLAUDE_CODE_DEFAULT_MODEL);
+                } else {
+                  const nextSource = { kind: 'cloud', providerSlug: slug } as const;
+                  setSource(nextSource);
+                  setModel('');
                 }
-                onChange={e => {
-                  const colonIdx = e.target.value.indexOf(':');
-                  const kind = e.target.value.slice(0, colonIdx);
-                  const slug = e.target.value.slice(colonIdx + 1);
-                  if (kind === 'local') {
-                    const nextSource = { kind: 'local' } as const;
-                    const nextModel = localModels[0]?.id ?? '';
-                    setSource(nextSource);
-                    setModel(nextModel);
-                  } else if (kind === 'claude-code') {
-                    setSource({ kind: 'claude-code' });
-                    setModel(CLAUDE_CODE_DEFAULT_MODEL);
-                  } else {
-                    const nextSource = { kind: 'cloud', providerSlug: slug } as const;
-                    setSource(nextSource);
-                    setModel('');
-                  }
-                }}
+              }}
+              className="w-full rounded-lg border border-stone-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100">
+              {customCloud.map(p => (
+                <option key={p.slug} value={`cloud:${p.slug}`}>
+                  {p.label}
+                </option>
+              ))}
+              {localAvailable ? (
+                <option value="local:">{t('settings.ai.provider.ollama')}</option>
+              ) : null}
+              <option value="claude-code:">Claude Code CLI</option>
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-stone-700 dark:text-neutral-200">
+              {t('settings.ai.globalModel.model')}
+            </label>
+            {source?.kind === 'local' ? (
+              <select
+                value={model}
+                onChange={e => setModel(e.target.value)}
                 className="w-full rounded-lg border border-stone-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100">
-                {customCloud.map(p => (
-                  <option key={p.slug} value={`cloud:${p.slug}`}>
-                    {p.label}
+                {localModels.map(m => (
+                  <option key={m.id} value={m.id}>
+                    {m.id}
                   </option>
                 ))}
-                {localAvailable ? (
-                  <option value="local:">{t('settings.ai.provider.ollama')}</option>
-                ) : null}
-                <option value="claude-code:">Claude Code CLI</option>
               </select>
-            </div>
+            ) : source?.kind === 'claude-code' ? (
+              <input
+                value={model}
+                onChange={e => setModel(e.target.value)}
+                placeholder={CLAUDE_CODE_DEFAULT_MODEL}
+                className="w-full rounded-lg border border-stone-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100"
+              />
+            ) : cloudModels.length > 0 ? (
+              <select
+                value={model}
+                onChange={e => setModel(e.target.value)}
+                className="w-full rounded-lg border border-stone-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100">
+                {cloudModels.map(m => (
+                  <option key={m.id} value={m.id}>
+                    {m.id}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                value={model}
+                onChange={e => setModel(e.target.value)}
+                placeholder={
+                  cloudModelsLoading
+                    ? t('settings.ai.globalModel.loadingModels')
+                    : t('settings.ai.globalModel.enterModelId')
+                }
+                className="w-full rounded-lg border border-stone-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100"
+              />
+            )}
+            {cloudModelsError ? (
+              <div className="text-xs text-coral-700 dark:text-coral-300">{cloudModelsError}</div>
+            ) : null}
+          </div>
+        </div>
+        <div className="rounded-lg bg-stone-50 dark:bg-neutral-800/60 px-3 py-2 text-xs text-stone-500 dark:text-neutral-400">
+          {t('settings.ai.globalModel.appliesToAll')}
+        </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-stone-700 dark:text-neutral-200">
-                {t('settings.ai.globalModel.model')}
-              </label>
-              {source?.kind === 'local' ? (
-                <select
-                  value={model}
-                  onChange={e => setModel(e.target.value)}
-                  className="w-full rounded-lg border border-stone-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100">
-                  {localModels.map(m => (
-                    <option key={m.id} value={m.id}>
-                      {m.id}
-                    </option>
-                  ))}
-                </select>
-              ) : source?.kind === 'claude-code' ? (
-                <input
-                  value={model}
-                  onChange={e => setModel(e.target.value)}
-                  placeholder={CLAUDE_CODE_DEFAULT_MODEL}
-                  className="w-full rounded-lg border border-stone-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100"
-                />
-              ) : cloudModels.length > 0 ? (
-                <select
-                  value={model}
-                  onChange={e => setModel(e.target.value)}
-                  className="w-full rounded-lg border border-stone-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100">
-                  {cloudModels.map(m => (
-                    <option key={m.id} value={m.id}>
-                      {m.id}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  value={model}
-                  onChange={e => setModel(e.target.value)}
-                  placeholder={
-                    cloudModelsLoading
-                      ? t('settings.ai.globalModel.loadingModels')
-                      : t('settings.ai.globalModel.enterModelId')
-                  }
-                  className="w-full rounded-lg border border-stone-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100"
-                />
-              )}
-              {cloudModelsError ? (
-                <div className="text-xs text-coral-700 dark:text-coral-300">{cloudModelsError}</div>
-              ) : null}
-            </div>
-          </div>
-          <div className="rounded-lg bg-stone-50 dark:bg-neutral-800/60 px-3 py-2 text-xs text-stone-500 dark:text-neutral-400">
-            {t('settings.ai.globalModel.appliesToAll')}
-          </div>
-
-          <div className="flex justify-end">
-            <button
-              type="button"
-              disabled={!canApply || saving || isSaved}
-              onClick={() => void applySelection(source, model)}
-              className="rounded-lg bg-primary-500 px-3 py-2 text-xs font-medium text-white hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50">
-              {saving
-                ? t('settings.ai.globalModel.saving')
-                : isSaved
-                  ? t('settings.ai.globalModel.saved')
-                  : t('common.save')}
-            </button>
-          </div>
-        </>
+        <div className="flex justify-end">
+          <button
+            type="button"
+            disabled={!canApply || saving || isSaved}
+            onClick={() => void applySelection(source, model)}
+            className="rounded-lg bg-primary-500 px-3 py-2 text-xs font-medium text-white hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50">
+            {saving
+              ? t('settings.ai.globalModel.saving')
+              : isSaved
+                ? t('settings.ai.globalModel.saved')
+                : t('common.save')}
+          </button>
+        </div>
+      </>
     </div>
   );
 };
