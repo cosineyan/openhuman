@@ -200,6 +200,10 @@ pub fn all_tools_with_runtime(
         Box::new(CronUpdateTool::new(config.clone(), security.clone())),
         Box::new(CronRunTool::new(config.clone())),
         Box::new(CronRunsTool::new(config.clone())),
+        Box::new(crate::openhuman::projects::tools::ProjectsListTool::new(config.clone())),
+        Box::new(crate::openhuman::projects::tools::ProjectsCreateTaskTool::new(config.clone())),
+        Box::new(crate::openhuman::projects::tools::ProjectsMoveTaskTool::new(config.clone())),
+        Box::new(crate::openhuman::projects::tools::ProjectsCompleteTaskTool::new(config.clone())),
         // Wallet tools — expose wallet operations to the agent tool-call pipeline
         // so the crypto sub-agent can prepare transfers, check status, etc.
         Box::new(WalletStatusTool::new()),

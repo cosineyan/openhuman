@@ -2,7 +2,7 @@ mod ops;
 mod schemas;
 pub(crate) mod store;
 mod types;
-pub mod tools; // placeholder — Task 4 fills this in
+pub mod tools;
 
 pub use ops::{
     create_task, delete_task, get_board, move_task, update_bucket, update_task,
@@ -11,6 +11,9 @@ pub use ops::{
 pub use schemas::{
     all_controller_schemas as all_projects_controller_schemas,
     all_registered_controllers as all_projects_registered_controllers,
+};
+pub use tools::{
+    ProjectsCompleteTaskTool, ProjectsCreateTaskTool, ProjectsListTool, ProjectsMoveTaskTool,
 };
 pub use types::{Bucket, BucketPatch, Project, Task, TaskPatch};
 pub(crate) use store::{
