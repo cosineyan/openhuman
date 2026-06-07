@@ -71,6 +71,9 @@ pub fn with_connection<T>(config: &Config, f: impl FnOnce(&Connection) -> Result
     conn.execute_batch(SCHEMA)
         .context("Failed to initialize projects schema")?;
 
+    add_column_if_missing(&conn, "project_tasks", "assignee", "TEXT")?;
+    add_column_if_missing(&conn, "project_tasks", "ai_plan", "TEXT")?;
+
     f(&conn)
 }
 
@@ -129,8 +132,8 @@ fn row_to_task(row: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
         hex_color: row.get(9)?,
         position: row.get(10)?,
         index: row.get(11)?,
-        assignee: None,
-        ai_plan: None,
+        assignee: row.get(14)?,
+        ai_plan: row.get(15)?,
         created: parse_rfc3339(&created_raw).map_err(sql_err)?,
         updated: parse_rfc3339(&updated_raw).map_err(sql_err)?,
     })
@@ -306,7 +309,8 @@ pub fn list_tasks(
             let mut stmt = conn.prepare(
                 "SELECT id, project_id, bucket_id, title, description,
                         done, done_at, priority, due_date, hex_color,
-                        position, idx, created, updated
+                        position, idx, created, updated,
+                        assignee, ai_plan
                  FROM project_tasks
                  WHERE project_id = ?1 AND bucket_id = ?2
                  ORDER BY position ASC",
@@ -319,7 +323,8 @@ pub fn list_tasks(
             let mut stmt = conn.prepare(
                 "SELECT id, project_id, bucket_id, title, description,
                         done, done_at, priority, due_date, hex_color,
-                        position, idx, created, updated
+                        position, idx, created, updated,
+                        assignee, ai_plan
                  FROM project_tasks
                  WHERE project_id = ?1
                  ORDER BY position ASC",
@@ -393,7 +398,8 @@ pub fn create_task(
         let task = conn.query_row(
             "SELECT id, project_id, bucket_id, title, description,
                     done, done_at, priority, due_date, hex_color,
-                    position, idx, created, updated
+                    position, idx, created, updated,
+                    assignee, ai_plan
              FROM project_tasks WHERE id = ?1",
             params![task_id],
             row_to_task,
@@ -411,7 +417,8 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch) -> Result<
             .query_row(
                 "SELECT id, project_id, bucket_id, title, description,
                         done, done_at, priority, due_date, hex_color,
-                        position, idx, created, updated
+                        position, idx, created, updated,
+                        assignee, ai_plan
                  FROM project_tasks WHERE id = ?1",
                 params![task_id],
                 row_to_task,
@@ -497,6 +504,14 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch) -> Result<
         )
         .context("Failed to update task")?;
 
+        if let Some(assignee_val) = &patch.assignee {
+            let now_str = Utc::now().to_rfc3339();
+            conn.execute(
+                "UPDATE project_tasks SET assignee = ?1, updated = ?2 WHERE id = ?3",
+                params![assignee_val, now_str, task_id],
+            )?;
+        }
+
         log::debug!(
             "[projects] update_task id={task_id} bucket={new_bucket_id} done={new_done}"
         );
@@ -504,7 +519,8 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch) -> Result<
         let updated = conn.query_row(
             "SELECT id, project_id, bucket_id, title, description,
                     done, done_at, priority, due_date, hex_color,
-                    position, idx, created, updated
+                    position, idx, created, updated,
+                    assignee, ai_plan
              FROM project_tasks WHERE id = ?1",
             params![task_id],
             row_to_task,
@@ -528,6 +544,36 @@ pub fn delete_task(config: &Config, task_id: &str) -> Result<()> {
 
     log::debug!("[projects] delete_task id={task_id}");
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Migration helpers
+// ---------------------------------------------------------------------------
+
+fn add_column_if_missing(conn: &Connection, table: &str, name: &str, sql_type: &str) -> Result<()> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let col_name: String = row.get(1)?;
+        if col_name == name {
+            return Ok(());
+        }
+    }
+    drop(rows);
+    drop(stmt);
+    match conn.execute(
+        &format!("ALTER TABLE {table} ADD COLUMN {name} {sql_type}"),
+        [],
+    ) {
+        Ok(_) => Ok(()),
+        Err(rusqlite::Error::SqliteFailure(err, Some(ref msg)))
+            if msg.contains("duplicate column name") =>
+        {
+            log::debug!("Column {table}.{name} already exists (concurrent migration): {err}");
+            Ok(())
+        }
+        Err(e) => Err(e).with_context(|| format!("Failed to add {table}.{name}")),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -635,5 +681,49 @@ mod tests {
             updated.done_at.is_some(),
             "done_at must be set when task is completed"
         );
+    }
+
+    #[test]
+    fn assignee_defaults_to_none_on_create() {
+        let tmp = TempDir::new().unwrap();
+        let cfg = test_config(&tmp);
+        let project_id = ensure_default_project(&cfg).unwrap();
+        let buckets = list_buckets(&cfg, &project_id).unwrap();
+        let task = create_task(&cfg, &project_id, &buckets[0].id, "Test", None, 0, None).unwrap();
+        assert_eq!(task.assignee, None);
+        assert_eq!(task.ai_plan, None);
+    }
+
+    #[test]
+    fn update_task_sets_and_clears_assignee() {
+        let tmp = TempDir::new().unwrap();
+        let cfg = test_config(&tmp);
+        let project_id = ensure_default_project(&cfg).unwrap();
+        let buckets = list_buckets(&cfg, &project_id).unwrap();
+        let task = create_task(&cfg, &project_id, &buckets[0].id, "Test", None, 0, None).unwrap();
+
+        // Set to 'me'
+        let patched = update_task(
+            &cfg,
+            &task.id,
+            &TaskPatch { assignee: Some(Some("me".to_string())), ..TaskPatch::default() },
+        ).unwrap();
+        assert_eq!(patched.assignee, Some("me".to_string()));
+
+        // Change to 'ai'
+        let patched2 = update_task(
+            &cfg,
+            &task.id,
+            &TaskPatch { assignee: Some(Some("ai".to_string())), ..TaskPatch::default() },
+        ).unwrap();
+        assert_eq!(patched2.assignee, Some("ai".to_string()));
+
+        // Clear it
+        let cleared = update_task(
+            &cfg,
+            &task.id,
+            &TaskPatch { assignee: Some(None), ..TaskPatch::default() },
+        ).unwrap();
+        assert_eq!(cleared.assignee, None);
     }
 }
