@@ -212,6 +212,18 @@ pub fn ensure_default_project(config: &Config) -> Result<String> {
     })
 }
 
+/// Load a project by id.
+pub fn get_project(config: &Config, project_id: &str) -> Result<Project> {
+    with_connection(config, |conn| {
+        conn.query_row(
+            "SELECT id, title, created, updated FROM projects WHERE id = ?1",
+            params![project_id],
+            row_to_project,
+        )
+        .with_context(|| format!("Project '{project_id}' not found"))
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Buckets
 // ---------------------------------------------------------------------------
