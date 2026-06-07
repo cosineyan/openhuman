@@ -72,6 +72,11 @@ pub struct Task {
     pub hex_color: Option<String>,
     pub position: f64,
     pub index: i64,
+    /// `'me'` = human, `'ai'` = AI assignee, `None` = unassigned.
+    pub assignee: Option<String>,
+    /// Reserved for orchestrator: JSON blob describing which agent/skill will
+    /// execute the task. Always `None` in Phase 1.
+    pub ai_plan: Option<String>,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
 }
@@ -102,6 +107,14 @@ pub struct TaskPatch {
         skip_serializing_if = "Option::is_none"
     )]
     pub hex_color: Option<Option<String>>,
+    /// `Some(Some("me"))` / `Some(Some("ai"))` = set. `Some(None)` = clear. `None` = no change.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_double_option",
+        serialize_with = "serialize_double_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub assignee: Option<Option<String>>,
     pub position: Option<f64>,
     pub done: Option<bool>,
 }
@@ -166,6 +179,7 @@ mod tests {
             priority: Some(3),
             due_date: Some(None),
             hex_color: Some(Some("#aabbcc".to_string())),
+            assignee: None,
             position: Some(1.5),
             done: Some(false),
         };
@@ -195,5 +209,20 @@ mod tests {
         let json = serde_json::to_string(&original).unwrap();
         let restored: BucketPatch = serde_json::from_str(&json).unwrap();
         assert_eq!(original, restored);
+    }
+
+    #[test]
+    fn task_patch_absent_vs_null_assignee() {
+        let absent: TaskPatch = serde_json::from_str("{}").unwrap();
+        assert_eq!(absent.assignee, None);
+
+        let null: TaskPatch = serde_json::from_str(r#"{"assignee": null}"#).unwrap();
+        assert_eq!(null.assignee, Some(None));
+
+        let me_val: TaskPatch = serde_json::from_str(r#"{"assignee": "me"}"#).unwrap();
+        assert_eq!(me_val.assignee, Some(Some("me".to_string())));
+
+        let ai_val: TaskPatch = serde_json::from_str(r#"{"assignee": "ai"}"#).unwrap();
+        assert_eq!(ai_val.assignee, Some(Some("ai".to_string())));
     }
 }

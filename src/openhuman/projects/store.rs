@@ -129,6 +129,8 @@ fn row_to_task(row: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
         hex_color: row.get(9)?,
         position: row.get(10)?,
         index: row.get(11)?,
+        assignee: None,
+        ai_plan: None,
         created: parse_rfc3339(&created_raw).map_err(sql_err)?,
         updated: parse_rfc3339(&updated_raw).map_err(sql_err)?,
     })
