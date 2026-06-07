@@ -20,7 +20,14 @@ use crate::openhuman::inference::provider::traits::ChatMessage;
 pub fn build_stdin(messages: &[ChatMessage], is_new_session: bool) -> Vec<u8> {
     let mut out = String::new();
     let to_emit: Vec<&ChatMessage> = if is_new_session {
-        messages.iter().filter(|m| m.role != "system").collect()
+        // Filter system messages, then drop any leading assistant turns.
+        // The CC CLI requires the first message to have role "user"; an
+        // opening assistant greeting (e.g. the agent's welcome message)
+        // causes exit(1) with "Expected message role 'user', got 'assistant'".
+        let filtered: Vec<&ChatMessage> =
+            messages.iter().filter(|m| m.role != "system").collect();
+        let first_user = filtered.iter().position(|m| m.role == "user").unwrap_or(filtered.len());
+        filtered[first_user..].to_vec()
     } else {
         // Resume: only the trailing user turn matters.
         messages
@@ -69,6 +76,24 @@ mod tests {
             "assistant" => ChatMessage::assistant(content),
             _ => ChatMessage::tool(content),
         }
+    }
+
+    #[test]
+    fn new_session_drops_leading_assistant_turns() {
+        // Agent welcome message arrives as assistant before any user turn.
+        let history = vec![
+            msg("system", "you are helpful"),
+            msg("assistant", "Hi! How can I help?"),
+            msg("user", "hello"),
+            msg("assistant", "hello back"),
+            msg("user", "how are you?"),
+        ];
+        let bytes = build_stdin(&history, true);
+        let s = String::from_utf8(bytes).unwrap();
+        let lines: Vec<_> = s.lines().collect();
+        // First emitted line must be a user turn, not the assistant greeting.
+        assert!(lines[0].contains("\"hello\""), "first line: {}", lines[0]);
+        assert_eq!(lines.len(), 3);
     }
 
     #[test]

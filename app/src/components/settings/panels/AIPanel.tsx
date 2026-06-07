@@ -2375,15 +2375,23 @@ const GlobalOwnModelSelector = ({
       ? { kind: 'cloud', providerSlug: current.providerSlug }
       : current?.kind === 'local'
         ? { kind: 'local' }
-        : customCloud[0]
-          ? { kind: 'cloud', providerSlug: customCloud[0].slug }
-          : localAvailable
-            ? { kind: 'local' }
-            : null;
+        : current?.kind === 'claude-code'
+          ? { kind: 'claude-code' }
+          : customCloud[0]
+            ? { kind: 'cloud', providerSlug: customCloud[0].slug }
+            : localAvailable
+              ? { kind: 'local' }
+              : { kind: 'claude-code' };
 
   const [source, setSource] = useState<CustomDialogSource | null>(initialSource);
   const [model, setModel] = useState<string>(
-    current?.kind === 'cloud' || current?.kind === 'local' ? current.model : ''
+    current?.kind === 'cloud' || current?.kind === 'local'
+      ? current.model
+      : current?.kind === 'claude-code'
+        ? current.model
+        : initialSource?.kind === 'claude-code'
+          ? CLAUDE_CODE_DEFAULT_MODEL
+          : ''
   );
   const [cloudModels, setCloudModels] = useState<ModelInfo[]>([]);
   const [cloudModelsLoading, setCloudModelsLoading] = useState(false);
@@ -2479,13 +2487,8 @@ const GlobalOwnModelSelector = ({
         </p>
       </div>
 
-      {customCloud.length === 0 && !localAvailable ? (
-        <div className="rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">
-          {t('settings.ai.globalModel.noProviders')}
-        </div>
-      ) : (
-        <>
-          <div className="grid gap-4 md:grid-cols-2">
+      <>
+        <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-stone-700 dark:text-neutral-200">
                 {t('settings.ai.globalModel.provider')}
@@ -2505,6 +2508,9 @@ const GlobalOwnModelSelector = ({
                     const nextModel = localModels[0]?.id ?? '';
                     setSource(nextSource);
                     setModel(nextModel);
+                  } else if (kind === 'claude-code') {
+                    setSource({ kind: 'claude-code' });
+                    setModel(CLAUDE_CODE_DEFAULT_MODEL);
                   } else {
                     const nextSource = { kind: 'cloud', providerSlug: slug } as const;
                     setSource(nextSource);
@@ -2520,6 +2526,7 @@ const GlobalOwnModelSelector = ({
                 {localAvailable ? (
                   <option value="local:">{t('settings.ai.provider.ollama')}</option>
                 ) : null}
+                <option value="claude-code:">Claude Code CLI</option>
               </select>
             </div>
 
@@ -2538,6 +2545,13 @@ const GlobalOwnModelSelector = ({
                     </option>
                   ))}
                 </select>
+              ) : source?.kind === 'claude-code' ? (
+                <input
+                  value={model}
+                  onChange={e => setModel(e.target.value)}
+                  placeholder={CLAUDE_CODE_DEFAULT_MODEL}
+                  className="w-full rounded-lg border border-stone-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100"
+                />
               ) : cloudModels.length > 0 ? (
                 <select
                   value={model}
@@ -2584,7 +2598,6 @@ const GlobalOwnModelSelector = ({
             </button>
           </div>
         </>
-      )}
     </div>
   );
 };

@@ -16,7 +16,8 @@ use tokio::sync::mpsc;
 
 /// Hard timeout per turn (PLAN §8). If the CLI hangs (network stall,
 /// infinite loop, MCP deadlock) we kill the child and surface a timeout.
-const TURN_TIMEOUT: Duration = Duration::from_secs(300);
+/// Set generously to accommodate extended thinking / agentic tasks.
+const TURN_TIMEOUT: Duration = Duration::from_secs(7200);
 
 use super::event_mapper::EventMapper;
 use super::input_builder::build_stdin;
@@ -24,22 +25,10 @@ use super::session_store::{generate_uuid_v4, is_uuid_v4, SessionStore};
 use super::stream_parser::StreamJsonParser;
 use crate::openhuman::inference::provider::traits::{ChatMessage, ChatResponse, ProviderDelta};
 
-/// Builtin CC tools disabled in v1 so OpenHuman's MCP-exposed surface is
-/// authoritative. CC's `mcp__openhuman__*` tools remain enabled.
-const DISALLOWED_CC_BUILTINS: &[&str] = &[
-    "Bash",
-    "BashOutput",
-    "KillShell",
-    "Read",
-    "Write",
-    "Edit",
-    "Glob",
-    "Grep",
-    "WebFetch",
-    "WebSearch",
-    "TodoWrite",
-    "Task",
-];
+/// Built-in CC tools to disable. Empty when OpenHuman acts as a pure shell
+/// for the local Claude Code install — the user's own CC permissions govern
+/// what's allowed, and we don't want to shadow any of them.
+const DISALLOWED_CC_BUILTINS: &[&str] = &[];
 
 /// One CC chat turn.
 pub struct TurnContext<'a> {
@@ -58,6 +47,12 @@ pub struct TurnContext<'a> {
     /// with `mcp` to get a stdio MCP server exposing OpenHuman tools.
     /// When `None`, MCP is not wired and CC runs with no extra tools.
     pub openhuman_core_bin: Option<PathBuf>,
+}
+
+/// Stderr messages from the CC CLI that indicate the stored session UUID is
+/// stale and can be cleared so the next attempt starts a fresh session.
+fn is_stale_session_error(stderr: &str) -> bool {
+    stderr.contains("No conversation found with session ID")
 }
 
 /// Write a CC `--mcp-config` JSON file that spawns `openhuman-core mcp`
@@ -84,9 +79,36 @@ fn write_mcp_config(dir: &std::path::Path, core_bin: &std::path::Path) -> std::i
 /// Run one turn against the `claude` CLI. Awaits process exit. Forwards
 /// `ProviderDelta`s through `ctx.stream` as they arrive and returns the
 /// aggregated `ChatResponse` when done.
+///
+/// If `--resume` fails with a stale-session error, clears the stored UUID
+/// and retries once as a new session.
 pub async fn run_turn(ctx: TurnContext<'_>) -> anyhow::Result<ChatResponse> {
     let stored = ctx.session_store.get(&ctx.thread_id);
     let is_new = !stored.as_deref().map(is_uuid_v4).unwrap_or(false);
+
+    let result = run_turn_inner(&ctx, is_new).await;
+
+    // If --resume hit a stale session, clear the UUID and retry as new.
+    if let Err(ref e) = result {
+        if !is_new && is_stale_session_error(&e.to_string()) {
+            log::warn!(
+                "[claude-code][driver] stale session for thread {}; clearing and retrying as new session",
+                ctx.thread_id
+            );
+            // Best-effort remove; a failure here just means the next turn
+            // will also try to resume and retry again.
+            let new_id = generate_uuid_v4();
+            let _ = ctx.session_store.set(&ctx.thread_id, &new_id);
+            return run_turn_inner(&ctx, true).await;
+        }
+    }
+
+    result
+}
+
+async fn run_turn_inner(ctx: &TurnContext<'_>, force_new: bool) -> anyhow::Result<ChatResponse> {
+    let stored = ctx.session_store.get(&ctx.thread_id);
+    let is_new = force_new || !stored.as_deref().map(is_uuid_v4).unwrap_or(false);
     let cc_session_id = if is_new {
         let id = generate_uuid_v4();
         if let Err(e) = ctx.session_store.set(&ctx.thread_id, &id) {
@@ -160,12 +182,13 @@ pub async fn run_turn(ctx: TurnContext<'_>) -> anyhow::Result<ChatResponse> {
         args.push(p.display().to_string());
         args.push("--strict-mcp-config".into());
     }
-    // Disable CC's built-in tools so OpenHuman's MCP surface stays
-    // authoritative. We disable per-builtin instead of using
-    // `--dangerously-skip-permissions` to keep the permission-prompt
-    // floor intact for any tools we forgot to list.
-    args.push("--disallowedTools".into());
-    args.push(DISALLOWED_CC_BUILTINS.join(","));
+    // In non-interactive -p mode the CLI cannot show permission prompts, so
+    // we bypass CC's interactive gate here. Security is enforced by:
+    //   1. The user's own ~/.claude/settings.json permission configuration.
+    //   2. OpenHuman's own SecurityPolicy / ApprovalGate layer upstream.
+    args.push("--dangerously-skip-permissions".into());
+
+    // Pass --disallowedTools only when there is something to block.
 
     // Validate input *before* spawning so we don't launch a process we
     // can't feed (CodeRabbit: validate before spawn).

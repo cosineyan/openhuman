@@ -117,6 +117,35 @@ rustup component add rustfmt clippy --toolchain 1.93.0
 rustup target add x86_64-apple-darwin
 ```
 
+#### macOS 26 beta — libc++ headers workaround
+
+On macOS 26 (Tahoe) beta, the Xcode Command Line Tools ship an incomplete libc++ — standard headers like `<array>` and `<mutex>` are missing. This causes `whisper-rs-sys` (and potentially `cef-dll-sys`) to fail during `cargo check` / `cargo build`.
+
+Install the full LLVM toolchain from Homebrew and point the build at its headers:
+
+```bash
+brew install llvm
+```
+
+Then add these lines to your `~/.zshrc` (or `~/.bashrc`) so they apply to every shell session:
+
+```bash
+# Required on macOS 26 beta: CLT libc++ headers are incomplete
+export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
+export CC="/opt/homebrew/opt/llvm/bin/clang"
+export CXX="/opt/homebrew/opt/llvm/bin/clang++"
+export LDFLAGS="-L/opt/homebrew/opt/llvm/lib/c++ -L/opt/homebrew/opt/llvm/lib -Wl,-rpath,/opt/homebrew/opt/llvm/lib/c++"
+export CPPFLAGS="-I/opt/homebrew/opt/llvm/include"
+# Make the vendored cargo-tauri visible to cargo after pnpm tauri:ensure installs it
+export PATH="$PWD/.cache/cargo-install/bin:$PATH"
+```
+
+Reload your shell (`source ~/.zshrc`) before running any `cargo` or `pnpm rust:check` commands. This workaround is only needed while the macOS 26 beta CLT ships incomplete headers; remove it once a stable Xcode release fixes the issue.
+
+> **Note:** `pnpm tauri:ensure` installs the vendored CEF-aware `cargo-tauri` binary into `.cache/cargo-install/bin/` (relative to the repo root), not into `~/.cargo/bin/`. The `PATH` line above makes it visible to `cargo tauri dev`. Without it, `cargo` will report `error: no such command: tauri` even after a successful install.
+
+> **First run:** make sure `pnpm install` has been run at least once from the repo root before `pnpm dev:app`. Tauri's `beforeDevCommand` launches Vite, which requires `node_modules` to be present; if they are missing you'll see `sh: vite: command not found`.
+
 ### 2. Clone and install
 
 Fork the upstream repository on GitHub first if you plan to submit changes, then clone your fork:

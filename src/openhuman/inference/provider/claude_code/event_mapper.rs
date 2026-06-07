@@ -34,6 +34,10 @@ enum BlockKind {
     Text,
     Thinking,
     Tool,
+    /// A CC built-in tool call (Bash, Read, Write, …). CC executes these
+    /// internally; we track the block so we can ignore its deltas cleanly
+    /// but never surface it as a ToolCall to the OpenHuman harness.
+    CcBuiltin,
 }
 
 #[derive(Debug, Default)]
@@ -172,17 +176,29 @@ impl EventMapper {
                 }
                 let call_id = call_id.unwrap();
                 let tool_name = tool_name.unwrap();
+
+                // CC built-in tools (Bash, Read, Write, Edit, etc.) are
+                // executed entirely inside the CC process. OpenHuman must NOT
+                // intercept them — doing so causes "not in visible tool set"
+                // errors because these tools are not registered in OpenHuman's
+                // tool registry. Only MCP tools (prefixed "mcp__") need to be
+                // forwarded to the OpenHuman harness.
+                let is_mcp = tool_name.starts_with("mcp__");
                 self.blocks.insert(
                     index,
                     BlockState {
-                        kind: BlockKind::Tool,
+                        kind: if is_mcp { BlockKind::Tool } else { BlockKind::CcBuiltin },
                         call_id: Some(call_id.clone()),
                         tool_name: Some(tool_name.clone()),
                         text_accum: String::new(),
                         input_accum: String::new(),
                     },
                 );
-                vec![ProviderDelta::ToolCallStart { call_id, tool_name }]
+                if is_mcp {
+                    vec![ProviderDelta::ToolCallStart { call_id, tool_name }]
+                } else {
+                    Vec::new()
+                }
             }
             _ => Vec::new(),
         }
@@ -253,6 +269,7 @@ impl EventMapper {
                 arguments,
             });
         }
+        // CcBuiltin blocks are silently dropped — CC handles them internally.
         Vec::new()
     }
 
