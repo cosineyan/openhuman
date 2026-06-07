@@ -8,6 +8,7 @@ const messages: TranslationMap = {
   'nav.chat': 'Chat',
   'nav.connections': 'Verbindungen',
   'nav.memory': 'Intelligenz',
+  'nav.projects': 'Projects',
   'nav.alerts': 'Benachrichtigungen',
   'nav.rewards': 'Belohnungen',
   'nav.settings': 'Einstellungen',

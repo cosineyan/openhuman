@@ -8,6 +8,7 @@ const messages: TranslationMap = {
   'nav.chat': 'Obrolan',
   'nav.connections': 'Koneksi',
   'nav.memory': 'Memori',
+  'nav.projects': 'Projects',
   'nav.alerts': 'Peringatan',
   'nav.rewards': 'Hadiah',
   'nav.settings': 'Pengaturan',

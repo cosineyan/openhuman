@@ -10,6 +10,7 @@ import Accounts from './pages/Accounts';
 import Channels from './pages/Channels';
 import Home from './pages/Home';
 import Intelligence from './pages/Intelligence';
+import { ProjectsPage } from './pages/ProjectsPage';
 import Invites from './pages/Invites';
 import Notifications from './pages/Notifications';
 import Onboarding from './pages/onboarding/Onboarding';
@@ -79,6 +80,15 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute requireAuth={true}>
             <Intelligence />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/projects"
+        element={
+          <ProtectedRoute requireAuth={true}>
+            <ProjectsPage />
           </ProtectedRoute>
         }
       />

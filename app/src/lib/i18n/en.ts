@@ -7,6 +7,7 @@ const en: TranslationMap = {
   'nav.chat': 'Chat',
   'nav.connections': 'Connections',
   'nav.memory': 'Intelligence',
+  'nav.projects': 'Projects',
   'nav.alerts': 'Alerts',
   'nav.rewards': 'Rewards',
   'nav.settings': 'Settings',
