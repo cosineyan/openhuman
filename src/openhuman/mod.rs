@@ -84,6 +84,7 @@ pub mod monitor;
 pub mod notifications;
 pub mod overlay;
 pub mod people;
+pub mod projects;
 pub mod prompt_injection;
 pub mod provider_surfaces;
 pub mod redirect_links;
