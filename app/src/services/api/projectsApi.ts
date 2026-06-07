@@ -46,6 +46,10 @@ export interface Task {
   hex_color: string | null;
   position: number;
   index: number;
+  /** 'me' | 'ai' | null */
+  assignee: string | null;
+  /** Reserved for orchestrator use. Always null in Phase 1. */
+  ai_plan: string | null;
   created: string;
   updated: string;
 }
@@ -113,6 +117,8 @@ export async function updateTask(params: {
     hex_color?: string | null;
     position?: number;
     done?: boolean;
+    /** 'me' | 'ai' | null to clear */
+    assignee?: string | null;
   };
 }): Promise<Task> {
   log('updateTask task_id=%s', params.task_id);

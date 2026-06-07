@@ -17,7 +17,20 @@ const PRIORITY_LABELS: Record<number, string> = {
   1: 'Low', 2: 'Medium', 3: 'High', 4: 'Urgent', 5: 'Critical',
 };
 
+const ASSIGNEE_BADGE: Record<string, { label: string; className: string }> = {
+  me: {
+    label: 'Me',
+    className: 'bg-primary-100 text-primary-800 dark:bg-primary-500/20 dark:text-primary-300',
+  },
+  ai: {
+    label: 'AI',
+    className: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
+  },
+};
+
 export function KanbanCard({ task, onClick }: Props) {
+  const assigneeBadge = task.assignee ? ASSIGNEE_BADGE[task.assignee] : null;
+
   return (
     <div
       role="button"
@@ -39,10 +52,19 @@ export function KanbanCard({ task, onClick }: Props) {
       <p className={`mt-1 text-sm font-medium leading-snug ${task.done ? 'line-through text-stone-400 dark:text-neutral-500' : 'text-stone-900 dark:text-neutral-100'}`}>
         {task.title}
       </p>
-      {task.due_date && (
-        <p className="mt-1.5 text-xs text-stone-500 dark:text-neutral-400">
-          Due {new Date(task.due_date).toLocaleDateString()}
-        </p>
+      {(task.due_date || assigneeBadge) && (
+        <div className="mt-1.5 flex items-center justify-between gap-2">
+          {task.due_date ? (
+            <p className="text-xs text-stone-500 dark:text-neutral-400">
+              Due {new Date(task.due_date).toLocaleDateString()}
+            </p>
+          ) : <span />}
+          {assigneeBadge && (
+            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 ${assigneeBadge.className}`}>
+              {assigneeBadge.label}
+            </span>
+          )}
+        </div>
       )}
     </div>
   );
