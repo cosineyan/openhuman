@@ -35,11 +35,9 @@ pub struct BucketWithTasks {
 /// Return the full Kanban board for the default project, with tasks grouped
 /// by bucket and ordered by position within each bucket.
 pub fn get_board(config: &Config) -> Result<RpcOutcome<BucketsWithTasks>, String> {
-    let project_id = store::ensure_default_project(config)
-        .map_err(|e| e.to_string())?;
+    let project_id = store::ensure_default_project(config).map_err(|e| e.to_string())?;
 
-    let project = store::get_project(config, &project_id)
-        .map_err(|e| e.to_string())?;
+    let project = store::get_project(config, &project_id).map_err(|e| e.to_string())?;
 
     let buckets = store::list_buckets(config, &project_id).map_err(|e| e.to_string())?;
     let all_tasks = store::list_tasks(config, &project_id, None).map_err(|e| e.to_string())?;
@@ -80,8 +78,7 @@ pub fn create_task(
     input: CreateTaskInput,
     actor: &str,
 ) -> Result<RpcOutcome<Task>, String> {
-    let project_id = store::ensure_default_project(config)
-        .map_err(|e| e.to_string())?;
+    let project_id = store::ensure_default_project(config).map_err(|e| e.to_string())?;
 
     // Resolve bucket: use provided or fall back to the first (lowest position) bucket.
     let bucket_id = if let Some(bid) = input.bucket_id {
@@ -194,8 +191,14 @@ pub fn list_task_events(
     task_id: &str,
 ) -> Result<RpcOutcome<Vec<TaskEvent>>, String> {
     let events = store::list_events(config, task_id).map_err(|e| e.to_string())?;
-    log::debug!("[projects] list_task_events task_id={task_id} count={}", events.len());
-    Ok(RpcOutcome::single_log(events, format!("events listed: {task_id}")))
+    log::debug!(
+        "[projects] list_task_events task_id={task_id} count={}",
+        events.len()
+    );
+    Ok(RpcOutcome::single_log(
+        events,
+        format!("events listed: {task_id}"),
+    ))
 }
 
 /// Add a plain-text comment to a task.
@@ -207,7 +210,10 @@ pub fn add_comment(
 ) -> Result<RpcOutcome<TaskEvent>, String> {
     let event = store::add_comment(config, task_id, actor, body).map_err(|e| e.to_string())?;
     log::debug!("[projects] add_comment task_id={task_id} actor={actor}");
-    Ok(RpcOutcome::single_log(event, format!("comment added: {task_id}")))
+    Ok(RpcOutcome::single_log(
+        event,
+        format!("comment added: {task_id}"),
+    ))
 }
 
 /// Attach a file (given its absolute path) to a task.
@@ -218,10 +224,16 @@ pub fn add_attachment(
     uploaded_by: &str,
 ) -> Result<RpcOutcome<TaskAttachment>, String> {
     let path = std::path::Path::new(src_path);
-    let att = store::add_attachment(config, task_id, path, uploaded_by)
-        .map_err(|e| e.to_string())?;
-    log::debug!("[projects] add_attachment task_id={task_id} filename={} by={uploaded_by}", att.filename);
-    Ok(RpcOutcome::single_log(att, format!("attachment added: {task_id}")))
+    let att =
+        store::add_attachment(config, task_id, path, uploaded_by).map_err(|e| e.to_string())?;
+    log::debug!(
+        "[projects] add_attachment task_id={task_id} filename={} by={uploaded_by}",
+        att.filename
+    );
+    Ok(RpcOutcome::single_log(
+        att,
+        format!("attachment added: {task_id}"),
+    ))
 }
 
 /// List all attachments for a task.
@@ -230,8 +242,14 @@ pub fn list_attachments(
     task_id: &str,
 ) -> Result<RpcOutcome<Vec<TaskAttachment>>, String> {
     let atts = store::list_attachments(config, task_id).map_err(|e| e.to_string())?;
-    log::debug!("[projects] list_attachments task_id={task_id} count={}", atts.len());
-    Ok(RpcOutcome::single_log(atts, format!("attachments listed: {task_id}")))
+    log::debug!(
+        "[projects] list_attachments task_id={task_id} count={}",
+        atts.len()
+    );
+    Ok(RpcOutcome::single_log(
+        atts,
+        format!("attachments listed: {task_id}"),
+    ))
 }
 
 /// Delete an attachment by id (removes DB row and file).
@@ -241,5 +259,8 @@ pub fn delete_attachment(
 ) -> Result<RpcOutcome<serde_json::Value>, String> {
     store::delete_attachment(config, attachment_id).map_err(|e| e.to_string())?;
     let result = serde_json::json!({ "attachment_id": attachment_id, "deleted": true });
-    Ok(RpcOutcome::single_log(result, format!("attachment deleted: {attachment_id}")))
+    Ok(RpcOutcome::single_log(
+        result,
+        format!("attachment deleted: {attachment_id}"),
+    ))
 }

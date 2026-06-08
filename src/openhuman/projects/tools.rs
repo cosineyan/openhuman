@@ -1,5 +1,5 @@
 use crate::openhuman::config::Config;
-use crate::openhuman::projects::{ops, store, ops::CreateTaskInput};
+use crate::openhuman::projects::{ops, ops::CreateTaskInput, store};
 use crate::openhuman::tools::traits::{PermissionLevel, Tool, ToolCallOptions, ToolResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -15,12 +15,7 @@ fn render_board_markdown(buckets: &[ops::BucketWithTasks]) -> String {
     }
     let mut out = String::new();
     for bwt in buckets {
-        let _ = writeln!(
-            out,
-            "## {} ({})",
-            bwt.bucket.title,
-            bwt.tasks.len()
-        );
+        let _ = writeln!(out, "## {} ({})", bwt.bucket.title, bwt.tasks.len());
         if bwt.tasks.is_empty() {
             let _ = writeln!(out, "_empty_");
         } else {
@@ -72,7 +67,8 @@ impl Tool for ProjectsListTool {
     }
 
     async fn execute(&self, args: Value) -> anyhow::Result<ToolResult> {
-        self.execute_with_options(args, ToolCallOptions::default()).await
+        self.execute_with_options(args, ToolCallOptions::default())
+            .await
     }
 
     async fn execute_with_options(
@@ -157,7 +153,8 @@ impl Tool for ProjectsCreateTaskTool {
     }
 
     async fn execute(&self, args: Value) -> anyhow::Result<ToolResult> {
-        self.execute_with_options(args, ToolCallOptions::default()).await
+        self.execute_with_options(args, ToolCallOptions::default())
+            .await
     }
 
     async fn execute_with_options(
@@ -167,7 +164,11 @@ impl Tool for ProjectsCreateTaskTool {
     ) -> anyhow::Result<ToolResult> {
         let title = match args.get("title").and_then(|v| v.as_str()) {
             Some(t) => t.to_string(),
-            None => return Ok(ToolResult::error("missing required field: title".to_string())),
+            None => {
+                return Ok(ToolResult::error(
+                    "missing required field: title".to_string(),
+                ))
+            }
         };
 
         let input = CreateTaskInput {
@@ -238,7 +239,8 @@ impl Tool for ProjectsMoveTaskTool {
     }
 
     async fn execute(&self, args: Value) -> anyhow::Result<ToolResult> {
-        self.execute_with_options(args, ToolCallOptions::default()).await
+        self.execute_with_options(args, ToolCallOptions::default())
+            .await
     }
 
     async fn execute_with_options(
@@ -248,7 +250,11 @@ impl Tool for ProjectsMoveTaskTool {
     ) -> anyhow::Result<ToolResult> {
         let task_id = match args.get("task_id").and_then(|v| v.as_str()) {
             Some(id) => id.to_string(),
-            None => return Ok(ToolResult::error("missing required field: task_id".to_string())),
+            None => {
+                return Ok(ToolResult::error(
+                    "missing required field: task_id".to_string(),
+                ))
+            }
         };
         let bucket_id = match args.get("bucket_id").and_then(|v| v.as_str()) {
             Some(id) => id.to_string(),
@@ -309,7 +315,8 @@ impl Tool for ProjectsCompleteTaskTool {
     }
 
     async fn execute(&self, args: Value) -> anyhow::Result<ToolResult> {
-        self.execute_with_options(args, ToolCallOptions::default()).await
+        self.execute_with_options(args, ToolCallOptions::default())
+            .await
     }
 
     async fn execute_with_options(
@@ -319,7 +326,11 @@ impl Tool for ProjectsCompleteTaskTool {
     ) -> anyhow::Result<ToolResult> {
         let task_id = match args.get("task_id").and_then(|v| v.as_str()) {
             Some(id) => id.to_string(),
-            None => return Ok(ToolResult::error("missing required field: task_id".to_string())),
+            None => {
+                return Ok(ToolResult::error(
+                    "missing required field: task_id".to_string(),
+                ))
+            }
         };
 
         // Resolve the task's project to find the done bucket.
@@ -345,9 +356,7 @@ impl Tool for ProjectsCompleteTaskTool {
 
         match ops::move_task(&self.config, &task_id, &done_bucket_id, None, "ai") {
             Ok(outcome) => {
-                log::debug!(
-                    "[projects] complete_task id={task_id} → done bucket={done_bucket_id}"
-                );
+                log::debug!("[projects] complete_task id={task_id} → done bucket={done_bucket_id}");
                 let json_str = serde_json::to_string_pretty(&outcome.value)?;
                 Ok(ToolResult::success(json_str))
             }
@@ -381,7 +390,9 @@ impl ProjectsReadAttachmentTool {
 
 #[async_trait]
 impl Tool for ProjectsReadAttachmentTool {
-    fn name(&self) -> &str { "projects_read_attachment" }
+    fn name(&self) -> &str {
+        "projects_read_attachment"
+    }
 
     fn description(&self) -> &str {
         "Read the contents of a file attachment on a task. \
@@ -402,10 +413,15 @@ impl Tool for ProjectsReadAttachmentTool {
     }
 
     async fn execute(&self, args: Value) -> anyhow::Result<ToolResult> {
-        self.execute_with_options(args, ToolCallOptions::default()).await
+        self.execute_with_options(args, ToolCallOptions::default())
+            .await
     }
 
-    async fn execute_with_options(&self, args: Value, _opts: ToolCallOptions) -> anyhow::Result<ToolResult> {
+    async fn execute_with_options(
+        &self,
+        args: Value,
+        _opts: ToolCallOptions,
+    ) -> anyhow::Result<ToolResult> {
         let Some(attachment_id) = args.get("attachment_id").and_then(|v| v.as_str()) else {
             return Ok(ToolResult::error("missing attachment_id"));
         };
@@ -416,34 +432,42 @@ impl Tool for ProjectsReadAttachmentTool {
         };
 
         if !abs_path.exists() {
-            return Ok(ToolResult::error(format!("attachment file not found on disk: {}", abs_path.display())));
+            return Ok(ToolResult::error(format!(
+                "attachment file not found on disk: {}",
+                abs_path.display()
+            )));
         }
 
         let mime = att.mime_type.as_str();
 
-        if mime.starts_with("text/") || mime == "application/json"
-            || mime.contains("javascript") || mime.contains("xml")
-            || mime == "application/x-sh" || att.filename.ends_with(".md")
-            || att.filename.ends_with(".toml") || att.filename.ends_with(".yaml")
+        if mime.starts_with("text/")
+            || mime == "application/json"
+            || mime.contains("javascript")
+            || mime.contains("xml")
+            || mime == "application/x-sh"
+            || att.filename.ends_with(".md")
+            || att.filename.ends_with(".toml")
+            || att.filename.ends_with(".yaml")
             || att.filename.ends_with(".yml")
         {
             // Plain text: read and truncate
-            let raw = std::fs::read(&abs_path)
-                .map_err(|e| anyhow::anyhow!("read error: {e}"))?;
+            let raw = std::fs::read(&abs_path).map_err(|e| anyhow::anyhow!("read error: {e}"))?;
             let total = raw.len();
             let slice = &raw[..raw.len().min(TEXT_TRUNCATE_BYTES)];
             let mut text = String::from_utf8_lossy(slice).into_owned();
             if total > TEXT_TRUNCATE_BYTES {
                 text.push_str(&format!("\n[content truncated: {} bytes total]", total));
             }
-            Ok(ToolResult::success(json!({
-                "attachment_id": attachment_id,
-                "filename": att.filename,
-                "mime_type": mime,
-                "content": text,
-                "truncated": total > TEXT_TRUNCATE_BYTES,
-            }).to_string()))
-
+            Ok(ToolResult::success(
+                json!({
+                    "attachment_id": attachment_id,
+                    "filename": att.filename,
+                    "mime_type": mime,
+                    "content": text,
+                    "truncated": total > TEXT_TRUNCATE_BYTES,
+                })
+                .to_string(),
+            ))
         } else if mime == "application/pdf" {
             // PDF: extract text via pdf-extract
             let text_result = pdf_extract::extract_text(&abs_path);
@@ -454,35 +478,42 @@ impl Tool for ProjectsReadAttachmentTool {
             let total = raw_text.len();
             let truncated = total > TEXT_TRUNCATE_BYTES;
             let content = if truncated {
-                format!("{}\n[content truncated: {} bytes total]", &raw_text[..TEXT_TRUNCATE_BYTES], total)
+                format!(
+                    "{}\n[content truncated: {} bytes total]",
+                    &raw_text[..TEXT_TRUNCATE_BYTES],
+                    total
+                )
             } else {
                 raw_text
             };
-            Ok(ToolResult::success(json!({
-                "attachment_id": attachment_id,
-                "filename": att.filename,
-                "mime_type": mime,
-                "content": content,
-                "truncated": truncated,
-            }).to_string()))
-
+            Ok(ToolResult::success(
+                json!({
+                    "attachment_id": attachment_id,
+                    "filename": att.filename,
+                    "mime_type": mime,
+                    "content": content,
+                    "truncated": truncated,
+                })
+                .to_string(),
+            ))
         } else if mime.starts_with("image/") {
             // Image: base64-encode and truncate
             use base64::Engine as _;
-            let raw = std::fs::read(&abs_path)
-                .map_err(|e| anyhow::anyhow!("read error: {e}"))?;
+            let raw = std::fs::read(&abs_path).map_err(|e| anyhow::anyhow!("read error: {e}"))?;
             let total = raw.len();
             let slice = &raw[..raw.len().min(IMAGE_TRUNCATE_BYTES)];
             let b64 = base64::engine::general_purpose::STANDARD.encode(slice);
-            Ok(ToolResult::success(json!({
-                "attachment_id": attachment_id,
-                "filename": att.filename,
-                "mime_type": mime,
-                "base64_content": b64,
-                "truncated": total > IMAGE_TRUNCATE_BYTES,
-                "size_bytes": total,
-            }).to_string()))
-
+            Ok(ToolResult::success(
+                json!({
+                    "attachment_id": attachment_id,
+                    "filename": att.filename,
+                    "mime_type": mime,
+                    "base64_content": b64,
+                    "truncated": total > IMAGE_TRUNCATE_BYTES,
+                    "size_bytes": total,
+                })
+                .to_string(),
+            ))
         } else {
             // Binary / unsupported: metadata only
             Ok(ToolResult::success(json!({
@@ -496,7 +527,9 @@ impl Tool for ProjectsReadAttachmentTool {
         }
     }
 
-    fn permission_level(&self) -> PermissionLevel { PermissionLevel::ReadOnly }
+    fn permission_level(&self) -> PermissionLevel {
+        PermissionLevel::ReadOnly
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -515,7 +548,9 @@ impl ProjectsAddAttachmentTool {
 
 #[async_trait]
 impl Tool for ProjectsAddAttachmentTool {
-    fn name(&self) -> &str { "projects_add_attachment" }
+    fn name(&self) -> &str {
+        "projects_add_attachment"
+    }
 
     fn description(&self) -> &str {
         "Attach a file to a task by providing its absolute path on disk. \
@@ -535,10 +570,15 @@ impl Tool for ProjectsAddAttachmentTool {
     }
 
     async fn execute(&self, args: Value) -> anyhow::Result<ToolResult> {
-        self.execute_with_options(args, ToolCallOptions::default()).await
+        self.execute_with_options(args, ToolCallOptions::default())
+            .await
     }
 
-    async fn execute_with_options(&self, args: Value, _opts: ToolCallOptions) -> anyhow::Result<ToolResult> {
+    async fn execute_with_options(
+        &self,
+        args: Value,
+        _opts: ToolCallOptions,
+    ) -> anyhow::Result<ToolResult> {
         let Some(task_id) = args.get("task_id").and_then(|v| v.as_str()) else {
             return Ok(ToolResult::error("missing task_id"));
         };
@@ -547,12 +587,16 @@ impl Tool for ProjectsAddAttachmentTool {
         };
 
         match ops::add_attachment(&self.config, task_id, src_path, "ai") {
-            Ok(outcome) => Ok(ToolResult::success(serde_json::to_string_pretty(&outcome.value)?)),
+            Ok(outcome) => Ok(ToolResult::success(serde_json::to_string_pretty(
+                &outcome.value,
+            )?)),
             Err(e) => Ok(ToolResult::error(e)),
         }
     }
 
-    fn permission_level(&self) -> PermissionLevel { PermissionLevel::Write }
+    fn permission_level(&self) -> PermissionLevel {
+        PermissionLevel::Write
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -585,7 +629,11 @@ mod tests {
         let tool = ProjectsListTool::new(cfg);
 
         let result = tool.execute(json!({})).await.unwrap();
-        assert!(!result.is_error, "expected success, got: {}", result.output());
+        assert!(
+            !result.is_error,
+            "expected success, got: {}",
+            result.output()
+        );
         // Should be a JSON array of bucket-with-tasks
         let arr: serde_json::Value = serde_json::from_str(&result.output()).unwrap();
         assert!(arr.is_array());

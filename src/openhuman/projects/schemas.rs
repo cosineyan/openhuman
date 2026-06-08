@@ -30,17 +30,50 @@ pub fn all_controller_schemas() -> Vec<ControllerSchema> {
 
 pub fn all_registered_controllers() -> Vec<RegisteredController> {
     vec![
-        RegisteredController { schema: schemas("get_board"), handler: handle_get_board },
-        RegisteredController { schema: schemas("create_task"), handler: handle_create_task },
-        RegisteredController { schema: schemas("update_task"), handler: handle_update_task },
-        RegisteredController { schema: schemas("move_task"), handler: handle_move_task },
-        RegisteredController { schema: schemas("delete_task"), handler: handle_delete_task },
-        RegisteredController { schema: schemas("update_bucket"), handler: handle_update_bucket },
-        RegisteredController { schema: schemas("list_task_events"), handler: handle_list_task_events },
-        RegisteredController { schema: schemas("add_comment"), handler: handle_add_comment },
-        RegisteredController { schema: schemas("add_attachment"), handler: handle_add_attachment },
-        RegisteredController { schema: schemas("list_attachments"), handler: handle_list_attachments },
-        RegisteredController { schema: schemas("delete_attachment"), handler: handle_delete_attachment },
+        RegisteredController {
+            schema: schemas("get_board"),
+            handler: handle_get_board,
+        },
+        RegisteredController {
+            schema: schemas("create_task"),
+            handler: handle_create_task,
+        },
+        RegisteredController {
+            schema: schemas("update_task"),
+            handler: handle_update_task,
+        },
+        RegisteredController {
+            schema: schemas("move_task"),
+            handler: handle_move_task,
+        },
+        RegisteredController {
+            schema: schemas("delete_task"),
+            handler: handle_delete_task,
+        },
+        RegisteredController {
+            schema: schemas("update_bucket"),
+            handler: handle_update_bucket,
+        },
+        RegisteredController {
+            schema: schemas("list_task_events"),
+            handler: handle_list_task_events,
+        },
+        RegisteredController {
+            schema: schemas("add_comment"),
+            handler: handle_add_comment,
+        },
+        RegisteredController {
+            schema: schemas("add_attachment"),
+            handler: handle_add_attachment,
+        },
+        RegisteredController {
+            schema: schemas("list_attachments"),
+            handler: handle_list_attachments,
+        },
+        RegisteredController {
+            schema: schemas("delete_attachment"),
+            handler: handle_delete_attachment,
+        },
     ]
 }
 
@@ -325,9 +358,7 @@ fn handle_create_task(params: Map<String, Value>) -> ControllerFuture {
                 .get("bucket_id")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string()),
-            priority: params
-                .get("priority")
-                .and_then(|v| v.as_i64()),
+            priority: params.get("priority").and_then(|v| v.as_i64()),
             due_date: params
                 .get("due_date")
                 .and_then(|v| v.as_str())
@@ -353,15 +384,15 @@ fn handle_move_task(params: Map<String, Value>) -> ControllerFuture {
         let config = config_rpc::load_config_with_timeout().await?;
         let task_id = get_str(&params, "task_id")?.to_string();
         let bucket_id = get_str(&params, "bucket_id")?.to_string();
-        let position = params
-            .get("position")
-            .and_then(|v| v.as_f64());
+        let position = params.get("position").and_then(|v| v.as_f64());
         tracing::debug!(
             task_id = %task_id,
             bucket_id = %bucket_id,
             "[rpc][projects] move_task entry"
         );
-        to_json(ops::move_task(&config, &task_id, &bucket_id, position, "me")?)
+        to_json(ops::move_task(
+            &config, &task_id, &bucket_id, position, "me",
+        )?)
     })
 }
 
@@ -373,7 +404,10 @@ fn handle_delete_task(params: Map<String, Value>) -> ControllerFuture {
         // delete_task returns RpcOutcome<()>; we emit a confirmation object instead.
         let _outcome = ops::delete_task(&config, &task_id)?;
         let result = serde_json::json!({ "task_id": task_id, "deleted": true });
-        to_json(RpcOutcome::single_log(result, format!("task deleted: {task_id}")))
+        to_json(RpcOutcome::single_log(
+            result,
+            format!("task deleted: {task_id}"),
+        ))
     })
 }
 
@@ -401,7 +435,11 @@ fn handle_add_comment(params: Map<String, Value>) -> ControllerFuture {
         let config = config_rpc::load_config_with_timeout().await?;
         let task_id = get_str(&params, "task_id")?.to_string();
         let body = get_str(&params, "body")?.to_string();
-        let actor = params.get("actor").and_then(|v| v.as_str()).unwrap_or("me").to_string();
+        let actor = params
+            .get("actor")
+            .and_then(|v| v.as_str())
+            .unwrap_or("me")
+            .to_string();
         tracing::debug!(task_id = %task_id, actor = %actor, "[rpc][projects] add_comment entry");
         to_json(ops::add_comment(&config, &task_id, &actor, &body)?)
     })
@@ -412,9 +450,18 @@ fn handle_add_attachment(params: Map<String, Value>) -> ControllerFuture {
         let config = config_rpc::load_config_with_timeout().await?;
         let task_id = get_str(&params, "task_id")?.to_string();
         let src_path = get_str(&params, "src_path")?.to_string();
-        let uploaded_by = params.get("uploaded_by").and_then(|v| v.as_str()).unwrap_or("me").to_string();
+        let uploaded_by = params
+            .get("uploaded_by")
+            .and_then(|v| v.as_str())
+            .unwrap_or("me")
+            .to_string();
         tracing::debug!(task_id = %task_id, src_path = %src_path, "[rpc][projects] add_attachment entry");
-        to_json(ops::add_attachment(&config, &task_id, &src_path, &uploaded_by)?)
+        to_json(ops::add_attachment(
+            &config,
+            &task_id,
+            &src_path,
+            &uploaded_by,
+        )?)
     })
 }
 

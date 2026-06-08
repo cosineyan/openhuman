@@ -64,10 +64,7 @@ where
 
 /// Serialize: `None` → field omitted (handled by `#[serde(skip_serializing_if)]`),
 /// `Some(None)` → `null`, `Some(Some(v))` → `v`.
-fn serialize_double_option<T, S>(
-    value: &Option<Option<T>>,
-    ser: S,
-) -> Result<S::Ok, S::Error>
+fn serialize_double_option<T, S>(value: &Option<Option<T>>, ser: S) -> Result<S::Ok, S::Error>
 where
     T: Serialize,
     S: Serializer,
@@ -187,8 +184,7 @@ mod tests {
         assert_eq!(null.description, Some(None));
 
         // A string value deserialises to Some(Some("...")).
-        let value: TaskPatch =
-            serde_json::from_str(r#"{"description": "hello"}"#).unwrap();
+        let value: TaskPatch = serde_json::from_str(r#"{"description": "hello"}"#).unwrap();
         assert_eq!(value.description, Some(Some("hello".to_string())));
     }
 
@@ -209,8 +205,7 @@ mod tests {
         let null: TaskPatch = serde_json::from_str(r#"{"hex_color": null}"#).unwrap();
         assert_eq!(null.hex_color, Some(None));
 
-        let value: TaskPatch =
-            serde_json::from_str("{\"hex_color\": \"#ff0000\"}").unwrap();
+        let value: TaskPatch = serde_json::from_str("{\"hex_color\": \"#ff0000\"}").unwrap();
         assert_eq!(value.hex_color, Some(Some("#ff0000".to_string())));
     }
 
