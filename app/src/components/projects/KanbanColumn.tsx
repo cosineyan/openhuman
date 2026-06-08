@@ -8,6 +8,8 @@ import { NewTaskInput } from './NewTaskInput';
 interface Props {
   bucket: Bucket;
   tasks: Task[];
+  subtaskCounts?: Record<string, [number, number]>;
+  boardVersion?: number;
   onTaskClick: (task: Task) => void;
   onAddTask: (
     bucketId: string,
@@ -88,6 +90,8 @@ function getBucketStyle(title: string, isDone: boolean): BucketStyle {
 export function KanbanColumn({
   bucket,
   tasks,
+  subtaskCounts = {},
+  boardVersion,
   onTaskClick,
   onAddTask,
   onAddViaModal,
@@ -175,7 +179,7 @@ export function KanbanColumn({
                     {...dragProvided.draggableProps}
                     {...dragProvided.dragHandleProps}
                     className={dragSnapshot.isDragging ? 'opacity-80 rotate-1' : ''}>
-                    <KanbanCard task={task} onClick={onTaskClick} />
+                    <KanbanCard task={task} subtaskInfo={subtaskCounts[task.id]} boardVersion={boardVersion} onClick={onTaskClick} />
                   </div>
                 )}
               </Draggable>

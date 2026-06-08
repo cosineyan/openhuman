@@ -64,6 +64,7 @@ export function TableView({ board, onTaskClick }: Props) {
               key={task.id}
               task={task}
               bucket={bucket}
+              subtaskCount={(board.subtask_counts?.[task.id]?.[0]) ?? 0}
               isLast={i === allTasks.length - 1}
               onClick={onTaskClick}
             />
@@ -77,11 +78,13 @@ export function TableView({ board, onTaskClick }: Props) {
 function TableRow({
   task,
   bucket,
+  subtaskCount,
   isLast,
   onClick,
 }: {
   task: Task;
   bucket: Bucket | undefined;
+  subtaskCount: number;
   isLast: boolean;
   onClick: (task: Task) => void;
 }) {
@@ -115,6 +118,14 @@ function TableRow({
           className={`text-sm font-medium truncate ${task.done ? 'line-through text-stone-400 dark:text-neutral-500' : 'text-stone-800 dark:text-neutral-100'}`}>
           {task.title}
         </span>
+        {subtaskCount > 0 && (
+          <span className="shrink-0 flex items-center gap-0.5 text-[10px] text-stone-400 dark:text-neutral-500">
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+              <path d="M2 2h8M2 6h5M2 10h3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+            {subtaskCount}
+          </span>
+        )}
       </div>
 
       {/* Status */}

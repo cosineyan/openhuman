@@ -50,6 +50,8 @@ export interface Task {
   assignee: string | null;
   /** Reserved for orchestrator use. Always null in Phase 1. */
   ai_plan: string | null;
+  /** null = top-level task; set = subtask of that task id */
+  parent_task_id: string | null;
   created: string;
   updated: string;
 }
@@ -62,6 +64,8 @@ export interface BucketWithTasks {
 export interface BoardData {
   project: Project;
   buckets: BucketWithTasks[];
+  /** task_id → [total_subtasks, done_subtasks] */
+  subtask_counts: Record<string, [number, number]>;
 }
 
 export interface TaskEvent {
@@ -241,4 +245,36 @@ export async function deleteAttachment(attachment_id: string): Promise<void> {
     method: 'openhuman.projects_delete_attachment',
     params: { attachment_id },
   });
+}
+
+/** Delete a subtask by id (logs deletion on the parent's feed). */
+export async function deleteSubtask(task_id: string): Promise<void> {
+  log('deleteSubtask task_id=%s', task_id);
+  await callCoreRpc<RpcEnvelope<unknown>>({
+    method: 'openhuman.projects_delete_subtask',
+    params: { task_id },
+  });
+}
+
+/** Return all subtasks for a given parent task id. */
+export async function listSubtasks(parent_task_id: string): Promise<Task[]> {
+  log('listSubtasks parent_task_id=%s', parent_task_id);
+  const res = await callCoreRpc<RpcEnvelope<Task[]>>({
+    method: 'openhuman.projects_list_subtasks',
+    params: { parent_task_id },
+  });
+  return res.result;
+}
+
+/** Create a subtask under a parent task. */
+export async function createSubtask(params: {
+  parent_task_id: string;
+  title: string;
+}): Promise<Task> {
+  log('createSubtask parent=%s title=%s', params.parent_task_id, params.title);
+  const res = await callCoreRpc<RpcEnvelope<Task>>({
+    method: 'openhuman.projects_create_subtask',
+    params,
+  });
+  return res.result;
 }

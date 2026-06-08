@@ -5,6 +5,7 @@ use crate::openhuman::projects::{
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
@@ -97,6 +98,7 @@ pub fn with_connection<T>(config: &Config, f: impl FnOnce(&Connection) -> Result
 
     add_column_if_missing(&conn, "project_tasks", "assignee", "TEXT")?;
     add_column_if_missing(&conn, "project_tasks", "ai_plan", "TEXT")?;
+    add_column_if_missing(&conn, "project_tasks", "parent_task_id", "TEXT")?;
 
     f(&conn)
 }
@@ -178,6 +180,7 @@ fn row_to_task(row: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
         index: row.get(11)?,
         assignee: row.get(14)?,
         ai_plan: row.get(15)?,
+        parent_task_id: row.get(16)?,
         created: parse_rfc3339(&created_raw).map_err(sql_err)?,
         updated: parse_rfc3339(&updated_raw).map_err(sql_err)?,
     })
@@ -411,6 +414,21 @@ pub fn list_events(config: &Config, task_id: &str) -> Result<Vec<TaskEvent>> {
 // Tasks
 // ---------------------------------------------------------------------------
 
+pub fn get_task(config: &Config, task_id: &str) -> Result<Task> {
+    with_connection(config, |conn| {
+        conn.query_row(
+            "SELECT id, project_id, bucket_id, title, description,
+                    done, done_at, priority, due_date, hex_color,
+                    position, idx, created, updated,
+                    assignee, ai_plan, parent_task_id
+             FROM project_tasks WHERE id = ?1",
+            params![task_id],
+            row_to_task,
+        )
+        .with_context(|| format!("Task '{task_id}' not found"))
+    })
+}
+
 pub fn list_tasks(config: &Config, project_id: &str, bucket_id: Option<&str>) -> Result<Vec<Task>> {
     with_connection(config, |conn| {
         let mut tasks = Vec::new();
@@ -419,9 +437,9 @@ pub fn list_tasks(config: &Config, project_id: &str, bucket_id: Option<&str>) ->
                 "SELECT id, project_id, bucket_id, title, description,
                         done, done_at, priority, due_date, hex_color,
                         position, idx, created, updated,
-                        assignee, ai_plan
+                        assignee, ai_plan, parent_task_id
                  FROM project_tasks
-                 WHERE project_id = ?1 AND bucket_id = ?2
+                 WHERE project_id = ?1 AND bucket_id = ?2 AND parent_task_id IS NULL
                  ORDER BY position ASC",
             )?;
             let rows = stmt.query_map(params![project_id, bid], row_to_task)?;
@@ -433,15 +451,35 @@ pub fn list_tasks(config: &Config, project_id: &str, bucket_id: Option<&str>) ->
                 "SELECT id, project_id, bucket_id, title, description,
                         done, done_at, priority, due_date, hex_color,
                         position, idx, created, updated,
-                        assignee, ai_plan
+                        assignee, ai_plan, parent_task_id
                  FROM project_tasks
-                 WHERE project_id = ?1
+                 WHERE project_id = ?1 AND parent_task_id IS NULL
                  ORDER BY position ASC",
             )?;
             let rows = stmt.query_map(params![project_id], row_to_task)?;
             for row in rows {
                 tasks.push(row?);
             }
+        }
+        Ok(tasks)
+    })
+}
+
+pub fn list_subtasks(config: &Config, parent_task_id: &str) -> Result<Vec<Task>> {
+    with_connection(config, |conn| {
+        let mut stmt = conn.prepare(
+            "SELECT id, project_id, bucket_id, title, description,
+                    done, done_at, priority, due_date, hex_color,
+                    position, idx, created, updated,
+                    assignee, ai_plan, parent_task_id
+             FROM project_tasks
+             WHERE parent_task_id = ?1
+             ORDER BY created ASC",
+        )?;
+        let rows = stmt.query_map(params![parent_task_id], row_to_task)?;
+        let mut tasks = Vec::new();
+        for row in rows {
+            tasks.push(row?);
         }
         Ok(tasks)
     })
@@ -457,6 +495,7 @@ pub fn create_task(
     priority: i64,
     due_date: Option<DateTime<Utc>>,
     actor: &str,
+    parent_task_id: Option<&str>,
 ) -> Result<Task> {
     let now = Utc::now();
     let task_id = Uuid::new_v4().to_string();
@@ -487,8 +526,8 @@ pub fn create_task(
             "INSERT INTO project_tasks
              (id, project_id, bucket_id, title, description,
               done, done_at, priority, due_date, hex_color,
-              position, idx, created, updated)
-             VALUES (?1, ?2, ?3, ?4, ?5, 0, NULL, ?6, ?7, NULL, ?8, ?9, ?10, ?11)",
+              position, idx, created, updated, parent_task_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, 0, NULL, ?6, ?7, NULL, ?8, ?9, ?10, ?11, ?12)",
             params![
                 task_id,
                 project_id,
@@ -501,6 +540,7 @@ pub fn create_task(
                 next_idx,
                 now.to_rfc3339(),
                 now.to_rfc3339(),
+                parent_task_id,
             ],
         )
         .context("Failed to insert task")?;
@@ -509,7 +549,7 @@ pub fn create_task(
             "SELECT id, project_id, bucket_id, title, description,
                     done, done_at, priority, due_date, hex_color,
                     position, idx, created, updated,
-                    assignee, ai_plan
+                    assignee, ai_plan, parent_task_id
              FROM project_tasks WHERE id = ?1",
             params![task_id],
             row_to_task,
@@ -533,7 +573,7 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch, actor: &st
                 "SELECT id, project_id, bucket_id, title, description,
                         done, done_at, priority, due_date, hex_color,
                         position, idx, created, updated,
-                        assignee, ai_plan
+                        assignee, ai_plan, parent_task_id
                  FROM project_tasks WHERE id = ?1",
                 params![task_id],
                 row_to_task,
@@ -646,7 +686,7 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch, actor: &st
             "SELECT id, project_id, bucket_id, title, description,
                     done, done_at, priority, due_date, hex_color,
                     position, idx, created, updated,
-                    assignee, ai_plan
+                    assignee, ai_plan, parent_task_id
              FROM project_tasks WHERE id = ?1",
             params![task_id],
             row_to_task,
@@ -864,6 +904,33 @@ pub fn add_attachment(
     Ok(att)
 }
 
+/// Return a map of { parent_task_id -> (total, done) } for all tasks in a project.
+pub fn count_subtasks_by_parent(
+    config: &Config,
+    project_id: &str,
+) -> Result<HashMap<String, (usize, usize)>> {
+    with_connection(config, |conn| {
+        let mut stmt = conn.prepare(
+            "SELECT parent_task_id, COUNT(*), SUM(done) FROM project_tasks
+             WHERE project_id = ?1 AND parent_task_id IS NOT NULL
+             GROUP BY parent_task_id",
+        )?;
+        let mut map = HashMap::new();
+        let rows = stmt.query_map(rusqlite::params![project_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)? as usize,
+                row.get::<_, i64>(2)? as usize,
+            ))
+        })?;
+        for row in rows {
+            let (parent_id, total, done) = row?;
+            map.insert(parent_id, (total, done));
+        }
+        Ok(map)
+    })
+}
+
 pub fn list_attachments(config: &Config, task_id: &str) -> Result<Vec<TaskAttachment>> {
     with_connection(config, |conn| {
         let mut stmt = conn.prepare(
@@ -1037,6 +1104,7 @@ mod tests {
             0,
             None,
             "me",
+            None,
         )
         .unwrap();
 
@@ -1067,6 +1135,7 @@ mod tests {
             0,
             None,
             "me",
+            None,
         )
         .unwrap();
         assert!(!task.done);
@@ -1102,6 +1171,7 @@ mod tests {
             0,
             None,
             "me",
+            None,
         )
         .unwrap();
         assert_eq!(task.assignee, None);
@@ -1123,6 +1193,7 @@ mod tests {
             0,
             None,
             "me",
+            None,
         )
         .unwrap();
 

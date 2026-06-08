@@ -3,6 +3,7 @@ use crate::openhuman::projects::{store, types::*};
 use crate::rpc::RpcOutcome;
 use serde::{Deserialize, Serialize};
 use serde_json;
+use std::collections::HashMap;
 // ---------------------------------------------------------------------------
 // Input / output shapes
 // ---------------------------------------------------------------------------
@@ -14,12 +15,15 @@ pub struct CreateTaskInput {
     pub bucket_id: Option<String>,
     pub priority: Option<i64>,
     pub due_date: Option<String>,
+    pub parent_task_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct BucketsWithTasks {
     pub project: Project,
     pub buckets: Vec<BucketWithTasks>,
+    /// Map of task_id -> (total_subtasks, done_subtasks).
+    pub subtask_counts: HashMap<String, (usize, usize)>,
 }
 
 #[derive(Debug, Serialize)]
@@ -54,6 +58,9 @@ pub fn get_board(config: &Config) -> Result<RpcOutcome<BucketsWithTasks>, String
         })
         .collect();
 
+    // Count subtasks per parent task
+    let subtask_counts = store::count_subtasks_by_parent(config, &project_id).unwrap_or_default();
+
     log::debug!(
         "[projects] get_board project={project_id} buckets={} tasks={}",
         buckets_with_tasks.len(),
@@ -64,6 +71,7 @@ pub fn get_board(config: &Config) -> Result<RpcOutcome<BucketsWithTasks>, String
         BucketsWithTasks {
             project,
             buckets: buckets_with_tasks,
+            subtask_counts,
         },
         "projects board loaded",
     ))
@@ -111,6 +119,7 @@ pub fn create_task(
         input.priority.unwrap_or(0),
         due_date,
         actor,
+        input.parent_task_id.as_deref(),
     )
     .map_err(|e| e.to_string())?;
 
@@ -131,6 +140,17 @@ pub fn update_task(
     actor: &str,
 ) -> Result<RpcOutcome<Task>, String> {
     let task = store::update_task(config, task_id, &patch, actor).map_err(|e| e.to_string())?;
+    // If this is a subtask, also log a summary entry on the parent's feed
+    if let Some(parent_id) = &task.parent_task_id {
+        let _ = store::log_change(
+            config,
+            parent_id,
+            actor,
+            "subtask_updated",
+            None,
+            Some(&task.title),
+        );
+    }
     log::debug!("[projects] update_task id={task_id}");
     Ok(RpcOutcome::single_log(
         task,
@@ -262,5 +282,92 @@ pub fn delete_attachment(
     Ok(RpcOutcome::single_log(
         result,
         format!("attachment deleted: {attachment_id}"),
+    ))
+}
+
+/// List all subtasks for a given parent task.
+pub fn list_subtasks(
+    config: &Config,
+    parent_task_id: &str,
+) -> Result<RpcOutcome<Vec<Task>>, String> {
+    let tasks = store::list_subtasks(config, parent_task_id).map_err(|e| e.to_string())?;
+    log::debug!(
+        "[projects] list_subtasks parent={parent_task_id} count={}",
+        tasks.len()
+    );
+    Ok(RpcOutcome::single_log(
+        tasks,
+        format!("subtasks listed: {parent_task_id}"),
+    ))
+}
+
+/// Create a subtask under a parent task.
+pub fn create_subtask(
+    config: &Config,
+    parent_task_id: &str,
+    title: &str,
+    actor: &str,
+) -> Result<RpcOutcome<Task>, String> {
+    // Subtask inherits the parent's project and bucket
+    let project_id = store::ensure_default_project(config).map_err(|e| e.to_string())?;
+    let buckets = store::list_buckets(config, &project_id).map_err(|e| e.to_string())?;
+    let bucket_id = buckets
+        .into_iter()
+        .next()
+        .map(|b| b.id)
+        .ok_or_else(|| "no buckets found".to_string())?;
+
+    let task = store::create_task(
+        config,
+        &project_id,
+        &bucket_id,
+        title,
+        None,
+        0,
+        None,
+        actor,
+        Some(parent_task_id),
+    )
+    .map_err(|e| e.to_string())?;
+
+    // Log on the parent task's feed
+    let _ = store::log_change(
+        config,
+        parent_task_id,
+        actor,
+        "subtask_added",
+        None,
+        Some(title),
+    );
+
+    log::debug!(
+        "[projects] create_subtask id={} parent={parent_task_id}",
+        task.id
+    );
+    Ok(RpcOutcome::single_log(task, "subtask created"))
+}
+
+/// Delete a subtask and log on the parent's feed.
+pub fn delete_subtask(
+    config: &Config,
+    subtask_id: &str,
+    actor: &str,
+) -> Result<RpcOutcome<serde_json::Value>, String> {
+    // Fetch subtask title + parent_id before deleting
+    let subtask = store::get_task(config, subtask_id).map_err(|e| e.to_string())?;
+    let parent_id = subtask.parent_task_id.clone();
+    let title = subtask.title.clone();
+
+    store::delete_task(config, subtask_id).map_err(|e| e.to_string())?;
+
+    // Log on the parent task's feed
+    if let Some(pid) = &parent_id {
+        let _ = store::log_change(config, pid, actor, "subtask_removed", Some(&title), None);
+    }
+
+    let result = serde_json::json!({ "task_id": subtask_id, "deleted": true });
+    Ok(RpcOutcome::single_log(
+        result,
+        format!("subtask deleted: {subtask_id}"),
     ))
 }

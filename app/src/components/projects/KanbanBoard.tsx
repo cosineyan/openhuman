@@ -14,6 +14,7 @@ interface Props {
   onAddViaModal: (bucketId: string) => void;
   onMoveTask: (taskId: string, destBucketId: string, destIndex: number) => Promise<void>;
   onRenameColumn: (bucketId: string, title: string) => Promise<void>;
+  boardVersion?: number;
 }
 
 export function KanbanBoard({
@@ -23,6 +24,7 @@ export function KanbanBoard({
   onAddViaModal,
   onMoveTask,
   onRenameColumn,
+  boardVersion,
 }: Props) {
   const onDragEnd = async (result: DropResult) => {
     if (!result.destination) return;
@@ -43,6 +45,8 @@ export function KanbanBoard({
             key={bucket.id}
             bucket={bucket}
             tasks={tasks}
+            subtaskCounts={board.subtask_counts ?? {}}
+            boardVersion={boardVersion}
             onTaskClick={onTaskClick}
             onAddTask={onAddTask}
             onAddViaModal={onAddViaModal}

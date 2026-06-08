@@ -186,6 +186,7 @@ impl Tool for ProjectsCreateTaskTool {
                 .get("due_date")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string()),
+            parent_task_id: None,
         };
 
         match ops::create_task(&self.config, input, "ai") {

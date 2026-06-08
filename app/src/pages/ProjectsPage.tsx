@@ -59,14 +59,17 @@ export function ProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [taskStack, setTaskStack] = useState<Task[]>([]);
   const [createBucketId, setCreateBucketId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('board');
+  const [boardVersion, setBoardVersion] = useState(0);
 
   const reload = useCallback(async () => {
     try {
       const data = await getBoard();
       setBoard(data);
       setError(null);
+      setBoardVersion(v => v + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -238,6 +241,7 @@ export function ProjectsPage() {
               onAddViaModal={setCreateBucketId}
               onMoveTask={handleMoveTask}
               onRenameColumn={handleRenameColumn}
+              boardVersion={boardVersion}
             />
           </div>
         )}
@@ -248,13 +252,24 @@ export function ProjectsPage() {
       <TaskDetailDrawer
         task={selectedTask}
         buckets={board.buckets.map(b => b.bucket)}
+        parentTask={taskStack.length > 0 ? taskStack[taskStack.length - 1] : null}
         onClose={() => {
           setSelectedTask(null);
+          setTaskStack([]);
           setCreateBucketId(null);
         }}
+        onBack={taskStack.length > 0 ? () => {
+          const parent = taskStack[taskStack.length - 1];
+          setTaskStack(prev => prev.slice(0, -1));
+          setSelectedTask(parent);
+        } : undefined}
         onSave={handleSaveTask}
         onDelete={handleDeleteTask}
         onMove={handleMoveTaskFromDrawer}
+        onSubtaskClick={(subtask, parent) => {
+          setTaskStack(prev => [...prev, parent]);
+          setSelectedTask(subtask);
+        }}
         createBucketId={createBucketId}
         onCreateTask={handleCreateTaskFromModal}
       />

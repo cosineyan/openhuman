@@ -64,6 +64,7 @@ export function ListView({ board, onTaskClick }: Props) {
                   key={task.id}
                   task={task}
                   bucket={bucket}
+                  subtaskCount={(board.subtask_counts?.[task.id]?.[0]) ?? 0}
                   isLast={i === tasks.length - 1}
                   onClick={onTaskClick}
                 />
@@ -79,11 +80,13 @@ export function ListView({ board, onTaskClick }: Props) {
 function TaskRow({
   task,
   bucket,
+  subtaskCount,
   isLast,
   onClick,
 }: {
   task: Task;
   bucket: Bucket;
+  subtaskCount: number;
   isLast: boolean;
   onClick: (task: Task) => void;
 }) {
@@ -113,6 +116,16 @@ function TaskRow({
         className={`flex-1 text-sm font-medium min-w-0 truncate ${task.done ? 'line-through text-stone-400 dark:text-neutral-500' : 'text-stone-800 dark:text-neutral-100'}`}>
         {task.title}
       </span>
+
+      {/* Subtask count */}
+      {subtaskCount > 0 && (
+        <span className="shrink-0 flex items-center gap-0.5 text-xs text-stone-400 dark:text-neutral-500">
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+            <path d="M2 2h8M2 6h5M2 10h3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+          </svg>
+          {subtaskCount}
+        </span>
+      )}
 
       {/* Assignee */}
       {task.assignee && (

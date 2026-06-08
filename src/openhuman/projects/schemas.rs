@@ -25,6 +25,9 @@ pub fn all_controller_schemas() -> Vec<ControllerSchema> {
         schemas("add_attachment"),
         schemas("list_attachments"),
         schemas("delete_attachment"),
+        schemas("list_subtasks"),
+        schemas("create_subtask"),
+        schemas("delete_subtask"),
     ]
 }
 
@@ -73,6 +76,18 @@ pub fn all_registered_controllers() -> Vec<RegisteredController> {
         RegisteredController {
             schema: schemas("delete_attachment"),
             handler: handle_delete_attachment,
+        },
+        RegisteredController {
+            schema: schemas("list_subtasks"),
+            handler: handle_list_subtasks,
+        },
+        RegisteredController {
+            schema: schemas("create_subtask"),
+            handler: handle_create_subtask,
+        },
+        RegisteredController {
+            schema: schemas("delete_subtask"),
+            handler: handle_delete_subtask,
         },
     ]
 }
@@ -313,6 +328,30 @@ pub fn schemas(function: &str) -> ControllerSchema {
             inputs: vec![FieldSchema { name: "attachment_id", ty: TypeSchema::String, comment: "Identifier of the attachment.", required: true }],
             outputs: vec![FieldSchema { name: "result", ty: TypeSchema::Json, comment: "{ attachment_id, deleted: true }.", required: true }],
         },
+        "list_subtasks" => ControllerSchema {
+            namespace: "projects",
+            function: "list_subtasks",
+            description: "Return all subtasks for a given parent task.",
+            inputs: vec![FieldSchema { name: "parent_task_id", ty: TypeSchema::String, comment: "Identifier of the parent task.", required: true }],
+            outputs: vec![FieldSchema { name: "subtasks", ty: TypeSchema::Json, comment: "Array of Task records.", required: true }],
+        },
+        "create_subtask" => ControllerSchema {
+            namespace: "projects",
+            function: "create_subtask",
+            description: "Create a subtask under a parent task.",
+            inputs: vec![
+                FieldSchema { name: "parent_task_id", ty: TypeSchema::String, comment: "Identifier of the parent task.", required: true },
+                FieldSchema { name: "title", ty: TypeSchema::String, comment: "Subtask title.", required: true },
+            ],
+            outputs: vec![FieldSchema { name: "task", ty: TypeSchema::Json, comment: "Newly created subtask Task record.", required: true }],
+        },
+        "delete_subtask" => ControllerSchema {
+            namespace: "projects",
+            function: "delete_subtask",
+            description: "Delete a subtask by id. Logs the deletion on the parent task's feed.",
+            inputs: vec![FieldSchema { name: "task_id", ty: TypeSchema::String, comment: "Identifier of the subtask to delete.", required: true }],
+            outputs: vec![FieldSchema { name: "result", ty: TypeSchema::Json, comment: "{ task_id, deleted: true }.", required: true }],
+        },
         _other => ControllerSchema {
             namespace: "projects",
             function: "unknown",
@@ -363,6 +402,7 @@ fn handle_create_task(params: Map<String, Value>) -> ControllerFuture {
                 .get("due_date")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string()),
+            parent_task_id: None,
         };
         tracing::debug!(title = %input.title, "[rpc][projects] create_task entry");
         to_json(ops::create_task(&config, input, "me")?)
@@ -480,6 +520,34 @@ fn handle_delete_attachment(params: Map<String, Value>) -> ControllerFuture {
         let attachment_id = get_str(&params, "attachment_id")?.to_string();
         tracing::debug!(attachment_id = %attachment_id, "[rpc][projects] delete_attachment entry");
         to_json(ops::delete_attachment(&config, &attachment_id)?)
+    })
+}
+
+fn handle_list_subtasks(params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let config = config_rpc::load_config_with_timeout().await?;
+        let parent_task_id = get_str(&params, "parent_task_id")?.to_string();
+        tracing::debug!(parent_task_id = %parent_task_id, "[rpc][projects] list_subtasks entry");
+        to_json(ops::list_subtasks(&config, &parent_task_id)?)
+    })
+}
+
+fn handle_create_subtask(params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let config = config_rpc::load_config_with_timeout().await?;
+        let parent_task_id = get_str(&params, "parent_task_id")?.to_string();
+        let title = get_str(&params, "title")?.to_string();
+        tracing::debug!(parent_task_id = %parent_task_id, title = %title, "[rpc][projects] create_subtask entry");
+        to_json(ops::create_subtask(&config, &parent_task_id, &title, "me")?)
+    })
+}
+
+fn handle_delete_subtask(params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let config = config_rpc::load_config_with_timeout().await?;
+        let task_id = get_str(&params, "task_id")?.to_string();
+        tracing::debug!(task_id = %task_id, "[rpc][projects] delete_subtask entry");
+        to_json(ops::delete_subtask(&config, &task_id, "me")?)
     })
 }
 

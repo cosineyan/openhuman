@@ -119,6 +119,8 @@ pub struct Task {
     /// Reserved for orchestrator: JSON blob describing which agent/skill will
     /// execute the task. Always `None` in Phase 1.
     pub ai_plan: Option<String>,
+    /// Parent task id — `None` means this is a top-level task.
+    pub parent_task_id: Option<String>,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
 }
