@@ -5,7 +5,8 @@ mod types;
 pub mod tools;
 
 pub use ops::{
-    create_task, delete_task, get_board, move_task, update_bucket, update_task,
+    add_attachment, add_comment, create_task, delete_attachment, delete_task, get_board,
+    list_attachments, list_task_events, move_task, update_bucket, update_task,
     BucketWithTasks, BucketsWithTasks, CreateTaskInput,
 };
 pub use schemas::{
@@ -13,16 +14,13 @@ pub use schemas::{
     all_registered_controllers as all_projects_registered_controllers,
 };
 pub use tools::{
-    ProjectsCompleteTaskTool, ProjectsCreateTaskTool, ProjectsListTool, ProjectsMoveTaskTool,
+    ProjectsAddAttachmentTool, ProjectsCompleteTaskTool, ProjectsCreateTaskTool,
+    ProjectsListTool, ProjectsMoveTaskTool, ProjectsReadAttachmentTool,
 };
-pub use types::{Bucket, BucketPatch, Project, Task, TaskPatch};
+pub use types::{Bucket, BucketPatch, Project, Task, TaskAttachment, TaskEvent, TaskEventKind, TaskPatch};
 pub(crate) use store::{
-    create_task as store_create_task,
-    delete_task as store_delete_task,
     ensure_default_project,
     get_project,
     list_buckets,
     list_tasks,
-    update_bucket as store_update_bucket,
-    update_task as store_update_task,
 };

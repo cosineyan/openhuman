@@ -189,6 +189,7 @@ matrix-sdk = { version = "0.16", optional = true, default-features = false, feat
 fantoccini = { version = "0.22.0", optional = true, default-features = false, features = ["rustls-tls"] }
 serde-big-array = { version = "0.5", optional = true }
 pdf-extract = "0.10"
+mime_guess = "2"
 # WhatsApp Web — upstream `whatsapp-rust` 0.5. Replaces the previous `wa-rs`
 # 0.2 fork: upstream now ships its own SqliteStore (so we no longer need the
 # 1.3K-line custom RusqliteStore) and dispatches `Event::Message` for

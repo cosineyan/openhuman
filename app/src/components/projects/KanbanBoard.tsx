@@ -5,12 +5,13 @@ import type { BoardData, Task } from '../../services/api/projectsApi';
 interface Props {
   board: BoardData;
   onTaskClick: (task: Task) => void;
-  onAddTask: (bucketId: string, title: string) => Promise<void>;
+  onAddTask: (bucketId: string, title: string, opts?: { assignee?: string; due_date?: string; priority?: number }) => Promise<void>;
+  onAddViaModal: (bucketId: string) => void;
   onMoveTask: (taskId: string, destBucketId: string, destIndex: number) => Promise<void>;
   onRenameColumn: (bucketId: string, title: string) => Promise<void>;
 }
 
-export function KanbanBoard({ board, onTaskClick, onAddTask, onMoveTask, onRenameColumn }: Props) {
+export function KanbanBoard({ board, onTaskClick, onAddTask, onAddViaModal, onMoveTask, onRenameColumn }: Props) {
   const onDragEnd = async (result: DropResult) => {
     if (!result.destination) return;
     const { draggableId, destination } = result;
@@ -23,7 +24,7 @@ export function KanbanBoard({ board, onTaskClick, onAddTask, onMoveTask, onRenam
 
   return (
     <DragDropContext onDragEnd={result => void onDragEnd(result)}>
-      <div className="flex gap-4 overflow-x-auto pb-4">
+      <div className="flex gap-4 items-start h-full min-w-0">
         {board.buckets.map(({ bucket, tasks }) => (
           <KanbanColumn
             key={bucket.id}
@@ -31,6 +32,7 @@ export function KanbanBoard({ board, onTaskClick, onAddTask, onMoveTask, onRenam
             tasks={tasks}
             onTaskClick={onTaskClick}
             onAddTask={onAddTask}
+            onAddViaModal={onAddViaModal}
             onRenameColumn={onRenameColumn}
           />
         ))}

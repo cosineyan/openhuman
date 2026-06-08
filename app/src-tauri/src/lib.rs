@@ -248,6 +248,30 @@ fn configure_overlay_window_macos(window: &WebviewWindow<AppRuntime>) {
     }
 }
 
+/// Show a native open-file dialog and return the chosen absolute path.
+/// Returns `None` if the user cancels.
+#[tauri::command]
+async fn pick_file() -> Result<Option<String>, String> {
+    // Use osascript on macOS — avoids tauri-plugin-dialog which currently
+    // breaks the build due to a schemars version conflict (see artifact_commands.rs).
+    #[cfg(target_os = "macos")]
+    {
+        let output = tokio::process::Command::new("osascript")
+            .arg("-e")
+            .arg("POSIX path of (choose file)")
+            .output()
+            .await
+            .map_err(|e| e.to_string())?;
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            return Ok(if path.is_empty() { None } else { Some(path) });
+        }
+        return Ok(None); // user cancelled
+    }
+    #[cfg(not(target_os = "macos"))]
+    Err("pick_file is only supported on macOS".to_string())
+}
+
 /// Core update is handled by the Tauri shell auto-updater (`tauri-plugin-updater`)
 /// since the core ships in-process with the app. This command is kept as a
 /// no-op stub so the frontend's `checkCoreUpdate` keeps working without errors;
@@ -3475,7 +3499,8 @@ pub fn run() {
             mcp_commands::mcp_open_client_config,
             loopback_oauth::start_loopback_oauth_listener,
             loopback_oauth::stop_loopback_oauth_listener,
-            claude_code::claude_code_login_launch
+            claude_code::claude_code_login_launch,
+            pick_file
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

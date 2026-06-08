@@ -2,6 +2,51 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 // ---------------------------------------------------------------------------
+// Task events (change feed + comments)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskEventKind {
+    Change,
+    Comment,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TaskEvent {
+    pub id: String,
+    pub task_id: String,
+    pub kind: TaskEventKind,
+    /// "me" | "ai"
+    pub actor: String,
+    /// For kind=Change: the field name that changed (e.g. "bucket_id", "priority").
+    pub field: Option<String>,
+    pub old_value: Option<String>,
+    pub new_value: Option<String>,
+    /// For kind=Comment: the plain-text body.
+    pub body: Option<String>,
+    pub created: DateTime<Utc>,
+}
+
+// ---------------------------------------------------------------------------
+// Task attachments
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TaskAttachment {
+    pub id: String,
+    pub task_id: String,
+    pub filename: String,
+    pub mime_type: String,
+    /// Path relative to workspace_dir.
+    pub rel_path: String,
+    pub size_bytes: i64,
+    /// "me" | "ai"
+    pub uploaded_by: String,
+    pub created: DateTime<Utc>,
+}
+
+// ---------------------------------------------------------------------------
 // double_option helpers — distinguish absent (→ None) from null (→ Some(None))
 // ---------------------------------------------------------------------------
 

@@ -5403,6 +5403,7 @@ dependencies = [
  "lettre",
  "log",
  "mail-parser",
+ "mime_guess",
  "motosan-ai-oauth",
  "nu-ansi-term 0.46.0",
  "objc2 0.6.4",

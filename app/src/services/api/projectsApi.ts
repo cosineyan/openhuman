@@ -64,6 +64,31 @@ export interface BoardData {
   buckets: BucketWithTasks[];
 }
 
+export interface TaskEvent {
+  id: string;
+  task_id: string;
+  kind: 'change' | 'comment';
+  /** 'me' | 'ai' */
+  actor: string;
+  field?: string;
+  old_value?: string;
+  new_value?: string;
+  body?: string;
+  created: string;
+}
+
+export interface TaskAttachment {
+  id: string;
+  task_id: string;
+  filename: string;
+  mime_type: string;
+  rel_path: string;
+  size_bytes: number;
+  /** 'me' | 'ai' */
+  uploaded_by: string;
+  created: string;
+}
+
 // ---------------------------------------------------------------------------
 // Wire envelope — RpcOutcome::single_log always wraps in { result, logs }
 // ---------------------------------------------------------------------------
@@ -167,4 +192,57 @@ export async function updateBucket(params: {
     params,
   });
   return res.result;
+}
+
+/** Return all change-feed events and comments for a task, oldest first. */
+export async function listTaskEvents(task_id: string): Promise<TaskEvent[]> {
+  log('listTaskEvents task_id=%s', task_id);
+  const res = await callCoreRpc<RpcEnvelope<TaskEvent[]>>({
+    method: 'openhuman.projects_list_task_events',
+    params: { task_id },
+  });
+  return res.result;
+}
+
+/** Add a plain-text comment to a task. */
+export async function addComment(task_id: string, body: string, actor = 'me'): Promise<TaskEvent> {
+  log('addComment task_id=%s actor=%s', task_id, actor);
+  const res = await callCoreRpc<RpcEnvelope<TaskEvent>>({
+    method: 'openhuman.projects_add_comment',
+    params: { task_id, body, actor },
+  });
+  return res.result;
+}
+
+/** Attach a file by its absolute path. uploaded_by defaults to 'me'. */
+export async function addAttachment(params: {
+  task_id: string;
+  src_path: string;
+  uploaded_by?: string;
+}): Promise<TaskAttachment> {
+  log('addAttachment task_id=%s', params.task_id);
+  const res = await callCoreRpc<RpcEnvelope<TaskAttachment>>({
+    method: 'openhuman.projects_add_attachment',
+    params: { uploaded_by: 'me', ...params },
+  });
+  return res.result;
+}
+
+/** List all attachments for a task. */
+export async function listAttachments(task_id: string): Promise<TaskAttachment[]> {
+  log('listAttachments task_id=%s', task_id);
+  const res = await callCoreRpc<RpcEnvelope<TaskAttachment[]>>({
+    method: 'openhuman.projects_list_attachments',
+    params: { task_id },
+  });
+  return res.result;
+}
+
+/** Delete an attachment by id. */
+export async function deleteAttachment(attachment_id: string): Promise<void> {
+  log('deleteAttachment attachment_id=%s', attachment_id);
+  await callCoreRpc<RpcEnvelope<unknown>>({
+    method: 'openhuman.projects_delete_attachment',
+    params: { attachment_id },
+  });
 }

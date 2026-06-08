@@ -1,5 +1,5 @@
 use crate::openhuman::config::Config;
-use crate::openhuman::projects::{Bucket, BucketPatch, Project, Task, TaskPatch};
+use crate::openhuman::projects::{Bucket, BucketPatch, Project, Task, TaskAttachment, TaskEvent, TaskEventKind, TaskPatch};
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
@@ -48,6 +48,31 @@ CREATE TABLE IF NOT EXISTS project_tasks (
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_bucket  ON project_tasks(bucket_id, position);
 CREATE INDEX IF NOT EXISTS idx_tasks_project ON project_tasks(project_id);
+
+CREATE TABLE IF NOT EXISTS project_task_events (
+    id        TEXT PRIMARY KEY,
+    task_id   TEXT NOT NULL REFERENCES project_tasks(id) ON DELETE CASCADE,
+    kind      TEXT NOT NULL,
+    actor     TEXT NOT NULL,
+    field     TEXT,
+    old_value TEXT,
+    new_value TEXT,
+    body      TEXT,
+    created   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_task_events ON project_task_events(task_id, created);
+
+CREATE TABLE IF NOT EXISTS project_task_attachments (
+    id           TEXT PRIMARY KEY,
+    task_id      TEXT NOT NULL REFERENCES project_tasks(id) ON DELETE CASCADE,
+    filename     TEXT NOT NULL,
+    mime_type    TEXT NOT NULL,
+    rel_path     TEXT NOT NULL,
+    size_bytes   INTEGER NOT NULL DEFAULT 0,
+    uploaded_by  TEXT NOT NULL DEFAULT 'me',
+    created      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_attachments_task ON project_task_attachments(task_id, created);
 ";
 
 // ---------------------------------------------------------------------------
@@ -103,6 +128,26 @@ fn row_to_bucket(row: &rusqlite::Row<'_>) -> rusqlite::Result<Bucket> {
         is_done_bucket: row.get::<_, i64>(4)? != 0,
         created: parse_rfc3339(&created_raw).map_err(sql_err)?,
         updated: parse_rfc3339(&updated_raw).map_err(sql_err)?,
+    })
+}
+
+fn row_to_task_event(row: &rusqlite::Row<'_>) -> rusqlite::Result<TaskEvent> {
+    let kind_str: String = row.get(2)?;
+    let created_raw: String = row.get(8)?;
+    let kind = match kind_str.as_str() {
+        "comment" => TaskEventKind::Comment,
+        _ => TaskEventKind::Change,
+    };
+    Ok(TaskEvent {
+        id: row.get(0)?,
+        task_id: row.get(1)?,
+        kind,
+        actor: row.get(3)?,
+        field: row.get(4)?,
+        old_value: row.get(5)?,
+        new_value: row.get(6)?,
+        body: row.get(7)?,
+        created: parse_rfc3339(&created_raw).map_err(sql_err)?,
     })
 }
 
@@ -164,13 +209,18 @@ pub fn ensure_default_project(config: &Config) -> Result<String> {
         // Check for existing default project.
         let existing: Option<String> = conn
             .query_row(
-                "SELECT id FROM projects WHERE title = 'Default' LIMIT 1",
+                "SELECT id FROM projects WHERE title = 'Project' OR title = 'Default' LIMIT 1",
                 [],
                 |row| row.get(0),
             )
             .optional()?;
 
         if let Some(id) = existing {
+            // Migrate old "Default" title to "Project"
+            conn.execute(
+                "UPDATE projects SET title = 'Project' WHERE id = ?1 AND title = 'Default'",
+                params![id],
+            ).ok();
             log::debug!("[projects] default project already exists id={id}");
             return Ok(id);
         }
@@ -179,7 +229,7 @@ pub fn ensure_default_project(config: &Config) -> Result<String> {
         let project_id = Uuid::new_v4().to_string();
 
         conn.execute(
-            "INSERT INTO projects (id, title, created, updated) VALUES (?1, 'Default', ?2, ?3)",
+            "INSERT INTO projects (id, title, created, updated) VALUES (?1, 'Project', ?2, ?3)",
             params![project_id, now.to_rfc3339(), now.to_rfc3339()],
         )
         .context("Failed to insert default project")?;
@@ -295,6 +345,69 @@ pub fn update_bucket(config: &Config, bucket_id: &str, patch: &BucketPatch) -> R
 }
 
 // ---------------------------------------------------------------------------
+// Task events (change feed + comments)
+// ---------------------------------------------------------------------------
+
+pub fn log_change(
+    config: &Config,
+    task_id: &str,
+    actor: &str,
+    field: &str,
+    old_value: Option<&str>,
+    new_value: Option<&str>,
+) -> Result<()> {
+    let now = Utc::now();
+    let id = Uuid::new_v4().to_string();
+    with_connection(config, |conn| {
+        conn.execute(
+            "INSERT INTO project_task_events (id, task_id, kind, actor, field, old_value, new_value, body, created)
+             VALUES (?1, ?2, 'change', ?3, ?4, ?5, ?6, NULL, ?7)",
+            params![id, task_id, actor, field, old_value, new_value, now.to_rfc3339()],
+        )
+        .context("Failed to insert change event")?;
+        Ok(())
+    })
+}
+
+pub fn add_comment(config: &Config, task_id: &str, actor: &str, body: &str) -> Result<TaskEvent> {
+    let now = Utc::now();
+    let id = Uuid::new_v4().to_string();
+    with_connection(config, |conn| {
+        conn.execute(
+            "INSERT INTO project_task_events (id, task_id, kind, actor, field, old_value, new_value, body, created)
+             VALUES (?1, ?2, 'comment', ?3, NULL, NULL, NULL, ?4, ?5)",
+            params![id, task_id, actor, body, now.to_rfc3339()],
+        )
+        .context("Failed to insert comment event")?;
+
+        let event = conn.query_row(
+            "SELECT id, task_id, kind, actor, field, old_value, new_value, body, created
+             FROM project_task_events WHERE id = ?1",
+            params![id],
+            row_to_task_event,
+        )?;
+        Ok(event)
+    })
+}
+
+pub fn list_events(config: &Config, task_id: &str) -> Result<Vec<TaskEvent>> {
+    with_connection(config, |conn| {
+        let mut stmt = conn.prepare(
+            "SELECT id, task_id, kind, actor, field, old_value, new_value, body, created
+             FROM project_task_events
+             WHERE task_id = ?1
+             ORDER BY created ASC",
+        )?;
+        let rows = stmt.query_map(params![task_id], row_to_task_event)?;
+        let mut events = Vec::new();
+        for row in rows {
+            events.push(row?);
+        }
+        Ok(events)
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Tasks
 // ---------------------------------------------------------------------------
 
@@ -347,11 +460,12 @@ pub fn create_task(
     description: Option<&str>,
     priority: i64,
     due_date: Option<DateTime<Utc>>,
+    actor: &str,
 ) -> Result<Task> {
     let now = Utc::now();
     let task_id = Uuid::new_v4().to_string();
 
-    with_connection(config, |conn| {
+    let task = with_connection(config, |conn| {
         // Compute next position (max + 1000.0) and next idx (max + 1)
         let max_pos: f64 = conn
             .query_row(
@@ -405,13 +519,18 @@ pub fn create_task(
             row_to_task,
         )?;
         Ok(task)
-    })
+    })?;
+
+    // Log a "created" event outside the connection closure.
+    let _ = log_change(config, &task.id, actor, "created", None, Some(&task.title));
+
+    Ok(task)
 }
 
-pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch) -> Result<Task> {
+pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch, actor: &str) -> Result<Task> {
     let now = Utc::now();
 
-    with_connection(config, |conn| {
+    let result = with_connection(config, |conn| {
         // Read current task.
         let task: Task = conn
             .query_row(
@@ -433,6 +552,16 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch) -> Result<
             .query_row(
                 "SELECT is_done_bucket FROM project_buckets WHERE id = ?1",
                 params![new_bucket_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .map(|v| v != 0)
+            .unwrap_or(false);
+
+        // Check if the source bucket was a done bucket (for auto-undone logic).
+        let source_is_done_bucket: bool = conn
+            .query_row(
+                "SELECT is_done_bucket FROM project_buckets WHERE id = ?1",
+                params![task.bucket_id],
                 |row| row.get::<_, i64>(0),
             )
             .map(|v| v != 0)
@@ -461,11 +590,13 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch) -> Result<
             Some(Some(s)) => Some(s.as_str()),
         };
 
-        // done field: explicit patch wins; moving to done bucket auto-sets.
+        // done field: explicit patch wins; moving to done bucket auto-sets; moving away auto-clears.
         let new_done = if let Some(explicit) = patch.done {
             explicit
         } else if target_is_done_bucket && new_bucket_id != task.bucket_id {
             true
+        } else if source_is_done_bucket && new_bucket_id != task.bucket_id && !target_is_done_bucket {
+            false
         } else {
             task.done
         };
@@ -525,8 +656,38 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch) -> Result<
             params![task_id],
             row_to_task,
         )?;
-        Ok(updated)
-    })
+        Ok((task, updated))
+    })?;
+
+    // Log field changes outside the connection closure.
+    let (old_task, updated) = result;
+    if patch.title.is_some() && old_task.title != updated.title {
+        let _ = log_change(config, task_id, actor, "title", Some(&old_task.title), Some(&updated.title));
+    }
+    if patch.description.is_some() && old_task.description != updated.description {
+        let _ = log_change(config, task_id, actor, "description", None, None);
+    }
+    if patch.bucket_id.is_some() && old_task.bucket_id != updated.bucket_id {
+        let _ = log_change(config, task_id, actor, "bucket_id", Some(&old_task.bucket_id), Some(&updated.bucket_id));
+    }
+    if patch.priority.is_some() && old_task.priority != updated.priority {
+        let _ = log_change(config, task_id, actor, "priority", Some(&old_task.priority.to_string()), Some(&updated.priority.to_string()));
+    }
+    if patch.done.is_some() && old_task.done != updated.done {
+        let _ = log_change(config, task_id, actor, "done", Some(&old_task.done.to_string()), Some(&updated.done.to_string()));
+    }
+    if patch.due_date.is_some() {
+        let old_val = old_task.due_date.as_ref().map(|d| d.to_rfc3339());
+        let new_val = updated.due_date.as_ref().map(|d| d.to_rfc3339());
+        if old_val != new_val {
+            let _ = log_change(config, task_id, actor, "due_date", old_val.as_deref(), new_val.as_deref());
+        }
+    }
+    if patch.assignee.is_some() && old_task.assignee != updated.assignee {
+        let _ = log_change(config, task_id, actor, "assignee", old_task.assignee.as_deref(), updated.assignee.as_deref());
+    }
+
+    Ok(updated)
 }
 
 pub fn delete_task(config: &Config, task_id: &str) -> Result<()> {
@@ -544,6 +705,172 @@ pub fn delete_task(config: &Config, task_id: &str) -> Result<()> {
 
     log::debug!("[projects] delete_task id={task_id}");
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Attachments
+// ---------------------------------------------------------------------------
+
+fn row_to_attachment(row: &rusqlite::Row<'_>) -> rusqlite::Result<TaskAttachment> {
+    let created_raw: String = row.get(7)?;
+    Ok(TaskAttachment {
+        id: row.get(0)?,
+        task_id: row.get(1)?,
+        filename: row.get(2)?,
+        mime_type: row.get(3)?,
+        rel_path: row.get(4)?,
+        size_bytes: row.get(5)?,
+        uploaded_by: row.get(6)?,
+        created: parse_rfc3339(&created_raw).map_err(sql_err)?,
+    })
+}
+
+/// Copy `src_path` into the workspace attachments dir and register it in the DB.
+/// Returns the new attachment record.
+pub fn add_attachment(
+    config: &Config,
+    task_id: &str,
+    src_path: &std::path::Path,
+    uploaded_by: &str,
+) -> Result<TaskAttachment> {
+    // Validate: source must exist and be a file.
+    anyhow::ensure!(src_path.exists(), "source file not found: {}", src_path.display());
+    anyhow::ensure!(src_path.is_file(), "source path is not a file: {}", src_path.display());
+
+    // Validate: source must NOT be inside the workspace dir (prevent loops).
+    let canonical_src = src_path.canonicalize()
+        .with_context(|| format!("cannot canonicalize {}", src_path.display()))?;
+    let canonical_ws = config.workspace_dir.canonicalize()
+        .unwrap_or_else(|_| config.workspace_dir.clone());
+    anyhow::ensure!(
+        !canonical_src.starts_with(&canonical_ws),
+        "cannot attach files from inside the workspace directory"
+    );
+
+    let filename = src_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| anyhow::anyhow!("invalid filename"))?
+        .to_string();
+
+    let id = Uuid::new_v4().to_string();
+    let now = Utc::now();
+
+    // Destination: workspace/projects/attachments/{task_id}/{id}-{filename}
+    let dest_dir = config.workspace_dir
+        .join("projects")
+        .join("attachments")
+        .join(task_id);
+    std::fs::create_dir_all(&dest_dir)
+        .with_context(|| format!("failed to create attachments dir: {}", dest_dir.display()))?;
+
+    let dest_filename = format!("{}-{}", id, filename);
+    let dest_path = dest_dir.join(&dest_filename);
+    std::fs::copy(&canonical_src, &dest_path)
+        .with_context(|| format!("failed to copy attachment to {}", dest_path.display()))?;
+
+    let size_bytes = dest_path.metadata().map(|m| m.len() as i64).unwrap_or(0);
+
+    // rel_path relative to workspace_dir
+    let rel_path = format!("projects/attachments/{}/{}", task_id, dest_filename);
+
+    let mime_type = mime_guess::from_path(&filename)
+        .first_or_octet_stream()
+        .to_string();
+
+    let att = with_connection(config, |conn| {
+        conn.execute(
+            "INSERT INTO project_task_attachments
+             (id, task_id, filename, mime_type, rel_path, size_bytes, uploaded_by, created)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![id, task_id, filename, mime_type, rel_path, size_bytes, uploaded_by, now.to_rfc3339()],
+        )
+        .context("Failed to insert attachment")?;
+
+        let att = conn.query_row(
+            "SELECT id, task_id, filename, mime_type, rel_path, size_bytes, uploaded_by, created
+             FROM project_task_attachments WHERE id = ?1",
+            params![id],
+            row_to_attachment,
+        )?;
+        Ok(att)
+    })?;
+
+    // Log an "attached" change event outside the connection closure.
+    let _ = log_change(config, task_id, uploaded_by, "attachment", None, Some(&att.filename));
+
+    Ok(att)
+}
+
+pub fn list_attachments(config: &Config, task_id: &str) -> Result<Vec<TaskAttachment>> {
+    with_connection(config, |conn| {
+        let mut stmt = conn.prepare(
+            "SELECT id, task_id, filename, mime_type, rel_path, size_bytes, uploaded_by, created
+             FROM project_task_attachments
+             WHERE task_id = ?1
+             ORDER BY created ASC",
+        )?;
+        let rows = stmt.query_map(params![task_id], row_to_attachment)?;
+        let mut atts = Vec::new();
+        for row in rows {
+            atts.push(row?);
+        }
+        Ok(atts)
+    })
+}
+
+pub fn delete_attachment(config: &Config, attachment_id: &str) -> Result<()> {
+    // Fetch task_id, filename, rel_path before deleting the DB row.
+    let row: Option<(String, String, String)> = with_connection(config, |conn| {
+        conn.query_row(
+            "SELECT task_id, filename, rel_path FROM project_task_attachments WHERE id = ?1",
+            params![attachment_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()
+        .context("Failed to query attachment")
+    })?;
+
+    let Some((task_id, filename, rel)) = row else {
+        anyhow::bail!("Attachment '{}' not found", attachment_id);
+    };
+
+    // Delete from DB first.
+    with_connection(config, |conn| {
+        conn.execute(
+            "DELETE FROM project_task_attachments WHERE id = ?1",
+            params![attachment_id],
+        )
+        .context("Failed to delete attachment row")?;
+        Ok(())
+    })?;
+
+    // Best-effort file deletion — don't fail the RPC if the file is already gone.
+    let file_path = config.workspace_dir.join(&rel);
+    if file_path.exists() {
+        let _ = std::fs::remove_file(&file_path);
+    }
+
+    // Log the removal to the change feed.
+    let _ = log_change(config, &task_id, "me", "attachment_removed", Some(&filename), None);
+
+    log::debug!("[projects] delete_attachment id={attachment_id} file={filename}");
+    Ok(())
+}
+
+/// Return the absolute path of an attachment (for AI reading).
+pub fn attachment_abs_path(config: &Config, attachment_id: &str) -> Result<(TaskAttachment, std::path::PathBuf)> {
+    with_connection(config, |conn| {
+        let att = conn.query_row(
+            "SELECT id, task_id, filename, mime_type, rel_path, size_bytes, uploaded_by, created
+             FROM project_task_attachments WHERE id = ?1",
+            params![attachment_id],
+            row_to_attachment,
+        )
+        .with_context(|| format!("Attachment '{}' not found", attachment_id))?;
+        let abs = config.workspace_dir.join(&att.rel_path);
+        Ok((att, abs))
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -637,6 +964,7 @@ mod tests {
             Some("All CRUD operations"),
             0,
             None,
+            "me",
         )
         .unwrap();
 
@@ -666,6 +994,7 @@ mod tests {
             None,
             0,
             None,
+            "me",
         )
         .unwrap();
         assert!(!task.done);
@@ -674,7 +1003,7 @@ mod tests {
             bucket_id: Some(done_bucket.id.clone()),
             ..TaskPatch::default()
         };
-        let updated = update_task(&config, &task.id, &patch).unwrap();
+        let updated = update_task(&config, &task.id, &patch, "me").unwrap();
 
         assert!(updated.done, "task moved to done bucket must be marked done");
         assert!(
@@ -689,7 +1018,7 @@ mod tests {
         let cfg = test_config(&tmp);
         let project_id = ensure_default_project(&cfg).unwrap();
         let buckets = list_buckets(&cfg, &project_id).unwrap();
-        let task = create_task(&cfg, &project_id, &buckets[0].id, "Test", None, 0, None).unwrap();
+        let task = create_task(&cfg, &project_id, &buckets[0].id, "Test", None, 0, None, "me").unwrap();
         assert_eq!(task.assignee, None);
         assert_eq!(task.ai_plan, None);
     }
@@ -700,13 +1029,14 @@ mod tests {
         let cfg = test_config(&tmp);
         let project_id = ensure_default_project(&cfg).unwrap();
         let buckets = list_buckets(&cfg, &project_id).unwrap();
-        let task = create_task(&cfg, &project_id, &buckets[0].id, "Test", None, 0, None).unwrap();
+        let task = create_task(&cfg, &project_id, &buckets[0].id, "Test", None, 0, None, "me").unwrap();
 
         // Set to 'me'
         let patched = update_task(
             &cfg,
             &task.id,
             &TaskPatch { assignee: Some(Some("me".to_string())), ..TaskPatch::default() },
+            "me",
         ).unwrap();
         assert_eq!(patched.assignee, Some("me".to_string()));
 
@@ -715,6 +1045,7 @@ mod tests {
             &cfg,
             &task.id,
             &TaskPatch { assignee: Some(Some("ai".to_string())), ..TaskPatch::default() },
+            "me",
         ).unwrap();
         assert_eq!(patched2.assignee, Some("ai".to_string()));
 
@@ -723,6 +1054,7 @@ mod tests {
             &cfg,
             &task.id,
             &TaskPatch { assignee: Some(None), ..TaskPatch::default() },
+            "me",
         ).unwrap();
         assert_eq!(cleared.assignee, None);
     }

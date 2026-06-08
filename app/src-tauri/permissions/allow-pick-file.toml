@@ -1,0 +1,11 @@
+[[permission]]
+identifier = "allow-pick-file"
+description = "Allow opening the native file picker to select a file for attachment"
+
+[permission.commands]
+
+allow = [
+    "pick_file",
+]
+
+deny = []

@@ -5,7 +5,6 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::fmt::Write as _;
 use std::sync::Arc;
-
 // ---------------------------------------------------------------------------
 // Markdown rendering
 // ---------------------------------------------------------------------------
@@ -188,7 +187,7 @@ impl Tool for ProjectsCreateTaskTool {
                 .map(|s| s.to_string()),
         };
 
-        match ops::create_task(&self.config, input) {
+        match ops::create_task(&self.config, input, "ai") {
             Ok(outcome) => {
                 let json_str = serde_json::to_string_pretty(&outcome.value)?;
                 Ok(ToolResult::success(json_str))
@@ -260,7 +259,7 @@ impl Tool for ProjectsMoveTaskTool {
             }
         };
 
-        match ops::move_task(&self.config, &task_id, &bucket_id, None) {
+        match ops::move_task(&self.config, &task_id, &bucket_id, None, "ai") {
             Ok(outcome) => {
                 let json_str = serde_json::to_string_pretty(&outcome.value)?;
                 Ok(ToolResult::success(json_str))
@@ -344,7 +343,7 @@ impl Tool for ProjectsCompleteTaskTool {
             }
         };
 
-        match ops::move_task(&self.config, &task_id, &done_bucket_id, None) {
+        match ops::move_task(&self.config, &task_id, &done_bucket_id, None, "ai") {
             Ok(outcome) => {
                 log::debug!(
                     "[projects] complete_task id={task_id} → done bucket={done_bucket_id}"
@@ -359,6 +358,201 @@ impl Tool for ProjectsCompleteTaskTool {
     fn permission_level(&self) -> PermissionLevel {
         PermissionLevel::Write
     }
+}
+
+// ---------------------------------------------------------------------------
+// ProjectsReadAttachmentTool
+// ---------------------------------------------------------------------------
+
+/// Max bytes to pass to the model for text/PDF content.
+const TEXT_TRUNCATE_BYTES: usize = 32 * 1024;
+/// Max bytes to pass to the model for image content (base64 encoded).
+const IMAGE_TRUNCATE_BYTES: usize = 1024 * 1024;
+
+pub struct ProjectsReadAttachmentTool {
+    config: Arc<Config>,
+}
+
+impl ProjectsReadAttachmentTool {
+    pub fn new(config: Arc<Config>) -> Self {
+        Self { config }
+    }
+}
+
+#[async_trait]
+impl Tool for ProjectsReadAttachmentTool {
+    fn name(&self) -> &str { "projects_read_attachment" }
+
+    fn description(&self) -> &str {
+        "Read the contents of a file attachment on a task. \
+         Text files and PDFs are returned as text (truncated to 32 KB). \
+         Images are returned as base64 (truncated to 1 MB). \
+         Other binary files return metadata only."
+    }
+
+    fn parameters_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "required": ["attachment_id"],
+            "properties": {
+                "attachment_id": { "type": "string", "description": "Attachment id to read." }
+            },
+            "additionalProperties": false
+        })
+    }
+
+    async fn execute(&self, args: Value) -> anyhow::Result<ToolResult> {
+        self.execute_with_options(args, ToolCallOptions::default()).await
+    }
+
+    async fn execute_with_options(&self, args: Value, _opts: ToolCallOptions) -> anyhow::Result<ToolResult> {
+        let Some(attachment_id) = args.get("attachment_id").and_then(|v| v.as_str()) else {
+            return Ok(ToolResult::error("missing attachment_id"));
+        };
+
+        let (att, abs_path) = match store::attachment_abs_path(&self.config, attachment_id) {
+            Ok(v) => v,
+            Err(e) => return Ok(ToolResult::error(e.to_string())),
+        };
+
+        if !abs_path.exists() {
+            return Ok(ToolResult::error(format!("attachment file not found on disk: {}", abs_path.display())));
+        }
+
+        let mime = att.mime_type.as_str();
+
+        if mime.starts_with("text/") || mime == "application/json"
+            || mime.contains("javascript") || mime.contains("xml")
+            || mime == "application/x-sh" || att.filename.ends_with(".md")
+            || att.filename.ends_with(".toml") || att.filename.ends_with(".yaml")
+            || att.filename.ends_with(".yml")
+        {
+            // Plain text: read and truncate
+            let raw = std::fs::read(&abs_path)
+                .map_err(|e| anyhow::anyhow!("read error: {e}"))?;
+            let total = raw.len();
+            let slice = &raw[..raw.len().min(TEXT_TRUNCATE_BYTES)];
+            let mut text = String::from_utf8_lossy(slice).into_owned();
+            if total > TEXT_TRUNCATE_BYTES {
+                text.push_str(&format!("\n[content truncated: {} bytes total]", total));
+            }
+            Ok(ToolResult::success(json!({
+                "attachment_id": attachment_id,
+                "filename": att.filename,
+                "mime_type": mime,
+                "content": text,
+                "truncated": total > TEXT_TRUNCATE_BYTES,
+            }).to_string()))
+
+        } else if mime == "application/pdf" {
+            // PDF: extract text via pdf-extract
+            let text_result = pdf_extract::extract_text(&abs_path);
+            let raw_text = match text_result {
+                Ok(t) => t,
+                Err(e) => return Ok(ToolResult::error(format!("PDF extraction failed: {e}"))),
+            };
+            let total = raw_text.len();
+            let truncated = total > TEXT_TRUNCATE_BYTES;
+            let content = if truncated {
+                format!("{}\n[content truncated: {} bytes total]", &raw_text[..TEXT_TRUNCATE_BYTES], total)
+            } else {
+                raw_text
+            };
+            Ok(ToolResult::success(json!({
+                "attachment_id": attachment_id,
+                "filename": att.filename,
+                "mime_type": mime,
+                "content": content,
+                "truncated": truncated,
+            }).to_string()))
+
+        } else if mime.starts_with("image/") {
+            // Image: base64-encode and truncate
+            use base64::Engine as _;
+            let raw = std::fs::read(&abs_path)
+                .map_err(|e| anyhow::anyhow!("read error: {e}"))?;
+            let total = raw.len();
+            let slice = &raw[..raw.len().min(IMAGE_TRUNCATE_BYTES)];
+            let b64 = base64::engine::general_purpose::STANDARD.encode(slice);
+            Ok(ToolResult::success(json!({
+                "attachment_id": attachment_id,
+                "filename": att.filename,
+                "mime_type": mime,
+                "base64_content": b64,
+                "truncated": total > IMAGE_TRUNCATE_BYTES,
+                "size_bytes": total,
+            }).to_string()))
+
+        } else {
+            // Binary / unsupported: metadata only
+            Ok(ToolResult::success(json!({
+                "attachment_id": attachment_id,
+                "filename": att.filename,
+                "mime_type": mime,
+                "size_bytes": att.size_bytes,
+                "readable": false,
+                "note": "Binary file type — content not readable. Use the filename and size as context.",
+            }).to_string()))
+        }
+    }
+
+    fn permission_level(&self) -> PermissionLevel { PermissionLevel::ReadOnly }
+}
+
+// ---------------------------------------------------------------------------
+// ProjectsAddAttachmentTool  (AI-facing upload)
+// ---------------------------------------------------------------------------
+
+pub struct ProjectsAddAttachmentTool {
+    config: Arc<Config>,
+}
+
+impl ProjectsAddAttachmentTool {
+    pub fn new(config: Arc<Config>) -> Self {
+        Self { config }
+    }
+}
+
+#[async_trait]
+impl Tool for ProjectsAddAttachmentTool {
+    fn name(&self) -> &str { "projects_add_attachment" }
+
+    fn description(&self) -> &str {
+        "Attach a file to a task by providing its absolute path on disk. \
+         The file is copied into the workspace. The attachment will be marked as uploaded by AI."
+    }
+
+    fn parameters_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "required": ["task_id", "src_path"],
+            "properties": {
+                "task_id": { "type": "string", "description": "Task to attach the file to." },
+                "src_path": { "type": "string", "description": "Absolute path of the file to attach." }
+            },
+            "additionalProperties": false
+        })
+    }
+
+    async fn execute(&self, args: Value) -> anyhow::Result<ToolResult> {
+        self.execute_with_options(args, ToolCallOptions::default()).await
+    }
+
+    async fn execute_with_options(&self, args: Value, _opts: ToolCallOptions) -> anyhow::Result<ToolResult> {
+        let Some(task_id) = args.get("task_id").and_then(|v| v.as_str()) else {
+            return Ok(ToolResult::error("missing task_id"));
+        };
+        let Some(src_path) = args.get("src_path").and_then(|v| v.as_str()) else {
+            return Ok(ToolResult::error("missing src_path"));
+        };
+
+        match ops::add_attachment(&self.config, task_id, src_path, "ai") {
+            Ok(outcome) => Ok(ToolResult::success(serde_json::to_string_pretty(&outcome.value)?)),
+            Err(e) => Ok(ToolResult::error(e)),
+        }
+    }
+
+    fn permission_level(&self) -> PermissionLevel { PermissionLevel::Write }
 }
 
 // ---------------------------------------------------------------------------
