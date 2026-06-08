@@ -95,6 +95,7 @@ export function KanbanColumn({
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState(bucket.title);
+  const [addOpen, setAddOpen] = useState(false);
   const style = getBucketStyle(bucket.title, bucket.is_done_bucket);
 
   const commitRename = async () => {
@@ -146,7 +147,7 @@ export function KanbanColumn({
         <button
           type="button"
           title="Add task"
-          onClick={() => onAddViaModal(bucket.id)}
+          onClick={() => setAddOpen(true)}
           className="p-0.5 text-stone-400 dark:text-neutral-500 hover:text-stone-600 dark:hover:text-neutral-300 ml-1">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
             <path
@@ -187,6 +188,8 @@ export function KanbanColumn({
       {/* Add task — inline form or button */}
       <div className="mt-2">
         <NewTaskInput
+          open={addOpen}
+          onOpenChange={setAddOpen}
           addTaskColor={style.addTaskColor}
           onAdd={(title, opts) => onAddTask(bucket.id, title, opts)}
         />

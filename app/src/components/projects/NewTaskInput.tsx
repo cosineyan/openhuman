@@ -362,9 +362,9 @@ export function NewTaskInput({ open: openProp, onOpenChange, addTaskColor, onAdd
   return (
     <div
       ref={containerRef}
-      className="relative rounded-lg border border-stone-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 shadow-sm">
-      {/* Title + Save */}
-      <div className="flex items-start justify-between gap-2 px-3 pt-3 pb-2">
+      className="rounded-lg border border-stone-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 shadow-sm overflow-hidden">
+      {/* Title + Save in one row */}
+      <div className="flex items-center gap-2 px-3 pt-2.5 pb-2">
         <input
           autoFocus
           type="text"
@@ -372,178 +372,101 @@ export function NewTaskInput({ open: openProp, onOpenChange, addTaskColor, onAdd
           onChange={e => setTitle(e.target.value)}
           onKeyDown={e => {
             if (e.key === 'Enter') void submit();
-            if (e.key === 'Escape') {
-              setOpen(false);
-              setTitle('');
-            }
+            if (e.key === 'Escape') { setOpen(false); setTitle(''); }
           }}
           placeholder="Task Name..."
-          className="flex-1 min-w-0 text-sm font-medium text-stone-900 dark:text-neutral-100 placeholder:text-stone-400 dark:placeholder:text-neutral-500 bg-transparent focus:outline-none"
+          className="flex-1 min-w-0 text-sm text-stone-800 dark:text-neutral-100 placeholder:text-stone-400 dark:placeholder:text-neutral-500 bg-transparent focus:outline-none"
         />
         <button
           type="button"
           disabled={!title.trim() || busy}
           onClick={() => void submit()}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-stone-200 dark:bg-neutral-700 text-xs font-medium text-stone-600 dark:text-neutral-300 hover:bg-stone-300 dark:hover:bg-neutral-600 disabled:opacity-30 transition-colors shrink-0">
+          className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-md bg-stone-200 dark:bg-neutral-700 text-xs font-medium text-stone-600 dark:text-neutral-300 hover:bg-stone-300 dark:hover:bg-neutral-600 disabled:opacity-30 transition-colors">
           Save <kbd className="text-[10px] opacity-60">↵</kbd>
         </button>
       </div>
 
-      {/* Hint rows */}
+      {/* Field rows */}
       <div className="border-t border-stone-100 dark:border-neutral-700">
-        {/* Assignee row */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={e =>
-              openPopover(e, setShowAssigneePicker, () => {
-                setShowDatePicker(false);
-                setShowPriorityPicker(false);
-              })
-            }
-            className="flex items-center gap-2.5 w-full px-3 py-2 text-xs text-stone-500 dark:text-neutral-400 hover:bg-stone-50 dark:hover:bg-neutral-700/50 transition-colors">
-            <PersonIcon />
-            {assignee ? (
-              <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 rounded-full bg-stone-500 flex items-center justify-center">
-                  <span className="text-[7px] font-bold text-white">
-                    {assignee === 'ai' ? 'AI' : 'ME'}
-                  </span>
-                </div>
-                <span>{assignee === 'ai' ? 'AI' : 'Me'}</span>
-              </div>
-            ) : (
-              <span>Add assignee</span>
-            )}
-            {assignee && (
-              <button
-                type="button"
-                onClick={e => {
-                  e.stopPropagation();
-                  setAssignee('');
-                }}
-                className="ml-auto text-stone-400 hover:text-stone-600 text-sm leading-none">
-                ×
-              </button>
-            )}
-          </button>
-          {showAssigneePicker && (
-            <div
-              className="fixed z-[200] bg-white dark:bg-neutral-900 rounded-lg shadow-lg border border-stone-200 dark:border-neutral-700 py-1 w-36"
-              style={{ top: popoverAnchor.top, left: popoverAnchor.left }}>
-              {[
-                { value: 'me', label: 'Me' },
-                { value: 'ai', label: 'AI' },
-              ].map(a => (
-                <button
-                  key={a.value}
-                  type="button"
-                  onClick={() => {
-                    setAssignee(a.value);
-                    setShowAssigneePicker(false);
-                  }}
-                  className="w-full text-left px-3 py-1.5 text-sm text-stone-700 dark:text-neutral-300 hover:bg-stone-50 dark:hover:bg-neutral-800">
-                  {a.label}
-                </button>
-              ))}
-            </div>
+        {/* Assignee */}
+        <button
+          type="button"
+          onClick={e => openPopover(e, setShowAssigneePicker, () => { setShowDatePicker(false); setShowPriorityPicker(false); })}
+          className="flex items-center gap-2.5 w-full px-3 py-1.5 text-xs text-stone-500 dark:text-neutral-400 hover:bg-stone-50 dark:hover:bg-neutral-700/50 transition-colors">
+          <PersonIcon />
+          {assignee ? (
+            <span className="text-stone-700 dark:text-neutral-200">{assignee === 'ai' ? 'AI (Wukong)' : 'Me'}</span>
+          ) : <span>Add assignee</span>}
+          {assignee && (
+            <span role="button" tabIndex={0}
+              onClick={e => { e.stopPropagation(); setAssignee(''); }}
+              onKeyDown={e => { if (e.key === 'Enter') { e.stopPropagation(); setAssignee(''); } }}
+              className="ml-auto text-stone-400 hover:text-stone-600 cursor-pointer">×</span>
           )}
-        </div>
+        </button>
+        {showAssigneePicker && (
+          <div className="fixed z-[200] bg-white dark:bg-neutral-900 rounded-lg shadow-lg border border-stone-200 dark:border-neutral-700 py-1 w-32"
+            style={{ top: popoverAnchor.top, left: popoverAnchor.left }}>
+            {[{ value: 'me', label: 'Me' }, { value: 'ai', label: 'AI (Wukong)' }].map(a => (
+              <button key={a.value} type="button"
+                onClick={() => { setAssignee(a.value); setShowAssigneePicker(false); }}
+                className="w-full text-left px-3 py-1.5 text-sm text-stone-700 dark:text-neutral-300 hover:bg-stone-50 dark:hover:bg-neutral-800">
+                {a.label}
+              </button>
+            ))}
+          </div>
+        )}
 
-        {/* Date row */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={e =>
-              openPopover(e, setShowDatePicker, () => {
-                setShowAssigneePicker(false);
-                setShowPriorityPicker(false);
-              })
-            }
-            className="flex items-center gap-2.5 w-full px-3 py-2 text-xs text-stone-500 dark:text-neutral-400 hover:bg-stone-50 dark:hover:bg-neutral-700/50 transition-colors">
-            <CalIcon />
-            {dueDate ? (
-              <span className="text-stone-700 dark:text-neutral-300">
-                {new Date(dueDate + 'T00:00:00').toLocaleDateString(undefined, {
-                  month: 'short',
-                  day: 'numeric',
-                })}
-              </span>
-            ) : (
-              <span>Add dates</span>
-            )}
-            {dueDate && (
-              <button
-                type="button"
-                onClick={e => {
-                  e.stopPropagation();
-                  setDueDate('');
-                }}
-                className="ml-auto text-stone-400 hover:text-stone-600 text-sm leading-none">
-                ×
-              </button>
-            )}
-          </button>
-          {showDatePicker && (
-            <CalendarPopover
-              value={dueDate}
-              onChange={setDueDate}
-              onClose={() => setShowDatePicker(false)}
-              anchor={popoverAnchor}
-            />
+        {/* Date */}
+        <button
+          type="button"
+          onClick={e => openPopover(e, setShowDatePicker, () => { setShowAssigneePicker(false); setShowPriorityPicker(false); })}
+          className="flex items-center gap-2.5 w-full px-3 py-1.5 text-xs text-stone-500 dark:text-neutral-400 hover:bg-stone-50 dark:hover:bg-neutral-700/50 transition-colors">
+          <CalIcon />
+          {dueDate ? (
+            <span className="text-stone-700 dark:text-neutral-200">
+              {new Date(dueDate + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+            </span>
+          ) : <span>Add dates</span>}
+          {dueDate && (
+            <span role="button" tabIndex={0}
+              onClick={e => { e.stopPropagation(); setDueDate(''); }}
+              onKeyDown={e => { if (e.key === 'Enter') { e.stopPropagation(); setDueDate(''); } }}
+              className="ml-auto text-stone-400 hover:text-stone-600 cursor-pointer">×</span>
           )}
-        </div>
+        </button>
+        {showDatePicker && (
+          <CalendarPopover value={dueDate} onChange={setDueDate} onClose={() => setShowDatePicker(false)} anchor={popoverAnchor} />
+        )}
 
-        {/* Priority row */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={e =>
-              openPopover(e, setShowPriorityPicker, () => {
-                setShowAssigneePicker(false);
-                setShowDatePicker(false);
-              })
-            }
-            className="flex items-center gap-2.5 w-full px-3 py-2 text-xs text-stone-500 dark:text-neutral-400 hover:bg-stone-50 dark:hover:bg-neutral-700/50 transition-colors">
-            <FlagIcon />
-            {priority > 0 ? (
-              <span className="text-stone-700 dark:text-neutral-300">
-                {PRIORITIES.find(p => p.value === priority)?.label}
-              </span>
-            ) : (
-              <span>Add priority</span>
-            )}
-            {priority > 0 && (
-              <button
-                type="button"
-                onClick={e => {
-                  e.stopPropagation();
-                  setPriority(0);
-                }}
-                className="ml-auto text-stone-400 hover:text-stone-600 text-sm leading-none">
-                ×
-              </button>
-            )}
-          </button>
-          {showPriorityPicker && (
-            <div
-              className="fixed z-[200] bg-white dark:bg-neutral-900 rounded-lg shadow-lg border border-stone-200 dark:border-neutral-700 py-1 w-36"
-              style={{ top: popoverAnchor.top, left: popoverAnchor.left }}>
-              {PRIORITIES.map(p => (
-                <button
-                  key={p.value}
-                  type="button"
-                  onClick={() => {
-                    setPriority(p.value);
-                    setShowPriorityPicker(false);
-                  }}
-                  className="w-full text-left px-3 py-1.5 text-sm text-stone-700 dark:text-neutral-300 hover:bg-stone-50 dark:hover:bg-neutral-800">
-                  {p.label}
-                </button>
-              ))}
-            </div>
+        {/* Priority */}
+        <button
+          type="button"
+          onClick={e => openPopover(e, setShowPriorityPicker, () => { setShowAssigneePicker(false); setShowDatePicker(false); })}
+          className="flex items-center gap-2.5 w-full px-3 py-1.5 text-xs text-stone-500 dark:text-neutral-400 hover:bg-stone-50 dark:hover:bg-neutral-700/50 transition-colors">
+          <FlagIcon />
+          {priority > 0 ? (
+            <span className="text-stone-700 dark:text-neutral-200">{PRIORITIES.find(p => p.value === priority)?.label}</span>
+          ) : <span>Add priority</span>}
+          {priority > 0 && (
+            <span role="button" tabIndex={0}
+              onClick={e => { e.stopPropagation(); setPriority(0); }}
+              onKeyDown={e => { if (e.key === 'Enter') { e.stopPropagation(); setPriority(0); } }}
+              className="ml-auto text-stone-400 hover:text-stone-600 cursor-pointer">×</span>
           )}
-        </div>
+        </button>
+        {showPriorityPicker && (
+          <div className="fixed z-[200] bg-white dark:bg-neutral-900 rounded-lg shadow-lg border border-stone-200 dark:border-neutral-700 py-1 w-28"
+            style={{ top: popoverAnchor.top, left: popoverAnchor.left }}>
+            {PRIORITIES.map(p => (
+              <button key={p.value} type="button"
+                onClick={() => { setPriority(p.value); setShowPriorityPicker(false); }}
+                className="w-full text-left px-3 py-1.5 text-sm text-stone-700 dark:text-neutral-300 hover:bg-stone-50 dark:hover:bg-neutral-800">
+                {p.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

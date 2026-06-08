@@ -5,10 +5,10 @@ import { formatFileSize } from '../../lib/attachments';
 import {
   addAttachment,
   addComment,
+  type Bucket,
   deleteAttachment,
   listAttachments,
   listTaskEvents,
-  type Bucket,
   type Task,
   type TaskAttachment,
   type TaskEvent,
@@ -175,6 +175,46 @@ export function TaskDetailDrawer({
 
   if (!task && !isCreateMode) return null;
 
+  // Auto-save a patch immediately (edit mode only)
+  const autoSave = async (patch: Parameters<typeof onSave>[1]) => {
+    if (!task) return;
+    await onSave(task.id, patch);
+    void loadEvents(task.id);
+  };
+
+  const handleStatusChange = async (newBucketId: string) => {
+    setBucketId(newBucketId);
+    if (isCreateMode) return;
+    if (!task || newBucketId === task.bucket_id) return;
+    await onMove(task.id, newBucketId);
+    void loadEvents(task.id);
+  };
+
+  const handleTitleBlur = () => {
+    if (!task || title.trim() === task.title) return;
+    void autoSave({ title: title.trim() || undefined });
+  };
+
+  const handleDescriptionBlur = () => {
+    if (!task || (description || null) === (task.description ?? null)) return;
+    void autoSave({ description: description || null });
+  };
+
+  const handlePriorityChange = (val: number) => {
+    setPriority(val);
+    if (!isCreateMode) void autoSave({ priority: val });
+  };
+
+  const handleDueDateChange = (val: string) => {
+    setDueDate(val);
+    if (!isCreateMode) void autoSave({ due_date: val ? `${val}T00:00:00Z` : null });
+  };
+
+  const handleAssigneeChange = (val: string) => {
+    setAssignee(val);
+    if (!isCreateMode) void autoSave({ assignee: val || null });
+  };
+
   const handlePickFile = async () => {
     let absPath: string | null = null;
     try {
@@ -203,38 +243,21 @@ export function TaskDetailDrawer({
     void loadEvents(task.id);
   };
 
-  const handleSave = async () => {
+  // Create-mode save
+  const handleCreateSave = async () => {
     if (saving) return;
     setSaving(true);
     try {
-      if (isCreateMode) {
-        await onCreateTask?.(bucketId, title.trim(), {
-          description: description || null,
-          priority: priority || undefined,
-          due_date: dueDate ? `${dueDate}T00:00:00Z` : null,
-          assignee: assignee || null,
-        });
-      } else if (task) {
-        // Move bucket first if it changed, then patch other fields
-        if (bucketId !== task.bucket_id) {
-          await onMove(task.id, bucketId);
-        }
-        await onSave(task.id, {
-          title: title.trim() || undefined,
-          description: description || null,
-          priority,
-          due_date: dueDate ? `${dueDate}T00:00:00Z` : null,
-          assignee: assignee || null,
-        });
-      }
+      await onCreateTask?.(bucketId, title.trim(), {
+        description: description || null,
+        priority: priority || undefined,
+        due_date: dueDate ? `${dueDate}T00:00:00Z` : null,
+        assignee: assignee || null,
+      });
       onClose();
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleStatusChange = (newBucketId: string) => {
-    setBucketId(newBucketId);
   };
 
   const handleAddComment = async () => {
@@ -305,8 +328,7 @@ export function TaskDetailDrawer({
                     {b.title}
                   </option>
                 ))}
-              </select>
-            </div>
+              </select>            </div>
             <div>
               <label className="text-xs font-medium text-stone-500 dark:text-neutral-400 block mb-1">
                 Title
@@ -314,6 +336,7 @@ export function TaskDetailDrawer({
               <input
                 value={title}
                 onChange={e => setTitle(e.target.value)}
+                onBlur={handleTitleBlur}
                 className="w-full rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100 focus:outline-none focus:ring-1 focus:ring-primary-500"
               />
             </div>
@@ -324,6 +347,7 @@ export function TaskDetailDrawer({
               <textarea
                 value={description}
                 onChange={e => setDescription(e.target.value)}
+                onBlur={handleDescriptionBlur}
                 rows={5}
                 className="w-full rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
               />
@@ -334,7 +358,7 @@ export function TaskDetailDrawer({
               </label>
               <select
                 value={priority}
-                onChange={e => setPriority(Number(e.target.value))}
+                onChange={e => handlePriorityChange(Number(e.target.value))}
                 className="w-full rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100">
                 {PRIORITIES.map(p => (
                   <option key={p.value} value={p.value}>
@@ -350,7 +374,7 @@ export function TaskDetailDrawer({
               <input
                 type="date"
                 value={dueDate}
-                onChange={e => setDueDate(e.target.value)}
+                onChange={e => handleDueDateChange(e.target.value)}
                 className="w-full rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100"
               />
             </div>
@@ -360,7 +384,7 @@ export function TaskDetailDrawer({
               </label>
               <select
                 value={assignee}
-                onChange={e => setAssignee(e.target.value)}
+                onChange={e => handleAssigneeChange(e.target.value)}
                 className="w-full rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100">
                 {ASSIGNEES.map(a => (
                   <option key={a.value} value={a.value}>
@@ -597,7 +621,16 @@ export function TaskDetailDrawer({
         {/* Footer */}
         <div className="px-6 py-3 border-t border-stone-200 dark:border-neutral-800 flex items-center justify-between shrink-0">
           {isCreateMode ? (
-            <span />
+            <>
+              <span />
+              <button
+                type="button"
+                disabled={saving || !title.trim()}
+                onClick={() => void handleCreateSave()}
+                className="rounded-lg bg-primary-500 px-5 py-2 text-xs font-medium text-white hover:bg-primary-600 disabled:opacity-50">
+                {saving ? 'Creating…' : 'Create Task'}
+              </button>
+            </>
           ) : confirmDelete ? (
             <div className="flex gap-2">
               <button
@@ -621,13 +654,6 @@ export function TaskDetailDrawer({
               Delete task
             </button>
           )}
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void handleSave()}
-            className="rounded-lg bg-primary-500 px-5 py-2 text-xs font-medium text-white hover:bg-primary-600 disabled:opacity-50">
-            {saving ? 'Saving…' : 'Save'}
-          </button>
         </div>
       </div>
     </div>
