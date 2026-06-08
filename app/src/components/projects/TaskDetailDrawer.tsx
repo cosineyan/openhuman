@@ -2,13 +2,16 @@ import { invoke } from '@tauri-apps/api/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { formatFileSize } from '../../lib/attachments';
-import type { Bucket, Task, TaskAttachment, TaskEvent } from '../../services/api/projectsApi';
 import {
   addAttachment,
   addComment,
   deleteAttachment,
   listAttachments,
   listTaskEvents,
+  type Bucket,
+  type Task,
+  type TaskAttachment,
+  type TaskEvent,
 } from '../../services/api/projectsApi';
 
 interface SavePatch {
@@ -177,7 +180,7 @@ export function TaskDetailDrawer({
     try {
       absPath = await invoke<string | null>('pick_file');
     } catch (err) {
-      alert(`File picker error: ${err instanceof Error ? err.message : String(err)}`);
+      console.error('File picker error:', err);
       return;
     }
     if (!absPath) return;
@@ -188,7 +191,7 @@ export function TaskDetailDrawer({
       // Refresh events so the "attached" change feed entry appears
       void loadEvents(task.id);
     } catch (err) {
-      alert(`Failed to attach file: ${err instanceof Error ? err.message : String(err)}`);
+      console.error('Failed to attach file:', err);
     } finally {
       setAttachUploading(false);
     }
