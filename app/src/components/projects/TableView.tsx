@@ -6,7 +6,12 @@ interface Props {
 }
 
 const PRIORITY_LABELS: Record<number, string> = {
-  0: '—', 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Urgent', 5: 'Critical',
+  0: '—',
+  1: 'Low',
+  2: 'Medium',
+  3: 'High',
+  4: 'Urgent',
+  5: 'Critical',
 };
 const PRIORITY_COLORS: Record<number, string> = {
   1: 'text-sage-600 dark:text-sage-400',
@@ -17,12 +22,12 @@ const PRIORITY_COLORS: Record<number, string> = {
 };
 
 const COLS = [
-  { key: 'index',    label: '#',          width: 'w-10',    align: 'text-right' },
-  { key: 'title',    label: 'Title',      width: 'flex-1',  align: 'text-left'  },
-  { key: 'status',   label: 'Status',     width: 'w-28',    align: 'text-left'  },
-  { key: 'assignee', label: 'Assignee',   width: 'w-24',    align: 'text-left'  },
-  { key: 'priority', label: 'Priority',   width: 'w-24',    align: 'text-left'  },
-  { key: 'due_date', label: 'Due date',   width: 'w-28',    align: 'text-left'  },
+  { key: 'index', label: '#', width: 'w-10', align: 'text-right' },
+  { key: 'title', label: 'Title', width: 'flex-1', align: 'text-left' },
+  { key: 'status', label: 'Status', width: 'w-28', align: 'text-left' },
+  { key: 'assignee', label: 'Assignee', width: 'w-24', align: 'text-left' },
+  { key: 'priority', label: 'Priority', width: 'w-24', align: 'text-left' },
+  { key: 'due_date', label: 'Due date', width: 'w-28', align: 'text-left' },
 ] as const;
 
 function bucketForTask(task: Task, board: BoardData): Bucket | undefined {
@@ -38,7 +43,9 @@ export function TableView({ board, onTaskClick }: Props) {
       {/* Header */}
       <div className="flex items-center gap-0 bg-stone-50 dark:bg-neutral-900 border-b border-stone-200 dark:border-neutral-800 px-4 py-2">
         {COLS.map(col => (
-          <div key={col.key} className={`${col.width} ${col.align} text-xs font-semibold text-stone-500 dark:text-neutral-400 uppercase tracking-wide shrink-0 px-2 first:pl-0`}>
+          <div
+            key={col.key}
+            className={`${col.width} ${col.align} text-xs font-semibold text-stone-500 dark:text-neutral-400 uppercase tracking-wide shrink-0 px-2 first:pl-0`}>
             {col.label}
           </div>
         ))}
@@ -67,7 +74,12 @@ export function TableView({ board, onTaskClick }: Props) {
   );
 }
 
-function TableRow({ task, bucket, isLast, onClick }: {
+function TableRow({
+  task,
+  bucket,
+  isLast,
+  onClick,
+}: {
   task: Task;
   bucket: Bucket | undefined;
   isLast: boolean;
@@ -77,8 +89,7 @@ function TableRow({ task, bucket, isLast, onClick }: {
     <button
       type="button"
       onClick={() => onClick(task)}
-      className={`w-full flex items-center gap-0 px-4 py-2.5 text-left bg-white dark:bg-neutral-900 hover:bg-stone-50 dark:hover:bg-neutral-800 transition-colors ${!isLast ? 'border-b border-stone-100 dark:border-neutral-800' : ''}`}
-    >
+      className={`w-full flex items-center gap-0 px-4 py-2.5 text-left bg-white dark:bg-neutral-900 hover:bg-stone-50 dark:hover:bg-neutral-800 transition-colors ${!isLast ? 'border-b border-stone-100 dark:border-neutral-800' : ''}`}>
       {/* # */}
       <div className="w-10 shrink-0 px-2 first:pl-0 text-right text-xs text-stone-400 dark:text-neutral-500">
         {task.index}
@@ -86,14 +97,22 @@ function TableRow({ task, bucket, isLast, onClick }: {
 
       {/* Title */}
       <div className="flex-1 min-w-0 px-2 flex items-center gap-2">
-        <span className={`shrink-0 w-3 h-3 rounded-full border flex items-center justify-center ${task.done ? 'bg-green-500 border-green-500' : 'border-stone-300 dark:border-neutral-600'}`}>
+        <span
+          className={`shrink-0 w-3 h-3 rounded-full border flex items-center justify-center ${task.done ? 'bg-green-500 border-green-500' : 'border-stone-300 dark:border-neutral-600'}`}>
           {task.done && (
             <svg width="7" height="7" viewBox="0 0 8 8" fill="none">
-              <path d="M1.5 4l2 2 3-3" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path
+                d="M1.5 4l2 2 3-3"
+                stroke="white"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           )}
         </span>
-        <span className={`text-sm font-medium truncate ${task.done ? 'line-through text-stone-400 dark:text-neutral-500' : 'text-stone-800 dark:text-neutral-100'}`}>
+        <span
+          className={`text-sm font-medium truncate ${task.done ? 'line-through text-stone-400 dark:text-neutral-500' : 'text-stone-800 dark:text-neutral-100'}`}>
           {task.title}
         </span>
       </div>
@@ -112,9 +131,13 @@ function TableRow({ task, bucket, isLast, onClick }: {
         {task.assignee ? (
           <div className="flex items-center gap-1.5">
             <div className="w-5 h-5 rounded-full bg-stone-400 dark:bg-neutral-500 flex items-center justify-center shrink-0">
-              <span className="text-[7px] font-bold text-white">{task.assignee === 'ai' ? 'AI' : 'ME'}</span>
+              <span className="text-[7px] font-bold text-white">
+                {task.assignee === 'ai' ? 'AI' : 'ME'}
+              </span>
             </div>
-            <span className="text-xs text-stone-600 dark:text-neutral-300">{task.assignee === 'ai' ? 'AI' : 'Me'}</span>
+            <span className="text-xs text-stone-600 dark:text-neutral-300">
+              {task.assignee === 'ai' ? 'AI' : 'Me'}
+            </span>
           </div>
         ) : (
           <span className="text-xs text-stone-300 dark:text-neutral-600">—</span>
@@ -123,7 +146,8 @@ function TableRow({ task, bucket, isLast, onClick }: {
 
       {/* Priority */}
       <div className="w-24 shrink-0 px-2">
-        <span className={`text-xs font-medium ${task.priority > 0 ? (PRIORITY_COLORS[task.priority] ?? 'text-stone-400') : 'text-stone-300 dark:text-neutral-600'}`}>
+        <span
+          className={`text-xs font-medium ${task.priority > 0 ? (PRIORITY_COLORS[task.priority] ?? 'text-stone-400') : 'text-stone-300 dark:text-neutral-600'}`}>
           {PRIORITY_LABELS[task.priority] ?? '—'}
         </span>
       </div>
@@ -135,9 +159,12 @@ function TableRow({ task, bucket, isLast, onClick }: {
             {(() => {
               const d = new Date(task.due_date!);
               const sameYear = d.getFullYear() === new Date().getFullYear();
-              return d.toLocaleDateString(undefined, sameYear
-                ? { month: 'short', day: 'numeric' }
-                : { month: 'short', day: 'numeric', year: 'numeric' });
+              return d.toLocaleDateString(
+                undefined,
+                sameYear
+                  ? { month: 'short', day: 'numeric' }
+                  : { month: 'short', day: 'numeric', year: 'numeric' }
+              );
             })()}
           </span>
         ) : (

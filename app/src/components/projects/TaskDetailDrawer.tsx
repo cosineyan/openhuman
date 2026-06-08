@@ -1,8 +1,15 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import type { Task, Bucket, TaskEvent, TaskAttachment } from '../../services/api/projectsApi';
-import { listTaskEvents, addComment, listAttachments, addAttachment, deleteAttachment } from '../../services/api/projectsApi';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
 import { formatFileSize } from '../../lib/attachments';
+import type { Bucket, Task, TaskAttachment, TaskEvent } from '../../services/api/projectsApi';
+import {
+  addAttachment,
+  addComment,
+  deleteAttachment,
+  listAttachments,
+  listTaskEvents,
+} from '../../services/api/projectsApi';
 
 interface SavePatch {
   title?: string;
@@ -21,7 +28,11 @@ interface Props {
   onMove: (taskId: string, bucketId: string) => Promise<void>;
   /** When set, modal opens in create-task mode for this bucket id. */
   createBucketId?: string | null;
-  onCreateTask?: (bucketId: string, title: string, patch: Omit<SavePatch, 'title'>) => Promise<void>;
+  onCreateTask?: (
+    bucketId: string,
+    title: string,
+    patch: Omit<SavePatch, 'title'>
+  ) => Promise<void>;
 }
 
 const PRIORITIES = [
@@ -53,7 +64,12 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 const PRIORITY_NAMES: Record<string, string> = {
-  '0': 'None', '1': 'Low', '2': 'Medium', '3': 'High', '4': 'Urgent', '5': 'Critical',
+  '0': 'None',
+  '1': 'Low',
+  '2': 'Medium',
+  '3': 'High',
+  '4': 'Urgent',
+  '5': 'Critical',
 };
 
 type FeedFilter = 'all' | 'comments' | 'attachments';
@@ -68,12 +84,23 @@ function humanizeValue(field: string, value: string | undefined, buckets: Bucket
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
-    month: 'short', day: 'numeric',
-    hour: '2-digit', minute: '2-digit',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   });
 }
 
-export function TaskDetailDrawer({ task, buckets, onClose, onSave, onDelete, onMove, createBucketId, onCreateTask }: Props) {
+export function TaskDetailDrawer({
+  task,
+  buckets,
+  onClose,
+  onSave,
+  onDelete,
+  onMove,
+  createBucketId,
+  onCreateTask,
+}: Props) {
   const isCreateMode = !task && !!createBucketId;
 
   const [title, setTitle] = useState('');
@@ -222,9 +249,8 @@ export function TaskDetailDrawer({ task, buckets, onClose, onSave, onDelete, onM
 
   const commentCount = events.filter(ev => ev.kind === 'comment').length;
 
-  const filteredEvents = feedFilter === 'comments'
-    ? events.filter(ev => ev.kind === 'comment')
-    : events;
+  const filteredEvents =
+    feedFilter === 'comments' ? events.filter(ev => ev.kind === 'comment') : events;
 
   const TABS: { key: FeedFilter; label: string; count: number }[] = [
     { key: 'all', label: 'All activity', count: events.length },
@@ -235,12 +261,10 @@ export function TaskDetailDrawer({ task, buckets, onClose, onSave, onDelete, onM
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-      onClick={onClose}
-    >
+      onClick={onClose}>
       <div
         className="w-full max-w-4xl max-h-[90vh] bg-white dark:bg-neutral-900 rounded-xl shadow-2xl flex flex-col overflow-hidden"
-        onClick={e => e.stopPropagation()}
-      >
+        onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 dark:border-neutral-800 shrink-0">
           <div className="flex items-center gap-3">
@@ -253,196 +277,317 @@ export function TaskDetailDrawer({ task, buckets, onClose, onSave, onDelete, onM
               {isCreateMode ? 'New Task' : task?.title}
             </h2>
           </div>
-          <button type="button" onClick={onClose} className="text-stone-400 hover:text-stone-700 dark:hover:text-neutral-200 text-xl leading-none ml-4 shrink-0">×</button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-stone-400 hover:text-stone-700 dark:hover:text-neutral-200 text-xl leading-none ml-4 shrink-0">
+            ×
+          </button>
         </div>
 
         {/* Two-column body */}
         <div className="flex-1 flex overflow-hidden min-h-0">
-
           {/* Left: task fields */}
           <div className="w-80 shrink-0 border-r border-stone-200 dark:border-neutral-800 overflow-y-auto px-5 py-5 space-y-4">
             <div>
-              <label className="text-xs font-medium text-stone-500 dark:text-neutral-400 block mb-1">Status</label>
-              <select value={bucketId} onChange={e => void handleStatusChange(e.target.value)}
+              <label className="text-xs font-medium text-stone-500 dark:text-neutral-400 block mb-1">
+                Status
+              </label>
+              <select
+                value={bucketId}
+                onChange={e => void handleStatusChange(e.target.value)}
                 className="w-full rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100">
-                {buckets.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
+                {buckets.map(b => (
+                  <option key={b.id} value={b.id}>
+                    {b.title}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium text-stone-500 dark:text-neutral-400 block mb-1">Title</label>
-              <input value={title} onChange={e => setTitle(e.target.value)}
-                className="w-full rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+              <label className="text-xs font-medium text-stone-500 dark:text-neutral-400 block mb-1">
+                Title
+              </label>
+              <input
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                className="w-full rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              />
             </div>
             <div>
-              <label className="text-xs font-medium text-stone-500 dark:text-neutral-400 block mb-1">Description</label>
-              <textarea value={description} onChange={e => setDescription(e.target.value)} rows={5}
-                className="w-full rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none" />
+              <label className="text-xs font-medium text-stone-500 dark:text-neutral-400 block mb-1">
+                Description
+              </label>
+              <textarea
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                rows={5}
+                className="w-full rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
+              />
             </div>
             <div>
-              <label className="text-xs font-medium text-stone-500 dark:text-neutral-400 block mb-1">Priority</label>
-              <select value={priority} onChange={e => setPriority(Number(e.target.value))}
+              <label className="text-xs font-medium text-stone-500 dark:text-neutral-400 block mb-1">
+                Priority
+              </label>
+              <select
+                value={priority}
+                onChange={e => setPriority(Number(e.target.value))}
                 className="w-full rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100">
-                {PRIORITIES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                {PRIORITIES.map(p => (
+                  <option key={p.value} value={p.value}>
+                    {p.label}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium text-stone-500 dark:text-neutral-400 block mb-1">Due date</label>
-              <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
-                className="w-full rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100" />
+              <label className="text-xs font-medium text-stone-500 dark:text-neutral-400 block mb-1">
+                Due date
+              </label>
+              <input
+                type="date"
+                value={dueDate}
+                onChange={e => setDueDate(e.target.value)}
+                className="w-full rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100"
+              />
             </div>
             <div>
-              <label className="text-xs font-medium text-stone-500 dark:text-neutral-400 block mb-1">Assignee</label>
-              <select value={assignee} onChange={e => setAssignee(e.target.value)}
+              <label className="text-xs font-medium text-stone-500 dark:text-neutral-400 block mb-1">
+                Assignee
+              </label>
+              <select
+                value={assignee}
+                onChange={e => setAssignee(e.target.value)}
                 className="w-full rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-2 text-sm text-stone-900 dark:text-neutral-100">
-                {ASSIGNEES.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+                {ASSIGNEES.map(a => (
+                  <option key={a.value} value={a.value}>
+                    {a.label}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
 
           {/* Right: activity + attachments */}
           <div className="flex-1 flex flex-col overflow-hidden">
-          {isCreateMode ? (
-            <div className="flex-1 flex items-center justify-center text-stone-300 dark:text-neutral-600 text-sm">
-              Activity available after saving
-            </div>
-          ) : (
-            <>
-            {/* Tab bar */}
-            <div className="flex items-center gap-1 px-5 pt-4 pb-0 border-b border-stone-200 dark:border-neutral-800 shrink-0">
-              {TABS.map(tab => (
-                <button key={tab.key} type="button" onClick={() => setFeedFilter(tab.key)}
-                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors ${
-                    feedFilter === tab.key
-                      ? 'border-primary-500 text-primary-600 dark:text-primary-400'
-                      : 'border-transparent text-stone-500 dark:text-neutral-500 hover:text-stone-700 dark:hover:text-neutral-300'
-                  }`}>
-                  {tab.label}
-                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                    feedFilter === tab.key
-                      ? 'bg-primary-100 text-primary-700 dark:bg-primary-500/20 dark:text-primary-300'
-                      : 'bg-stone-100 text-stone-500 dark:bg-neutral-800 dark:text-neutral-500'
-                  }`}>{tab.count}</span>
-                </button>
-              ))}
-            </div>
-
-            {feedFilter === 'attachments' ? (
-              /* ── Attachments tab ── */
-              <div className="flex-1 overflow-y-auto px-5 py-4">
-                {attachments.length === 0 ? (
-                  <p className="text-xs text-stone-400 dark:text-neutral-500">No attachments yet.</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {attachments.map(att => (
-                      <li key={att.id} className="flex items-center gap-3 rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-2.5 text-xs">
-                        <span className="text-base shrink-0">📎</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-stone-800 dark:text-neutral-200 truncate">{att.filename}</p>
-                          <p className="text-stone-400 dark:text-neutral-500 mt-0.5">
-                            {formatFileSize(att.size_bytes)}
-                            <span className="mx-1">·</span>
-                            <span className={att.uploaded_by === 'ai' ? 'text-amber-600 dark:text-amber-400' : 'text-primary-600 dark:text-primary-400'}>
-                              by {att.uploaded_by === 'ai' ? 'AI' : 'Me'}
-                            </span>
-                            <span className="mx-1">·</span>
-                            {formatTime(att.created)}
-                          </p>
-                        </div>
-                        <button type="button" onClick={() => void handleDeleteAttachment(att.id)}
-                          className="shrink-0 text-stone-300 hover:text-coral-500 dark:text-neutral-600 dark:hover:text-coral-400 text-base leading-none" title="Remove">
-                          ×
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+            {isCreateMode ? (
+              <div className="flex-1 flex items-center justify-center text-stone-300 dark:text-neutral-600 text-sm">
+                Activity available after saving
               </div>
             ) : (
-              /* ── Activity / Comments tab ── */
-              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-                {eventsLoading ? (
-                  <p className="text-xs text-stone-400 dark:text-neutral-500">Loading…</p>
-                ) : filteredEvents.length === 0 ? (
-                  <p className="text-xs text-stone-400 dark:text-neutral-500">
-                    {feedFilter === 'comments' ? 'No comments yet.' : 'No activity yet.'}
-                  </p>
-                ) : (
-                  filteredEvents.map(ev => (
-                    <div key={ev.id}>
-                      {ev.kind === 'comment' ? (
-                        <div className="flex gap-2.5 text-xs">
-                          <span className={`shrink-0 mt-0.5 px-1.5 py-0.5 rounded font-medium self-start ${ev.actor === 'ai' ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300' : 'bg-primary-100 text-primary-800 dark:bg-primary-500/20 dark:text-primary-300'}`}>
-                            {ev.actor === 'ai' ? 'AI' : 'Me'}
-                          </span>
-                          <div className="flex-1 min-w-0 rounded-lg border border-stone-200 dark:border-neutral-700 border-l-2 border-l-primary-400 dark:border-l-primary-500 bg-stone-50 dark:bg-neutral-800 px-3 py-2.5">
-                            <p className="text-stone-800 dark:text-neutral-200 break-words leading-relaxed">{ev.body}</p>
-                            <p className="text-stone-400 dark:text-neutral-500 mt-1.5">{formatTime(ev.created)}</p>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex gap-2 text-xs items-start">
-                          <div className={`shrink-0 mt-[5px] w-1.5 h-1.5 rounded-full ${
-                            ev.field === 'attachment' ? 'bg-primary-300 dark:bg-primary-600'
-                            : ev.field === 'attachment_removed' ? 'bg-coral-300 dark:bg-coral-600'
-                            : 'bg-stone-300 dark:bg-neutral-600'
-                          }`} />
-                          <p className="flex-1 min-w-0 text-stone-500 dark:text-neutral-400 leading-relaxed">
-                            <span className={`font-medium mr-1 ${ev.actor === 'ai' ? 'text-amber-700 dark:text-amber-400' : 'text-primary-600 dark:text-primary-400'}`}>
-                              {ev.actor === 'ai' ? 'AI' : 'Me'}
-                            </span>
-                            {ev.field === 'attachment' ? (
-                              <>attached <span className="font-medium text-stone-700 dark:text-neutral-300">📎 {ev.new_value}</span></>
-                            ) : ev.field === 'attachment_removed' ? (
-                              <>removed attachment <span className="line-through text-stone-400 dark:text-neutral-500">📎 {ev.old_value}</span></>
-                            ) : ev.field === 'created' ? (
-                              <>created task <span className="font-medium text-stone-700 dark:text-neutral-300">{ev.new_value}</span></>
-                            ) : (ev.old_value == null && ev.new_value == null) ? (
-                              <>updated <span className="font-medium text-stone-600 dark:text-neutral-300">{FIELD_LABELS[ev.field ?? ''] ?? ev.field}</span></>
-                            ) : (
-                              <>
-                                changed <span className="font-medium text-stone-600 dark:text-neutral-300">{FIELD_LABELS[ev.field ?? ''] ?? ev.field}</span>
-                                {ev.old_value != null && (
-                                  <> from <span className="line-through text-stone-400 dark:text-neutral-500">{humanizeValue(ev.field ?? '', ev.old_value, buckets)}</span></>
-                                )}
-                                {ev.new_value != null && (
-                                  <> → <span className="font-medium text-stone-700 dark:text-neutral-300">{humanizeValue(ev.field ?? '', ev.new_value, buckets)}</span></>
-                                )}
-                              </>
-                            )}
-                            <span className="ml-1.5 text-stone-300 dark:text-neutral-600">{formatTime(ev.created)}</span>
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
-                <div ref={feedEndRef} />
-              </div>
-            )}
+              <>
+                {/* Tab bar */}
+                <div className="flex items-center gap-1 px-5 pt-4 pb-0 border-b border-stone-200 dark:border-neutral-800 shrink-0">
+                  {TABS.map(tab => (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => setFeedFilter(tab.key)}
+                      className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors ${
+                        feedFilter === tab.key
+                          ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                          : 'border-transparent text-stone-500 dark:text-neutral-500 hover:text-stone-700 dark:hover:text-neutral-300'
+                      }`}>
+                      {tab.label}
+                      <span
+                        className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                          feedFilter === tab.key
+                            ? 'bg-primary-100 text-primary-700 dark:bg-primary-500/20 dark:text-primary-300'
+                            : 'bg-stone-100 text-stone-500 dark:bg-neutral-800 dark:text-neutral-500'
+                        }`}>
+                        {tab.count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
 
-            {/* Bottom bar: comment input + upload button */}
-            <div className="px-5 py-3 border-t border-stone-200 dark:border-neutral-800 shrink-0 flex gap-2">
-              <input
-                value={commentDraft}
-                onChange={e => setCommentDraft(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleAddComment(); } }}
-                placeholder="Add a comment…"
-                className="flex-1 rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-2 text-xs text-stone-900 dark:text-neutral-100 focus:outline-none focus:ring-1 focus:ring-primary-500"
-              />
-              <button type="button" disabled={!commentDraft.trim() || submittingComment}
-                onClick={() => void handleAddComment()}
-                className="rounded-lg bg-primary-500 px-4 py-2 text-xs font-medium text-white hover:bg-primary-600 disabled:opacity-40 shrink-0">
-                Add
-              </button>
-              <button type="button" disabled={attachUploading}
-                onClick={() => void handlePickFile()}
-                title="Attach file"
-                className="rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-2 text-xs text-stone-500 dark:text-neutral-400 hover:text-stone-700 dark:hover:text-neutral-200 hover:border-stone-300 dark:hover:border-neutral-600 disabled:opacity-40 shrink-0">
-                {attachUploading ? '…' : '📎'}
-              </button>
-            </div>
-            </>
-          )}
+                {feedFilter === 'attachments' ? (
+                  /* ── Attachments tab ── */
+                  <div className="flex-1 overflow-y-auto px-5 py-4">
+                    {attachments.length === 0 ? (
+                      <p className="text-xs text-stone-400 dark:text-neutral-500">
+                        No attachments yet.
+                      </p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {attachments.map(att => (
+                          <li
+                            key={att.id}
+                            className="flex items-center gap-3 rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-2.5 text-xs">
+                            <span className="text-base shrink-0">📎</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-stone-800 dark:text-neutral-200 truncate">
+                                {att.filename}
+                              </p>
+                              <p className="text-stone-400 dark:text-neutral-500 mt-0.5">
+                                {formatFileSize(att.size_bytes)}
+                                <span className="mx-1">·</span>
+                                <span
+                                  className={
+                                    att.uploaded_by === 'ai'
+                                      ? 'text-amber-600 dark:text-amber-400'
+                                      : 'text-primary-600 dark:text-primary-400'
+                                  }>
+                                  by {att.uploaded_by === 'ai' ? 'AI' : 'Me'}
+                                </span>
+                                <span className="mx-1">·</span>
+                                {formatTime(att.created)}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteAttachment(att.id)}
+                              className="shrink-0 text-stone-300 hover:text-coral-500 dark:text-neutral-600 dark:hover:text-coral-400 text-base leading-none"
+                              title="Remove">
+                              ×
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ) : (
+                  /* ── Activity / Comments tab ── */
+                  <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+                    {eventsLoading ? (
+                      <p className="text-xs text-stone-400 dark:text-neutral-500">Loading…</p>
+                    ) : filteredEvents.length === 0 ? (
+                      <p className="text-xs text-stone-400 dark:text-neutral-500">
+                        {feedFilter === 'comments' ? 'No comments yet.' : 'No activity yet.'}
+                      </p>
+                    ) : (
+                      filteredEvents.map(ev => (
+                        <div key={ev.id}>
+                          {ev.kind === 'comment' ? (
+                            <div className="flex gap-2.5 text-xs">
+                              <span
+                                className={`shrink-0 mt-0.5 px-1.5 py-0.5 rounded font-medium self-start ${ev.actor === 'ai' ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300' : 'bg-primary-100 text-primary-800 dark:bg-primary-500/20 dark:text-primary-300'}`}>
+                                {ev.actor === 'ai' ? 'AI' : 'Me'}
+                              </span>
+                              <div className="flex-1 min-w-0 rounded-lg border border-stone-200 dark:border-neutral-700 border-l-2 border-l-primary-400 dark:border-l-primary-500 bg-stone-50 dark:bg-neutral-800 px-3 py-2.5">
+                                <p className="text-stone-800 dark:text-neutral-200 break-words leading-relaxed">
+                                  {ev.body}
+                                </p>
+                                <p className="text-stone-400 dark:text-neutral-500 mt-1.5">
+                                  {formatTime(ev.created)}
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex gap-2 text-xs items-start">
+                              <div
+                                className={`shrink-0 mt-[5px] w-1.5 h-1.5 rounded-full ${
+                                  ev.field === 'attachment'
+                                    ? 'bg-primary-300 dark:bg-primary-600'
+                                    : ev.field === 'attachment_removed'
+                                      ? 'bg-coral-300 dark:bg-coral-600'
+                                      : 'bg-stone-300 dark:bg-neutral-600'
+                                }`}
+                              />
+                              <p className="flex-1 min-w-0 text-stone-500 dark:text-neutral-400 leading-relaxed">
+                                <span
+                                  className={`font-medium mr-1 ${ev.actor === 'ai' ? 'text-amber-700 dark:text-amber-400' : 'text-primary-600 dark:text-primary-400'}`}>
+                                  {ev.actor === 'ai' ? 'AI' : 'Me'}
+                                </span>
+                                {ev.field === 'attachment' ? (
+                                  <>
+                                    attached{' '}
+                                    <span className="font-medium text-stone-700 dark:text-neutral-300">
+                                      📎 {ev.new_value}
+                                    </span>
+                                  </>
+                                ) : ev.field === 'attachment_removed' ? (
+                                  <>
+                                    removed attachment{' '}
+                                    <span className="line-through text-stone-400 dark:text-neutral-500">
+                                      📎 {ev.old_value}
+                                    </span>
+                                  </>
+                                ) : ev.field === 'created' ? (
+                                  <>
+                                    created task{' '}
+                                    <span className="font-medium text-stone-700 dark:text-neutral-300">
+                                      {ev.new_value}
+                                    </span>
+                                  </>
+                                ) : ev.old_value == null && ev.new_value == null ? (
+                                  <>
+                                    updated{' '}
+                                    <span className="font-medium text-stone-600 dark:text-neutral-300">
+                                      {FIELD_LABELS[ev.field ?? ''] ?? ev.field}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    changed{' '}
+                                    <span className="font-medium text-stone-600 dark:text-neutral-300">
+                                      {FIELD_LABELS[ev.field ?? ''] ?? ev.field}
+                                    </span>
+                                    {ev.old_value != null && (
+                                      <>
+                                        {' '}
+                                        from{' '}
+                                        <span className="line-through text-stone-400 dark:text-neutral-500">
+                                          {humanizeValue(ev.field ?? '', ev.old_value, buckets)}
+                                        </span>
+                                      </>
+                                    )}
+                                    {ev.new_value != null && (
+                                      <>
+                                        {' '}
+                                        →{' '}
+                                        <span className="font-medium text-stone-700 dark:text-neutral-300">
+                                          {humanizeValue(ev.field ?? '', ev.new_value, buckets)}
+                                        </span>
+                                      </>
+                                    )}
+                                  </>
+                                )}
+                                <span className="ml-1.5 text-stone-300 dark:text-neutral-600">
+                                  {formatTime(ev.created)}
+                                </span>
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                    <div ref={feedEndRef} />
+                  </div>
+                )}
+
+                {/* Bottom bar: comment input + upload button */}
+                <div className="px-5 py-3 border-t border-stone-200 dark:border-neutral-800 shrink-0 flex gap-2">
+                  <input
+                    value={commentDraft}
+                    onChange={e => setCommentDraft(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        void handleAddComment();
+                      }
+                    }}
+                    placeholder="Add a comment…"
+                    className="flex-1 rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-2 text-xs text-stone-900 dark:text-neutral-100 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  />
+                  <button
+                    type="button"
+                    disabled={!commentDraft.trim() || submittingComment}
+                    onClick={() => void handleAddComment()}
+                    className="rounded-lg bg-primary-500 px-4 py-2 text-xs font-medium text-white hover:bg-primary-600 disabled:opacity-40 shrink-0">
+                    Add
+                  </button>
+                  <button
+                    type="button"
+                    disabled={attachUploading}
+                    onClick={() => void handlePickFile()}
+                    title="Attach file"
+                    className="rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-2 text-xs text-stone-500 dark:text-neutral-400 hover:text-stone-700 dark:hover:text-neutral-200 hover:border-stone-300 dark:hover:border-neutral-600 disabled:opacity-40 shrink-0">
+                    {attachUploading ? '…' : '📎'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -452,13 +597,31 @@ export function TaskDetailDrawer({ task, buckets, onClose, onSave, onDelete, onM
             <span />
           ) : confirmDelete ? (
             <div className="flex gap-2">
-              <button type="button" onClick={() => task && void onDelete(task.id).then(onClose)} className="text-xs text-coral-700 dark:text-coral-400 underline">Confirm delete</button>
-              <button type="button" onClick={() => setConfirmDelete(false)} className="text-xs text-stone-500">Cancel</button>
+              <button
+                type="button"
+                onClick={() => task && void onDelete(task.id).then(onClose)}
+                className="text-xs text-coral-700 dark:text-coral-400 underline">
+                Confirm delete
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                className="text-xs text-stone-500">
+                Cancel
+              </button>
             </div>
           ) : (
-            <button type="button" onClick={() => setConfirmDelete(true)} className="text-xs text-stone-400 hover:text-coral-600 dark:hover:text-coral-400">Delete task</button>
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              className="text-xs text-stone-400 hover:text-coral-600 dark:hover:text-coral-400">
+              Delete task
+            </button>
           )}
-          <button type="button" disabled={saving} onClick={() => void handleSave()}
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => void handleSave()}
             className="rounded-lg bg-primary-500 px-5 py-2 text-xs font-medium text-white hover:bg-primary-600 disabled:opacity-50">
             {saving ? 'Saving…' : 'Save'}
           </button>

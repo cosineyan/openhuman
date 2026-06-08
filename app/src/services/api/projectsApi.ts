@@ -180,11 +180,7 @@ export async function deleteTask(task_id: string): Promise<void> {
 /** Apply a partial patch to a bucket (rename, reorder, done-status). */
 export async function updateBucket(params: {
   bucket_id: string;
-  patch: {
-    title?: string;
-    position?: number;
-    is_done_bucket?: boolean;
-  };
+  patch: { title?: string; position?: number; is_done_bucket?: boolean };
 }): Promise<Bucket> {
   log('updateBucket bucket_id=%s', params.bucket_id);
   const res = await callCoreRpc<RpcEnvelope<Bucket>>({

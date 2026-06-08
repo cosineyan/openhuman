@@ -6,7 +6,11 @@ interface Props {
 }
 
 const PRIORITY_LABELS: Record<number, string> = {
-  1: 'Low', 2: 'Medium', 3: 'High', 4: 'Urgent', 5: 'Critical',
+  1: 'Low',
+  2: 'Medium',
+  3: 'High',
+  4: 'Urgent',
+  5: 'Critical',
 };
 const PRIORITY_COLORS: Record<number, string> = {
   1: 'text-sage-600 dark:text-sage-400',
@@ -27,7 +31,9 @@ function StatusDot({ bucket }: { bucket: Bucket }) {
   if (t.includes('block')) {
     return <span className="inline-block w-2 h-2 rounded-full bg-coral-400 shrink-0" />;
   }
-  return <span className="inline-block w-2 h-2 rounded-full border border-stone-400 dark:border-neutral-500 shrink-0" />;
+  return (
+    <span className="inline-block w-2 h-2 rounded-full border border-stone-400 dark:border-neutral-500 shrink-0" />
+  );
 }
 
 export function ListView({ board, onTaskClick }: Props) {
@@ -41,7 +47,9 @@ export function ListView({ board, onTaskClick }: Props) {
             <span className="text-xs font-bold tracking-widest uppercase text-stone-600 dark:text-neutral-400">
               {bucket.title}
             </span>
-            <span className="text-xs text-stone-400 dark:text-neutral-500 ml-1">{tasks.length}</span>
+            <span className="text-xs text-stone-400 dark:text-neutral-500 ml-1">
+              {tasks.length}
+            </span>
           </div>
 
           {/* Task rows */}
@@ -68,7 +76,12 @@ export function ListView({ board, onTaskClick }: Props) {
   );
 }
 
-function TaskRow({ task, bucket, isLast, onClick }: {
+function TaskRow({
+  task,
+  bucket,
+  isLast,
+  onClick,
+}: {
   task: Task;
   bucket: Bucket;
   isLast: boolean;
@@ -78,26 +91,35 @@ function TaskRow({ task, bucket, isLast, onClick }: {
     <button
       type="button"
       onClick={() => onClick(task)}
-      className={`w-full flex items-center gap-3 px-4 py-2.5 text-left bg-white dark:bg-neutral-900 hover:bg-stone-50 dark:hover:bg-neutral-800 transition-colors ${!isLast ? 'border-b border-stone-100 dark:border-neutral-800' : ''}`}
-    >
+      className={`w-full flex items-center gap-3 px-4 py-2.5 text-left bg-white dark:bg-neutral-900 hover:bg-stone-50 dark:hover:bg-neutral-800 transition-colors ${!isLast ? 'border-b border-stone-100 dark:border-neutral-800' : ''}`}>
       {/* Done checkbox-style dot */}
-      <span className={`shrink-0 w-3.5 h-3.5 rounded-full border flex items-center justify-center ${task.done ? 'bg-green-500 border-green-500' : 'border-stone-300 dark:border-neutral-600'}`}>
+      <span
+        className={`shrink-0 w-3.5 h-3.5 rounded-full border flex items-center justify-center ${task.done ? 'bg-green-500 border-green-500' : 'border-stone-300 dark:border-neutral-600'}`}>
         {task.done && (
           <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-            <path d="M1.5 4l2 2 3-3" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path
+              d="M1.5 4l2 2 3-3"
+              stroke="white"
+              strokeWidth="1.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
         )}
       </span>
 
       {/* Title */}
-      <span className={`flex-1 text-sm font-medium min-w-0 truncate ${task.done ? 'line-through text-stone-400 dark:text-neutral-500' : 'text-stone-800 dark:text-neutral-100'}`}>
+      <span
+        className={`flex-1 text-sm font-medium min-w-0 truncate ${task.done ? 'line-through text-stone-400 dark:text-neutral-500' : 'text-stone-800 dark:text-neutral-100'}`}>
         {task.title}
       </span>
 
       {/* Assignee */}
       {task.assignee && (
         <div className="shrink-0 w-5 h-5 rounded-full bg-stone-400 dark:bg-neutral-500 flex items-center justify-center">
-          <span className="text-[7px] font-bold text-white">{task.assignee === 'ai' ? 'AI' : 'ME'}</span>
+          <span className="text-[7px] font-bold text-white">
+            {task.assignee === 'ai' ? 'AI' : 'ME'}
+          </span>
         </div>
       )}
 
@@ -107,16 +129,20 @@ function TaskRow({ task, bucket, isLast, onClick }: {
           {(() => {
             const d = new Date(task.due_date!);
             const sameYear = d.getFullYear() === new Date().getFullYear();
-            return d.toLocaleDateString(undefined, sameYear
-              ? { month: 'short', day: 'numeric' }
-              : { month: 'short', day: 'numeric', year: 'numeric' });
+            return d.toLocaleDateString(
+              undefined,
+              sameYear
+                ? { month: 'short', day: 'numeric' }
+                : { month: 'short', day: 'numeric', year: 'numeric' }
+            );
           })()}
         </span>
       )}
 
       {/* Priority */}
       {task.priority > 0 && (
-        <span className={`shrink-0 text-xs font-medium ${PRIORITY_COLORS[task.priority] ?? 'text-stone-400'}`}>
+        <span
+          className={`shrink-0 text-xs font-medium ${PRIORITY_COLORS[task.priority] ?? 'text-stone-400'}`}>
           {PRIORITY_LABELS[task.priority]}
         </span>
       )}
