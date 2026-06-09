@@ -10,7 +10,9 @@ const MOCK_ADMIN_BASE = `http://127.0.0.1:${process.env.E2E_MOCK_PORT || '18473'
 const USER_ID = 'pw-chat-tool-call';
 const PROMPT = 'Fetch the contents of https://example.com for me.';
 const CANARY_FINAL = 'canary-tool-call-fetched-a1b2c3';
+const MEMORY_TRIGGER_RESPONSE = { content: 'No relevant memory context.' };
 const FORCED_RESPONSES = [
+  MEMORY_TRIGGER_RESPONSE,
   {
     content: '',
     toolCalls: [
@@ -158,7 +160,7 @@ test.describe('Chat Tool Call Flow', () => {
     const threadId = await createNewThread(page);
     await sendMessage(page, PROMPT);
 
-    await expect(page.getByText(CANARY_FINAL)).toBeVisible({ timeout: 40_000 });
+    await expect(page.getByText(CANARY_FINAL).first()).toBeVisible({ timeout: 40_000 });
 
     const names = await expect
       .poll(async () => toolTimelineNames(page, threadId), { timeout: 20_000 })

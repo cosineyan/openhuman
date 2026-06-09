@@ -181,9 +181,9 @@ fn build_registered_controllers() -> Vec<RegisteredController> {
     // Background command monitors for agent-scoped event sources
     controllers.extend(crate::openhuman::monitor::all_monitor_registered_controllers());
     // Unified inference domain: text / vision / local runtime / cloud providers.
-    // (Formerly split across inference, local_ai, and providers namespaces.)
+    // (Formerly split across inference, local AI, and providers modules.)
     controllers.extend(crate::openhuman::inference::all_inference_registered_controllers());
-    controllers.extend(crate::openhuman::inference::all_local_ai_registered_controllers());
+    controllers.extend(crate::openhuman::inference::all_local_inference_registered_controllers());
     // Embedding provider configuration and embed RPC.
     controllers.extend(crate::openhuman::embeddings::all_embeddings_registered_controllers());
     // People resolution and interaction scoring
@@ -200,6 +200,8 @@ fn build_registered_controllers() -> Vec<RegisteredController> {
     controllers.extend(crate::openhuman::javascript::all_javascript_registered_controllers());
     // Discovered SKILL.md skills and their bundled resources
     controllers.extend(crate::openhuman::workflows::all_workflows_registered_controllers());
+    // Skill runtime: run/cancel/log skill executions and resolve Node/Python toolchains
+    controllers.extend(crate::openhuman::skill_runtime::all_skill_runtime_registered_controllers());
     // Skill registry: browse, search, install from remote registries
     controllers
         .extend(crate::openhuman::skill_registry::all_skill_registry_registered_controllers());
@@ -293,6 +295,9 @@ fn build_registered_controllers() -> Vec<RegisteredController> {
     controllers.extend(crate::openhuman::devices::all_devices_registered_controllers());
     // Durable agent session database — queryable index over transcripts, lineage, tool calls
     controllers.extend(crate::openhuman::session_db::all_session_db_registered_controllers());
+    // Background agent command center — read-only grouped view over the run ledger
+    controllers
+        .extend(crate::openhuman::agent_orchestration::all_command_center_registered_controllers());
     controllers
 }
 
@@ -355,7 +360,7 @@ fn build_declared_controller_schemas() -> Vec<ControllerSchema> {
     schemas.extend(crate::openhuman::model_council::all_model_council_controller_schemas());
     schemas.extend(crate::openhuman::monitor::all_monitor_controller_schemas());
     schemas.extend(crate::openhuman::inference::all_inference_controller_schemas());
-    schemas.extend(crate::openhuman::inference::all_local_ai_controller_schemas());
+    schemas.extend(crate::openhuman::inference::all_local_inference_controller_schemas());
     schemas.extend(crate::openhuman::embeddings::all_embeddings_controller_schemas());
     schemas.extend(crate::openhuman::people::all_people_controller_schemas());
     schemas.extend(
@@ -365,6 +370,7 @@ fn build_declared_controller_schemas() -> Vec<ControllerSchema> {
     schemas.extend(crate::openhuman::socket::all_socket_controller_schemas());
     schemas.extend(crate::openhuman::javascript::all_javascript_controller_schemas());
     schemas.extend(crate::openhuman::workflows::all_workflows_controller_schemas());
+    schemas.extend(crate::openhuman::skill_runtime::all_skill_runtime_controller_schemas());
     schemas.extend(crate::openhuman::skill_registry::all_skill_registry_controller_schemas());
     schemas.extend(crate::openhuman::workspace::all_workspace_controller_schemas());
     schemas.extend(crate::openhuman::tools::all_tools_controller_schemas());
@@ -420,6 +426,8 @@ fn build_declared_controller_schemas() -> Vec<ControllerSchema> {
     schemas.extend(crate::openhuman::devices::all_devices_controller_schemas());
     // Durable agent session database
     schemas.extend(crate::openhuman::session_db::all_session_db_controller_schemas());
+    // Background agent command center
+    schemas.extend(crate::openhuman::agent_orchestration::all_command_center_controller_schemas());
     schemas
 }
 
@@ -473,14 +481,14 @@ pub fn namespace_description(namespace: &str) -> Option<&'static str> {
         "encrypt" => Some("Encrypt secure values managed by secret storage."),
         "health" => Some("Process and component health snapshots."),
         "inference" => Some("Connect to configured text, vision, and embedding inference runtimes."),
-        "local_ai" => Some("Local AI chat, inference, downloads, and media operations."),
         "migrate" => Some("Data migration utilities."),
         "javascript" => Some("First-class JavaScript runtime bridge for listing and dispatching tools."),
         "monitor" => Some("Start, inspect, read, and stop bounded background command monitors."),
         "screen_intelligence" => Some("Screen capture, permissions, and accessibility automation."),
         "security" => Some("Security policy and autonomy guardrail metadata."),
         "service" => Some("Desktop service lifecycle management."),
-        "skill_registry" => Some("Browse, search, and install skills from remote registries (OpenHuman, Hermes, OpenClaw)."),
+        "skill_registry" => Some("Browse, search, install, and uninstall skills from remote registries (OpenHuman, Hermes, OpenClaw)."),
+        "skill_runtime" => Some("Run installed skills, inspect run logs, and resolve Node/Python skill runtimes."),
         "workflows" => Some("Discovered workflows (WORKFLOW.md/SKILL.md bundles) and their resources."),
         "socket" => Some("Backend Socket.IO bridge controls."),
         "memory" => Some("Document storage, vector search, key-value store, and knowledge graph."),
@@ -502,6 +510,9 @@ pub fn namespace_description(namespace: &str) -> Option<&'static str> {
         "referral" => Some("Referral codes, stats, and apply flows via the hosted backend API."),
         "run_ledger" => Some(
             "Durable agent and workflow run state, child lineage, events, telemetry, and checkpoint references.",
+        ),
+        "agent_work" => Some(
+            "Background agent command center — recent agent runs grouped by status (needs-input, working, completed, failed, stopped).",
         ),
         "billing" => Some("Subscription plan, payment links, and credit top-up via the backend."),
         "team" => Some("Team member management, invites, and role changes via the backend."),

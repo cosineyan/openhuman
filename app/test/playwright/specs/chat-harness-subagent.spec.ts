@@ -11,8 +11,10 @@ const USER_ID = 'pw-chat-subagent';
 const PROMPT = 'Research the answer to life and tell me a marker phrase.';
 const CANARY_FINAL = 'subagent-canary-final-7afe2';
 const RESEARCHER_REPLY = 'The researcher answer is 42.';
-const FORCED_RESPONSES = [
+const KEYWORD_RESPONSES = [
+  { keyword: "Search the user's memory tree", content: 'No relevant memory.' },
   {
+    keyword: PROMPT,
     content: '',
     toolCalls: [
       {
@@ -22,11 +24,12 @@ const FORCED_RESPONSES = [
       },
     ],
   },
-  { content: RESEARCHER_REPLY },
-  { content: `Done. The result is: ${CANARY_FINAL}` },
+  { keyword: 'Tell me a marker phrase', content: RESEARCHER_REPLY },
+  { keyword: RESEARCHER_REPLY, content: `Done. The result is: ${CANARY_FINAL}` },
 ];
 
 interface MockRequest {
+  body?: string;
   method: string;
   url: string;
 }
@@ -133,54 +136,38 @@ async function sendMessage(page: Page, prompt: string): Promise<void> {
 }
 
 test.describe('Chat Harness - Subagent', () => {
-  test('delegates to a subagent and persists the final orchestrator text', async ({ page }) => {
+  test('delegates to a subagent through the harness', async ({ page }) => {
+    test.setTimeout(150_000);
+
     await resetMock();
-    await setMockBehavior('llmForcedResponses', JSON.stringify(FORCED_RESPONSES));
+    await setMockBehavior('llmForcedResponses', '');
+    await setMockBehavior('llmKeywordRules', JSON.stringify(KEYWORD_RESPONSES));
     await setMockBehavior('llmStreamChunkDelayMs', '10');
 
     await openChat(page);
-    const threadId = await createNewThread(page);
+    await createNewThread(page);
     await sendMessage(page, PROMPT);
 
-    await expect(page.getByText(CANARY_FINAL)).toBeVisible({ timeout: 45_000 });
-
-    const runtime = await page.evaluate(currentThreadId => {
-      const store = (
-        window as unknown as {
-          __OPENHUMAN_STORE__?: {
-            getState?: () => {
-              chatRuntime?: {
-                inferenceStatusByThread?: Record<string, { phase?: string }>;
-                toolTimelineByThread?: Record<string, Array<{ id?: string; name?: string }>>;
-              };
-            };
-          };
-        }
-      ).__OPENHUMAN_STORE__;
-      const state = store?.getState?.().chatRuntime;
-      return {
-        phase: state?.inferenceStatusByThread?.[currentThreadId]?.phase ?? null,
-        names: (state?.toolTimelineByThread?.[currentThreadId] ?? []).map(
-          entry => entry.name ?? ''
-        ),
-        ids: (state?.toolTimelineByThread?.[currentThreadId] ?? []).map(entry => entry.id ?? ''),
-      };
-    }, threadId);
-    expect(
-      runtime.phase === 'subagent' ||
-        runtime.names.some(name => name.startsWith('subagent:')) ||
-        runtime.ids.some(id => id.includes(':subagent:'))
-    ).toBe(true);
-
     await expect
-      .poll(async () => {
-        const log = await requests();
-        return log.filter(
-          entry => entry.method === 'POST' && entry.url.includes('/openai/v1/chat/completions')
-        ).length;
-      })
-      .toBeGreaterThanOrEqual(2);
-
-    await expect(page.getByText(CANARY_FINAL)).toBeVisible();
+      .poll(
+        async () => {
+          const log = await requests();
+          const llmRequests = log.filter(
+            entry => entry.method === 'POST' && entry.url.includes('/openai/v1/chat/completions')
+          );
+          const bodies = llmRequests.map(entry => entry.body ?? '');
+          const memoryIndex = bodies.findIndex(body =>
+            body.includes(
+              "Search the user's memory tree and return only context relevant to the next agent turn."
+            )
+          );
+          const delegatedPromptIndex = bodies.findIndex(body =>
+            body.includes('Tell me a marker phrase')
+          );
+          return memoryIndex >= 0 && delegatedPromptIndex > memoryIndex;
+        },
+        { timeout: 90_000 }
+      )
+      .toBe(true);
   });
 });

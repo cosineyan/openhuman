@@ -8,6 +8,7 @@ import {
 
 const MOCK_ADMIN_BASE = `http://127.0.0.1:${process.env.E2E_MOCK_PORT || '18473'}`;
 const USER_ID = 'pw-harness-composio-tool-flow';
+const MEMORY_TRIGGER_RESPONSE = { content: 'No relevant memory context.' };
 
 interface MockRequest {
   method: string;
@@ -152,6 +153,7 @@ test.describe('Harness - Composio tool-call prompt flow', () => {
     await setMockBehavior(
       'llmForcedResponses',
       JSON.stringify([
+        MEMORY_TRIGGER_RESPONSE,
         {
           content: '',
           toolCalls: [
@@ -194,6 +196,7 @@ test.describe('Harness - Composio tool-call prompt flow', () => {
     await setMockBehavior(
       'llmForcedResponses',
       JSON.stringify([
+        MEMORY_TRIGGER_RESPONSE,
         {
           content: '',
           toolCalls: [
@@ -211,7 +214,7 @@ test.describe('Harness - Composio tool-call prompt flow', () => {
 
     await sendMessage(page, 'list my GitHub repos');
     await expect(page.getByText(CANARY).first()).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByText(/openhuman/i)).toBeVisible();
+    await expect(page.getByText(/openhuman/i).first()).toBeVisible();
 
     const log = await requests();
     const llmHits = log.filter(
@@ -226,6 +229,7 @@ test.describe('Harness - Composio tool-call prompt flow', () => {
     await setMockBehavior(
       'llmForcedResponses',
       JSON.stringify([
+        MEMORY_TRIGGER_RESPONSE,
         {
           content: '',
           toolCalls: [
@@ -264,6 +268,7 @@ test.describe('Harness - Composio tool-call prompt flow', () => {
     await setMockBehavior(
       'llmForcedResponses',
       JSON.stringify([
+        MEMORY_TRIGGER_RESPONSE,
         {
           content: '',
           toolCalls: [

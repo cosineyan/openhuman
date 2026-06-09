@@ -2013,7 +2013,6 @@ fn register_domain_subscribers(
 /// surface a banner; under CLI / Docker the override is honored (with a
 /// noisy log + a domain event so any connected dashboard can flag it).
 pub async fn bootstrap_core_runtime(host_kind: crate::core::types::HostKind) {
-    use crate::core::types::HostKind;
     use crate::openhuman::socket::{set_global_socket_manager, SocketManager};
     use std::sync::Arc;
     // `embedded_core` derived from host_kind so the rest of the function (which
@@ -2036,6 +2035,10 @@ pub async fn bootstrap_core_runtime(host_kind: crate::core::types::HostKind) {
     // Uses a Once guard so repeated calls to bootstrap_core_runtime()
     // cannot double-subscribe.
     register_domain_subscribers(workspace_dir.clone(), cfg.clone(), embedded_core);
+    // Warm the remote skills catalog on every core load. This updates the
+    // cached registry used by skill discovery/search, but runs best-effort in
+    // the background so Hermes/network latency cannot block core readiness.
+    crate::openhuman::skill_registry::ops::start_boot_catalog_refresh();
 
     // --- Turn-state recovery -------------------------------------------
     // Any per-thread turn snapshots left on disk from a previous process
@@ -2117,6 +2120,16 @@ pub async fn bootstrap_core_runtime(host_kind: crate::core::types::HostKind) {
         workspace_dir.clone(),
         action_dir,
     );
+
+    // --- Triggered-workflow subscriber ---
+    // Install on the always-run serve boot, not only inside `start_channels`
+    // (skipped for web-chat-only cores with no messaging integrations, and when
+    // `OPENHUMAN_DISABLE_CHANNEL_LISTENERS=1`). Without this, any workflow
+    // declaring `triggers:` was silently ignored on web-chat-only desktop
+    // installs. Idempotent — shares a process-global OnceLock with the
+    // `start_channels` site so it registers exactly once regardless of which
+    // path runs first. (Matching only for now; activation handoff still pending.)
+    crate::openhuman::workflows::bus::ensure_triggered_workflow_subscriber(&workspace_dir);
 
     // --- Approval gate (#1339) ---
     // ON by default; opt out with `OPENHUMAN_APPROVAL_GATE=0` (or `false`).

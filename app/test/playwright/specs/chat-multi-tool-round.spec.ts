@@ -10,7 +10,9 @@ const MOCK_ADMIN_BASE = `http://127.0.0.1:${process.env.E2E_MOCK_PORT || '18473'
 const USER_ID = 'pw-chat-multi-tool';
 const PROMPT = 'Read the config file and search for the relevant setting.';
 const CANARY_FINAL = 'canary-multi-tool-d4e5f6';
+const MEMORY_TRIGGER_RESPONSE = { content: 'No relevant memory context.' };
 const FORCED_RESPONSES = [
+  MEMORY_TRIGGER_RESPONSE,
   {
     content: '',
     toolCalls: [
@@ -166,7 +168,7 @@ test.describe('Chat Multi Tool Round', () => {
     const threadId = await createNewThread(page);
     await sendMessage(page, PROMPT);
 
-    await expect(page.getByText(CANARY_FINAL)).toBeVisible({ timeout: 50_000 });
+    await expect(page.getByText(CANARY_FINAL).first()).toBeVisible({ timeout: 50_000 });
 
     await expect
       .poll(

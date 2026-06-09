@@ -4,6 +4,7 @@ use crate::openhuman::agent::host_runtime::{NativeRuntime, RuntimeAdapter};
 use crate::openhuman::config::{Config, DelegateAgentConfig};
 use crate::openhuman::javascript::NodeBootstrap;
 use crate::openhuman::memory::Memory;
+use crate::openhuman::runtime_python::PythonBootstrap;
 use crate::openhuman::security::{AuditLogger, SecurityPolicy};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -113,21 +114,29 @@ pub fn all_tools_with_runtime(
         );
         None
     };
-
-    let shell: Box<dyn Tool> = if let Some(bootstrap) = node_bootstrap.as_ref() {
-        Box::new(ShellTool::with_node_bootstrap(
-            security.clone(),
-            Arc::clone(&runtime),
-            Arc::clone(&audit),
-            Arc::clone(bootstrap),
-        ))
+    let python_bootstrap: Option<Arc<PythonBootstrap>> = if root_config.runtime_python.enabled {
+        tracing::debug!(
+            minimum_version = %root_config.runtime_python.minimum_version,
+            prefer_system = root_config.runtime_python.prefer_system,
+            "[tools::ops] python runtime enabled — constructing shared PythonBootstrap"
+        );
+        Some(Arc::new(PythonBootstrap::new(
+            root_config.runtime_python.clone(),
+        )))
     } else {
-        Box::new(ShellTool::new(
-            security.clone(),
-            Arc::clone(&runtime),
-            Arc::clone(&audit),
-        ))
+        tracing::debug!(
+            "[tools::ops] python runtime disabled — shell python/pip PATH injection suppressed"
+        );
+        None
     };
+
+    let shell: Box<dyn Tool> = Box::new(ShellTool::with_language_bootstraps(
+        security.clone(),
+        Arc::clone(&runtime),
+        Arc::clone(&audit),
+        node_bootstrap.as_ref().map(Arc::clone),
+        python_bootstrap.as_ref().map(Arc::clone),
+    ));
 
     let mut tools: Vec<Box<dyn Tool>> = vec![
         shell,
@@ -168,7 +177,7 @@ pub fn all_tools_with_runtime(
         // Workflow composition: `run_workflow` runs another workflow as a
         // subagent and (by default) waits on its result like a function call;
         // `await_workflow` re-attaches to a run that outlived its inline wait.
-        // Both wrap `workflows::schemas::spawn_workflow_run_background` +
+        // Both wrap `skill_runtime::spawn_workflow_run_background` +
         // `await_run_outcome` — the same spawn path `openhuman.workflows_run`
         // JSON-RPC uses, so RPC and tool callers stay in sync.
         Box::new(RunWorkflowTool::new()),
@@ -223,7 +232,6 @@ pub fn all_tools_with_runtime(
         Box::new(MemoryQueryTool),
         Box::new(MemoryQueryWalkTool),
         Box::new(SmartMemoryWalkTool),
-        Box::new(CallMemoryAgentTool::new()),
         // memory_search tools — vector search, chunk context, hybrid search,
         // and previously unregistered raw store tools.
         Box::new(MemoryVectorSearchTool),
@@ -299,6 +307,17 @@ pub fn all_tools_with_runtime(
         // `tools::user_filter` (install also fetches remote content).
         Box::new(WorkflowListTool::new(config.clone())),
         Box::new(WorkflowDescribeTool::new(config.clone())),
+        // Skill registry tools — browse/search/install from remote registries.
+        // Browse and search are read-only (default-ON); install is a write
+        // operation (fetches remote content and writes to disk).
+        Box::new(SkillRegistryBrowseTool),
+        Box::new(SkillRegistrySearchTool),
+        Box::new(SkillRegistryInstallTool::new(config.clone())),
+        Box::new(SkillRegistrySourcesTool),
+        Box::new(SkillRegistryUninstallTool),
+        // Skill runtime probes — resolve the reusable Node/Python runtimes
+        // that skill execution relies on before a script-backed skill runs.
+        Box::new(SkillRuntimeResolveRuntimesTool::new(config.clone())),
         Box::new(WorkflowReadResourceTool::new(config.clone())),
         Box::new(WorkflowRecentRunsTool::new(config.clone())),
         Box::new(WorkflowReadRunLogTool::new(config.clone())),
