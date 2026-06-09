@@ -4,12 +4,13 @@
 //! 1. Verifies the task is still in a "To Do" (non-done, non-in-progress) bucket.
 //! 2. Moves the task to the "Doing" bucket (In Progress).
 //! 3. Runs the AI using the task title + description as prompt.
-//! 4. On success: posts result as a comment and moves task to "Done".
-//! 5. On failure: posts error as a comment and moves task to "Blocked".
+//! 4. On success: posts result as a comment, moves to "Done", uploads AI log.
+//! 5. On failure: posts error as a comment, moves to "Blocked", uploads AI log.
 
 use std::sync::{Arc, OnceLock};
 
 use async_trait::async_trait;
+use chrono::Utc;
 
 use crate::core::event_bus::{DomainEvent, EventHandler, SubscriptionHandle};
 use crate::openhuman::config::Config;
@@ -67,7 +68,6 @@ impl EventHandler for ProjectAiRunner {
         };
 
         // Only process tasks in a "To Do" bucket (not already in progress / done / blocked).
-        // We check is_done_bucket=false and bucket title contains "to do" (case-insensitive).
         let buckets = match store::list_buckets(&self.config, project_id) {
             Ok(b) => b,
             Err(e) => {
@@ -94,9 +94,7 @@ impl EventHandler for ProjectAiRunner {
         let project_id = project_id.clone();
         let title = title.clone();
         let description = description.clone();
-        let buckets = buckets;
 
-        // Spawn detached so we don't block the event bus dispatcher.
         tokio::spawn(async move {
             run_ai_task(config, task_id, project_id, title, description, buckets).await;
         });
@@ -115,9 +113,9 @@ async fn run_ai_task(
     description: Option<String>,
     buckets: Vec<crate::openhuman::projects::Bucket>,
 ) {
+    let started_at = Utc::now();
     log::debug!("{LOG} picking up task={task_id} title={title:?}");
 
-    // Helper: find bucket id by title fragment (case-insensitive).
     let find_bucket = |fragment: &str| -> Option<String> {
         buckets
             .iter()
@@ -142,9 +140,6 @@ async fn run_ai_task(
         log::error!("{LOG} task={task_id} failed to move to Doing: {e}");
         return;
     }
-    log::debug!("{LOG} task={task_id} moved to Doing");
-
-    // Also log a comment so the user knows it started.
     let _ = store::add_comment(&config, &task_id, "ai", "Starting to work on this task…");
 
     // ── 2. Build prompt ───────────────────────────────────────────────────
@@ -152,14 +147,12 @@ async fn run_ai_task(
 
     // ── 3. Run AI ─────────────────────────────────────────────────────────
     let outcome = run_agent(&config, &task_id, &prompt).await;
+    let finished_at = Utc::now();
 
     // ── 4. Write back ─────────────────────────────────────────────────────
-    match outcome {
+    let (status, response_text) = match &outcome {
         Ok(response) => {
-            log::debug!("{LOG} task={task_id} AI succeeded");
-            // Post result as a comment.
-            let _ = store::add_comment(&config, &task_id, "ai", &response);
-            // Move to Done.
+            let _ = store::add_comment(&config, &task_id, "ai", response);
             let done_id = buckets
                 .iter()
                 .find(|b| b.is_done_bucket)
@@ -172,13 +165,11 @@ async fn run_ai_task(
                 };
                 let _ = store::update_task(&config, &task_id, &patch, "ai");
             }
+            ("done", response.as_str())
         }
         Err(err_msg) => {
-            log::warn!("{LOG} task={task_id} AI failed: {err_msg}");
-            // Post error as a comment.
             let comment = format!("Encountered an issue:\n\n{err_msg}");
             let _ = store::add_comment(&config, &task_id, "ai", &comment);
-            // Move to Blocked.
             if let Some(id) = find_bucket("block") {
                 let patch = TaskPatch {
                     bucket_id: Some(id),
@@ -186,11 +177,99 @@ async fn run_ai_task(
                 };
                 let _ = store::update_task(&config, &task_id, &patch, "ai");
             }
+            ("blocked", err_msg.as_str())
+        }
+    };
+
+    // ── 5. Write and attach AI log ────────────────────────────────────────
+    upload_ai_log(
+        &config,
+        &task_id,
+        &title,
+        description.as_deref(),
+        &prompt,
+        status,
+        response_text,
+        started_at,
+        finished_at,
+    );
+
+    let _ = project_id;
+    log::debug!("{LOG} task={task_id} complete (status={status})");
+}
+
+// ---------------------------------------------------------------------------
+// AI log file
+// ---------------------------------------------------------------------------
+
+#[allow(clippy::too_many_arguments)]
+fn upload_ai_log(
+    config: &Config,
+    task_id: &str,
+    title: &str,
+    description: Option<&str>,
+    prompt: &str,
+    status: &str,
+    response: &str,
+    started_at: chrono::DateTime<Utc>,
+    finished_at: chrono::DateTime<Utc>,
+) {
+    let timestamp = started_at.format("%Y%m%d_%H%M%S");
+    let filename = format!("ai-log-{timestamp}.md");
+    let duration_secs = (finished_at - started_at).num_seconds();
+
+    let mut md = String::new();
+    md.push_str(&format!("# AI Task Log — {title}\n\n"));
+    md.push_str(&format!("| Field | Value |\n|-------|-------|\n"));
+    md.push_str(&format!("| Task ID | `{task_id}` |\n"));
+    md.push_str(&format!("| Status | **{status}** |\n"));
+    md.push_str(&format!(
+        "| Started | {} |\n",
+        started_at.format("%Y-%m-%d %H:%M:%S UTC")
+    ));
+    md.push_str(&format!(
+        "| Finished | {} |\n",
+        finished_at.format("%Y-%m-%d %H:%M:%S UTC")
+    ));
+    md.push_str(&format!("| Duration | {duration_secs}s |\n\n"));
+
+    md.push_str("## Task\n\n");
+    md.push_str(&format!("**Title:** {title}\n\n"));
+    if let Some(desc) = description.filter(|d| !d.trim().is_empty()) {
+        md.push_str(&format!("**Description:**\n\n{desc}\n\n"));
+    }
+
+    md.push_str("## Prompt Sent to AI\n\n");
+    md.push_str("```\n");
+    md.push_str(prompt);
+    md.push_str("\n```\n\n");
+
+    md.push_str(&format!("## AI Response ({})\n\n", status.to_uppercase()));
+    md.push_str(response);
+    md.push('\n');
+
+    // Write to system temp dir
+    let tmp_path = std::env::temp_dir().join(&filename);
+    if let Err(e) = std::fs::write(&tmp_path, &md) {
+        log::error!("{LOG} task={task_id} failed to write log file: {e}");
+        return;
+    }
+
+    // Attach to the task
+    match store::add_attachment(config, task_id, &tmp_path, "ai") {
+        Ok(att) => {
+            log::debug!(
+                "{LOG} task={task_id} uploaded log as attachment id={}",
+                att.id
+            );
+        }
+        Err(e) => {
+            log::error!("{LOG} task={task_id} failed to attach log: {e}");
         }
     }
 
-    let _ = project_id; // suppress unused warning
-    log::debug!("{LOG} task={task_id} complete");
+    // Clean up temp file
+    let _ = std::fs::remove_file(&tmp_path);
 }
 
 // ---------------------------------------------------------------------------
@@ -214,12 +293,9 @@ fn build_prompt(title: &str, description: Option<&str>) -> String {
 
 async fn run_agent(config: &Config, task_id: &str, prompt: &str) -> Result<String, String> {
     log::debug!("{LOG} task={task_id} building agent");
-
     let mut agent = crate::openhuman::agent::harness::session::Agent::from_config(config)
         .map_err(|e| format!("failed to build agent: {e}"))?;
-
     agent.set_event_context(&format!("project-task-{task_id}"), "background");
-
     log::debug!("{LOG} task={task_id} running agent turn");
     agent.run_single(prompt).await.map_err(|e| e.to_string())
 }
