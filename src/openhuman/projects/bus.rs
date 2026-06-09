@@ -158,24 +158,47 @@ async fn run_ai_task(
                 .find(|b| b.is_done_bucket)
                 .map(|b| b.id.clone())
                 .or_else(|| find_bucket("done"));
-            if let Some(id) = done_id {
-                let patch = TaskPatch {
-                    bucket_id: Some(id),
-                    ..TaskPatch::default()
-                };
-                let _ = store::update_task(&config, &task_id, &patch, "ai");
+            match done_id {
+                Some(id) => {
+                    let patch = TaskPatch {
+                        bucket_id: Some(id),
+                        ..TaskPatch::default()
+                    };
+                    if let Err(e) = store::update_task(&config, &task_id, &patch, "ai") {
+                        log::error!("{LOG} task={task_id} failed to move to Done: {e}");
+                    } else {
+                        log::debug!("{LOG} task={task_id} moved to Done");
+                    }
+                }
+                None => {
+                    log::warn!("{LOG} task={task_id} no Done bucket found — task stays in Doing");
+                }
             }
             ("done", response.as_str())
         }
         Err(err_msg) => {
+            log::warn!("{LOG} task={task_id} AI failed: {err_msg}");
             let comment = format!("Encountered an issue:\n\n{err_msg}");
             let _ = store::add_comment(&config, &task_id, "ai", &comment);
-            if let Some(id) = find_bucket("block") {
-                let patch = TaskPatch {
-                    bucket_id: Some(id),
-                    ..TaskPatch::default()
-                };
-                let _ = store::update_task(&config, &task_id, &patch, "ai");
+            match find_bucket("block") {
+                Some(id) => {
+                    let patch = TaskPatch {
+                        bucket_id: Some(id),
+                        ..TaskPatch::default()
+                    };
+                    if let Err(e) = store::update_task(&config, &task_id, &patch, "ai") {
+                        log::error!("{LOG} task={task_id} failed to move to Blocked: {e}");
+                    } else {
+                        log::debug!("{LOG} task={task_id} moved to Blocked");
+                    }
+                }
+                None => {
+                    log::warn!(
+                        "{LOG} task={task_id} no 'Blocked' bucket found — task stays in Doing. \
+                         Available buckets: {:?}",
+                        buckets.iter().map(|b| &b.title).collect::<Vec<_>>()
+                    );
+                }
             }
             ("blocked", err_msg.as_str())
         }
