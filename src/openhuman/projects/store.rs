@@ -780,24 +780,27 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch, actor: &st
     // Trigger the AI runner when:
     // (a) assignee just became "ai" (new assignment), OR
     // (b) assignee was already "ai" and bucket just changed (e.g. moved back to To Do).
-    // The bus.rs handler filters to only act when the target bucket is "To Do".
-    let ai_newly_assigned =
-        updated.assignee.as_deref() == Some("ai") && old_task.assignee.as_deref() != Some("ai");
-    let ai_bucket_changed = updated.assignee.as_deref() == Some("ai")
-        && old_task.assignee.as_deref() == Some("ai")
-        && patch.bucket_id.is_some()
-        && updated.bucket_id != old_task.bucket_id;
+    // Never fire when actor="ai" — the AI runner's own moves should not retrigger pickup.
+    // The bus.rs handler also filters to only act when the target bucket is "To Do".
+    if actor != "ai" {
+        let ai_newly_assigned =
+            updated.assignee.as_deref() == Some("ai") && old_task.assignee.as_deref() != Some("ai");
+        let ai_bucket_changed = updated.assignee.as_deref() == Some("ai")
+            && old_task.assignee.as_deref() == Some("ai")
+            && patch.bucket_id.is_some()
+            && updated.bucket_id != old_task.bucket_id;
 
-    if ai_newly_assigned || ai_bucket_changed {
-        crate::core::event_bus::publish_global(
-            crate::core::event_bus::DomainEvent::ProjectTaskAssignedToAi {
-                task_id: task_id.to_string(),
-                project_id: updated.project_id.clone(),
-                bucket_id: updated.bucket_id.clone(),
-                title: updated.title.clone(),
-                description: updated.description.clone(),
-            },
-        );
+        if ai_newly_assigned || ai_bucket_changed {
+            crate::core::event_bus::publish_global(
+                crate::core::event_bus::DomainEvent::ProjectTaskAssignedToAi {
+                    task_id: task_id.to_string(),
+                    project_id: updated.project_id.clone(),
+                    bucket_id: updated.bucket_id.clone(),
+                    title: updated.title.clone(),
+                    description: updated.description.clone(),
+                },
+            );
+        }
     }
 
     Ok(updated)

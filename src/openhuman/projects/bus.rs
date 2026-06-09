@@ -319,15 +319,16 @@ async fn run_agent(config: &Config, task_id: &str, prompt: &str) -> Result<Strin
     let mut agent = crate::openhuman::agent::harness::session::Agent::from_config(config)
         .map_err(|e| format!("failed to build agent: {e}"))?;
 
-    // Use a unique session id per run so we never resume a prior transcript
-    // that might start with an assistant message (which the API rejects).
+    // Use a unique agent definition name so the transcript loader finds no
+    // prior session file and history starts clean. Without this the turn()
+    // call re-loads a previous transcript (which may start with an assistant
+    // message), causing "Expected message role 'user', got 'assistant'" from
+    // the Claude API.
     let run_id = uuid::Uuid::new_v4().to_string();
+    let run_name = format!("project-task-runner-{run_id}");
+    agent.set_agent_definition_name(&run_name);
     agent.set_event_context(&format!("project-task-{task_id}-{run_id}"), "background");
 
-    // Clear any history that may have been loaded from a previous session
-    // file — the AI runner always starts fresh for each task execution.
-    agent.clear_history();
-
-    log::debug!("{LOG} task={task_id} running agent turn");
+    log::debug!("{LOG} task={task_id} running agent turn (agent_name={run_name})");
     agent.run_single(prompt).await.map_err(|e| e.to_string())
 }
