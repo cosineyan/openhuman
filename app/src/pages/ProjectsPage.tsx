@@ -70,6 +70,14 @@ export function ProjectsPage() {
       setBoard(data);
       setError(null);
       setBoardVersion(v => v + 1);
+      // Keep selectedTask in sync: if the drawer is open, update it with
+      // the fresh task data so the feed + status reflect external changes
+      // (e.g. AI moving the task, or a drag while the drawer is open).
+      setSelectedTask(prev => {
+        if (!prev) return prev;
+        const fresh = data.buckets.flatMap(b => b.tasks).find(t => t.id === prev.id);
+        return fresh ?? prev;
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -80,6 +88,18 @@ export function ProjectsPage() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  // Poll every 5s while any task with assignee=ai is in a non-terminal bucket
+  // (i.e. AI may be actively working). This keeps the board + open drawer fresh.
+  useEffect(() => {
+    const hasActiveAiTask = board?.buckets.some(b =>
+      !b.bucket.is_done_bucket &&
+      b.tasks.some(t => t.assignee === 'ai' && !t.done)
+    );
+    if (!hasActiveAiTask) return;
+    const interval = setInterval(() => { void reload(); }, 5000);
+    return () => clearInterval(interval);
+  }, [board, reload]);
 
   const handleAddTask = async (
     bucketId: string,

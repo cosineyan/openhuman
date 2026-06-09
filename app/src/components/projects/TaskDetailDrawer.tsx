@@ -3,6 +3,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { formatFileSize } from '../../lib/attachments';
 import {
+  openWorkspacePath,
+  revealWorkspacePath,
+} from '../../utils/tauriCommands/workspacePaths';
+import {
   addAttachment,
   addComment,
   type Bucket,
@@ -602,7 +606,7 @@ export function TaskDetailDrawer({
                         {attachments.map(att => (
                           <li
                             key={att.id}
-                            className="flex items-center gap-3 rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-2.5 text-xs">
+                            className="flex items-center gap-3 rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-2.5 text-xs group">
                             <span className="text-base shrink-0">📎</span>
                             <div className="flex-1 min-w-0">
                               <p className="font-medium text-stone-800 dark:text-neutral-200 truncate">
@@ -623,10 +627,32 @@ export function TaskDetailDrawer({
                                 {formatTime(att.created)}
                               </p>
                             </div>
+                            {/* Open with default app */}
+                            <button
+                              type="button"
+                              onClick={() => void openWorkspacePath(att.rel_path)}
+                              title="Open"
+                              className="shrink-0 opacity-0 group-hover:opacity-100 text-stone-400 hover:text-primary-500 dark:hover:text-primary-400 transition-opacity">
+                              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                <path d="M6 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1v-3M10 2h4m0 0v4m0-4L7 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            </button>
+                            {/* Reveal in Finder */}
+                            <button
+                              type="button"
+                              onClick={() => void revealWorkspacePath(att.rel_path)}
+                              title="Show in Finder"
+                              className="shrink-0 opacity-0 group-hover:opacity-100 text-stone-400 hover:text-stone-600 dark:hover:text-neutral-200 transition-opacity">
+                              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                <path d="M2 4a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V4z" stroke="currentColor" strokeWidth="1.4"/>
+                                <path d="M5 8h6M8 5v6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                              </svg>
+                            </button>
+                            {/* Delete */}
                             <button
                               type="button"
                               onClick={() => void handleDeleteAttachment(att.id)}
-                              className="shrink-0 text-stone-300 hover:text-coral-500 dark:text-neutral-600 dark:hover:text-coral-400 text-base leading-none"
+                              className="shrink-0 opacity-0 group-hover:opacity-100 text-stone-300 hover:text-coral-500 dark:text-neutral-600 dark:hover:text-coral-400 transition-opacity text-base leading-none"
                               title="Remove">
                               ×
                             </button>
