@@ -173,6 +173,9 @@ export function TaskDetailDrawer({
     }
   }, []);
 
+  const prevTaskIdRef = useRef<string | null>(null);
+  const prevEventCountRef = useRef(0);
+
   useEffect(() => {
     if (task) {
       setTitle(task.title);
@@ -181,12 +184,20 @@ export function TaskDetailDrawer({
       setDueDate(task.due_date ? task.due_date.slice(0, 10) : '');
       setAssignee(task.assignee ?? '');
       setBucketId(task.bucket_id);
-      setConfirmDelete(false);
-      setCommentDraft('');
-      setNewSubtaskTitle('');
-      void loadEvents(task.id);
-      void loadAttachments(task.id);
-      void loadSubtasks(task.id);
+
+      // Only reset and reload data when the task ID changes (different task opened).
+      // When the same task object is refreshed by the board poller we skip the reload
+      // to avoid resetting scroll position and form state.
+      if (task.id !== prevTaskIdRef.current) {
+        prevTaskIdRef.current = task.id;
+        prevEventCountRef.current = 0;
+        setConfirmDelete(false);
+        setCommentDraft('');
+        setNewSubtaskTitle('');
+        void loadEvents(task.id);
+        void loadAttachments(task.id);
+        void loadSubtasks(task.id);
+      }
     } else if (createBucketId) {
       setTitle('');
       setDescription('');
@@ -196,13 +207,17 @@ export function TaskDetailDrawer({
       setBucketId(createBucketId);
       setConfirmDelete(false);
       setSubtasks([]);
+      prevTaskIdRef.current = null;
     }
   }, [task, createBucketId, loadEvents, loadAttachments, loadSubtasks]);
 
   useEffect(() => {
-    if (feedFilter !== 'attachments') {
+    if (feedFilter === 'attachments') return;
+    // Only scroll to bottom when new events appear, not on every reload.
+    if (events.length > prevEventCountRef.current) {
       feedEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
+    prevEventCountRef.current = events.length;
   }, [events, feedFilter]);
 
   if (!task && !isCreateMode) return null;

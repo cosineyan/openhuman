@@ -318,7 +318,16 @@ async fn run_agent(config: &Config, task_id: &str, prompt: &str) -> Result<Strin
     log::debug!("{LOG} task={task_id} building agent");
     let mut agent = crate::openhuman::agent::harness::session::Agent::from_config(config)
         .map_err(|e| format!("failed to build agent: {e}"))?;
-    agent.set_event_context(&format!("project-task-{task_id}"), "background");
+
+    // Use a unique session id per run so we never resume a prior transcript
+    // that might start with an assistant message (which the API rejects).
+    let run_id = uuid::Uuid::new_v4().to_string();
+    agent.set_event_context(&format!("project-task-{task_id}-{run_id}"), "background");
+
+    // Clear any history that may have been loaded from a previous session
+    // file — the AI runner always starts fresh for each task execution.
+    agent.clear_history();
+
     log::debug!("{LOG} task={task_id} running agent turn");
     agent.run_single(prompt).await.map_err(|e| e.to_string())
 }
