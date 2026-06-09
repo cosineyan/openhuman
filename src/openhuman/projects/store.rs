@@ -777,8 +777,18 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch, actor: &st
         );
     }
 
-    // If assignee just became AI, signal the AI runner.
-    if updated.assignee.as_deref() == Some("ai") && old_task.assignee.as_deref() != Some("ai") {
+    // Trigger the AI runner when:
+    // (a) assignee just became "ai" (new assignment), OR
+    // (b) assignee was already "ai" and bucket just changed (e.g. moved back to To Do).
+    // The bus.rs handler filters to only act when the target bucket is "To Do".
+    let ai_newly_assigned =
+        updated.assignee.as_deref() == Some("ai") && old_task.assignee.as_deref() != Some("ai");
+    let ai_bucket_changed = updated.assignee.as_deref() == Some("ai")
+        && old_task.assignee.as_deref() == Some("ai")
+        && patch.bucket_id.is_some()
+        && updated.bucket_id != old_task.bucket_id;
+
+    if ai_newly_assigned || ai_bucket_changed {
         crate::core::event_bus::publish_global(
             crate::core::event_bus::DomainEvent::ProjectTaskAssignedToAi {
                 task_id: task_id.to_string(),
