@@ -978,6 +978,17 @@ pub enum DomainEvent {
         reason: String,
     },
 
+    // ── Projects AI task pickup ───────────────────────────────────────────
+    /// A project task was assigned to AI (or created with assignee=ai)
+    /// and is in a todo bucket. The AI runner should pick it up.
+    ProjectTaskAssignedToAi {
+        task_id: String,
+        project_id: String,
+        bucket_id: String,
+        title: String,
+        description: Option<String>,
+    },
+
     // ── Backend Meet Bot ──────────────────────────────────────────────
     /// Backend gmeet bot successfully joined the meeting.
     BackendMeetJoined { meet_url: String },
@@ -1119,6 +1130,8 @@ impl DomainEvent {
 
             Self::TaskPlanAwaitingApproval { .. } | Self::TaskRunReclaimed { .. } => "agent",
 
+            Self::ProjectTaskAssignedToAi { .. } => "projects",
+
             Self::Voice(_) => "voice",
 
             Self::ApprovalRequested { .. }
@@ -1252,6 +1265,7 @@ impl DomainEvent {
             Self::TaskSourceFetchFailed { .. } => "TaskSourceFetchFailed",
             Self::TaskPlanAwaitingApproval { .. } => "TaskPlanAwaitingApproval",
             Self::TaskRunReclaimed { .. } => "TaskRunReclaimed",
+            Self::ProjectTaskAssignedToAi { .. } => "ProjectTaskAssignedToAi",
             Self::BackendMeetJoined { .. } => "BackendMeetJoined",
             Self::BackendMeetLeft { .. } => "BackendMeetLeft",
             Self::BackendMeetReply { .. } => "BackendMeetReply",

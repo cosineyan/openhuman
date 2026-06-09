@@ -112,6 +112,8 @@ pub async fn start_channels(mut config: Config) -> Result<()> {
     // Board poller: dispatch the highest-urgency `todo` card on the
     // task-sources board (catch-all for cards without a proactive trigger).
     crate::openhuman::agent::task_dispatcher::start_board_poller();
+    // Projects AI runner: event-driven pickup of project tasks assigned to AI.
+    crate::openhuman::projects::register_project_ai_runner(std::sync::Arc::new(config.clone()));
     // Native request handlers. Re-registering is safe (latest wins) so
     // this is idempotent even if `bootstrap_core_runtime` also runs.
     // Must happen before `run_message_dispatch_loop` begins, because

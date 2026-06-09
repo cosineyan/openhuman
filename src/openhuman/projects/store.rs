@@ -560,6 +560,19 @@ pub fn create_task(
     // Log a "created" event outside the connection closure.
     let _ = log_change(config, &task.id, actor, "created", None, Some(&task.title));
 
+    // If assigned to AI, signal the AI runner via event bus.
+    if task.assignee.as_deref() == Some("ai") {
+        crate::core::event_bus::publish_global(
+            crate::core::event_bus::DomainEvent::ProjectTaskAssignedToAi {
+                task_id: task.id.clone(),
+                project_id: task.project_id.clone(),
+                bucket_id: task.bucket_id.clone(),
+                title: task.title.clone(),
+                description: task.description.clone(),
+            },
+        );
+    }
+
     Ok(task)
 }
 
@@ -761,6 +774,19 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch, actor: &st
             "assignee",
             old_task.assignee.as_deref(),
             updated.assignee.as_deref(),
+        );
+    }
+
+    // If assignee just became AI, signal the AI runner.
+    if updated.assignee.as_deref() == Some("ai") && old_task.assignee.as_deref() != Some("ai") {
+        crate::core::event_bus::publish_global(
+            crate::core::event_bus::DomainEvent::ProjectTaskAssignedToAi {
+                task_id: task_id.to_string(),
+                project_id: updated.project_id.clone(),
+                bucket_id: updated.bucket_id.clone(),
+                title: updated.title.clone(),
+                description: updated.description.clone(),
+            },
         );
     }
 

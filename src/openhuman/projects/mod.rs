@@ -1,8 +1,11 @@
+pub mod bus;
 mod ops;
 mod schemas;
 pub(crate) mod store;
 pub mod tools;
 mod types;
+
+pub use bus::register_project_ai_runner;
 
 pub use ops::{
     add_attachment, add_comment, create_subtask, create_task, delete_attachment, delete_subtask,
