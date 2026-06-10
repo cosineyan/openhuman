@@ -364,20 +364,60 @@ fn build_prompt(title: &str, description: Option<&str>) -> String {
 }
 
 async fn run_agent(config: &Config, task_id: &str, prompt: &str) -> Result<String, String> {
+    use crate::openhuman::agent::progress::AgentProgress;
+
     log::debug!("{LOG} task={task_id} building agent");
     let mut agent = crate::openhuman::agent::harness::session::Agent::from_config(config)
         .map_err(|e| format!("failed to build agent: {e}"))?;
 
-    // Use a unique agent definition name so the transcript loader finds no
-    // prior session file and history starts clean. Without this the turn()
-    // call re-loads a previous transcript (which may start with an assistant
-    // message), causing "Expected message role 'user', got 'assistant'" from
-    // the Claude API.
     let run_id = uuid::Uuid::new_v4().to_string();
     let run_name = format!("project-task-runner-{run_id}");
     agent.set_agent_definition_name(&run_name);
     agent.set_event_context(&format!("project-task-{task_id}-{run_id}"), "background");
 
+    // Attach a progress channel so we can forward granular events.
+    let (progress_tx, mut progress_rx) =
+        tokio::sync::mpsc::channel::<AgentProgress>(64);
+    agent.set_on_progress(Some(progress_tx));
+
+    // Spawn a task that forwards AgentProgress events as task log lines.
+    let task_id_fwd = task_id.to_string();
+    let fwd = tokio::spawn(async move {
+        while let Some(event) = progress_rx.recv().await {
+            let line = match &event {
+                AgentProgress::TurnStarted => {
+                    Some("AI turn started".to_string())
+                }
+                AgentProgress::IterationStarted { iteration, .. } => {
+                    Some(format!("Thinking (step {iteration})…"))
+                }
+                AgentProgress::ToolCallStarted { tool_name, .. } => {
+                    Some(format!("Using tool: {tool_name}"))
+                }
+                AgentProgress::ToolCallCompleted {
+                    tool_name,
+                    success,
+                    elapsed_ms,
+                    ..
+                } => {
+                    if *success {
+                        Some(format!("✓ {tool_name} ({elapsed_ms}ms)"))
+                    } else {
+                        Some(format!("✗ {tool_name} failed ({elapsed_ms}ms)"))
+                    }
+                }
+                // Ignore noisy / redundant variants
+                _ => None,
+            };
+            if let Some(line) = line {
+                emit_task_log(&task_id_fwd, &line, "log");
+            }
+        }
+    });
+
     log::debug!("{LOG} task={task_id} running agent turn (agent_name={run_name})");
-    agent.run_single(prompt).await.map_err(|e| e.to_string())
+    let result = agent.run_single(prompt).await.map_err(|e| e.to_string());
+    // Wait for forwarder to drain before returning.
+    let _ = fwd.await;
+    result
 }
