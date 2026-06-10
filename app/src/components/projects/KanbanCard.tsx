@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { listSubtasks, type Task } from '../../services/api/projectsApi';
+import { AiRunDrawer } from './AiRunDrawer';
 import { useAiTaskRuns } from './useAiTaskRuns';
 
 interface Props {
@@ -109,6 +110,7 @@ export function KanbanCard({ task, subtaskInfo, boardVersion, onClick }: Props) 
   const { isRunning, getLines } = useAiTaskRuns();
   const aiRunning = task.assignee === 'ai' && isRunning(task.id);
   const lastLogLine = aiRunning ? getLines(task.id).at(-1) : undefined;
+  const [showRunDrawer, setShowRunDrawer] = useState(false);
 
   // Re-fetch subtasks whenever the board reloads (boardVersion changes) and we're expanded
   useEffect(() => {
@@ -141,9 +143,14 @@ export function KanbanCard({ task, subtaskInfo, boardVersion, onClick }: Props) 
           {task.title}
         </p>
         {lastLogLine && (
-          <p className="text-xs text-stone-400 dark:text-neutral-500 truncate mt-0.5">
+          <button
+            onClick={e => {
+              e.stopPropagation();
+              setShowRunDrawer(true);
+            }}
+            className="w-full text-left text-xs text-ocean-600 dark:text-ocean-400 truncate mt-0.5 hover:underline">
             {lastLogLine}
-          </p>
+          </button>
         )}
 
         {/* Subtask count row — separate from assignee/date/priority */}
@@ -245,6 +252,9 @@ export function KanbanCard({ task, subtaskInfo, boardVersion, onClick }: Props) 
             <SubMiniCard key={sub.id} sub={sub} onClick={onClick} />
           ))}
         </div>
+      )}
+      {showRunDrawer && (
+        <AiRunDrawer task={task} onClose={() => setShowRunDrawer(false)} />
       )}
     </div>
   );
