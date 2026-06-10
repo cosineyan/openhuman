@@ -649,7 +649,22 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch, actor: &st
         };
 
         let new_priority = patch.priority.unwrap_or(task.priority);
-        let new_position = patch.position.unwrap_or(task.position);
+        // When a task moves to a different bucket without an explicit position,
+        // place it at the top (min position - 1) so it's immediately visible.
+        let new_position = if let Some(p) = patch.position {
+            p
+        } else if new_bucket_id != task.bucket_id {
+            let min_pos: f64 = conn
+                .query_row(
+                    "SELECT COALESCE(MIN(position), 0.0) FROM project_tasks WHERE bucket_id = ?1",
+                    params![new_bucket_id],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0.0);
+            min_pos - 1.0
+        } else {
+            task.position
+        };
 
         let new_due_date: Option<DateTime<Utc>> = match &patch.due_date {
             None => task.due_date,
