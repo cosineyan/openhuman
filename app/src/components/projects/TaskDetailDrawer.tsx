@@ -6,7 +6,6 @@ import {
   addAttachment,
   addComment,
   type Bucket,
-  cancelAiTask,
   createSubtask,
   deleteAttachment,
   deleteSubtask,
@@ -18,6 +17,7 @@ import {
   type TaskEvent,
 } from '../../services/api/projectsApi';
 import { openWorkspacePath, revealWorkspacePath } from '../../utils/tauriCommands/workspacePaths';
+import { AiRunDrawer } from './AiRunDrawer';
 import { useAiTaskRuns } from './useAiTaskRuns';
 
 interface SavePatch {
@@ -143,15 +143,11 @@ export function TaskDetailDrawer({
 
   const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
   const [attachUploading, setAttachUploading] = useState(false);
+  const [showRunDrawer, setShowRunDrawer] = useState(false);
 
   const { getRun } = useAiTaskRuns();
   const activeRun = task ? getRun(task.id) : undefined;
-  const logEndRef = useRef<HTMLDivElement>(null);
   const prevRunStatusRef = useRef<string | undefined>(undefined);
-
-  useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeRun?.lines.length]);
 
   const loadEvents = useCallback(async (taskId: string) => {
     setEventsLoading(true);
@@ -701,8 +697,10 @@ export function TaskDetailDrawer({
             ) : (
               <>
                 {activeRun && (
-                  <div className="mb-4 rounded-lg border border-stone-200 dark:border-neutral-700 overflow-hidden">
-                    <div className="flex items-center justify-between px-3 py-2 bg-stone-50 dark:bg-neutral-800 border-b border-stone-200 dark:border-neutral-700">
+                  <button
+                    onClick={() => setShowRunDrawer(true)}
+                    className="mb-4 w-full rounded-lg border border-stone-200 dark:border-neutral-700 overflow-hidden text-left hover:border-ocean-300 dark:hover:border-ocean-700 transition-colors">
+                    <div className="flex items-center justify-between px-3 py-2 bg-stone-50 dark:bg-neutral-800">
                       <span className="text-xs font-medium text-stone-600 dark:text-neutral-300 flex items-center gap-1.5">
                         {activeRun.status === 'running' && (
                           <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
@@ -721,25 +719,16 @@ export function TaskDetailDrawer({
                             />
                           </svg>
                         )}
-                        {activeRun.status === 'running'
-                          ? 'AI is working…'
-                          : `AI finished — ${activeRun.status}`}
+                        {activeRun.status === 'running' ? 'AI is working…' : `AI finished — ${activeRun.status}`}
                       </span>
-                      {activeRun.status === 'running' && (
-                        <button
-                          onClick={() => {
-                            void cancelAiTask(task!.id);
-                          }}
-                          className="text-xs text-red-600 dark:text-red-400 hover:underline font-medium">
-                          Stop
-                        </button>
-                      )}
+                      <span className="text-xs text-stone-400 dark:text-neutral-500">View log →</span>
                     </div>
-                    <pre className="text-xs font-mono p-3 max-h-48 overflow-y-auto whitespace-pre-wrap break-words bg-white dark:bg-neutral-900 text-stone-700 dark:text-neutral-200">
-                      {activeRun.lines.join('\n') || '…'}
-                      <div ref={logEndRef} />
-                    </pre>
-                  </div>
+                    {activeRun.lines.at(-1) && (
+                      <p className="px-3 py-1.5 text-xs font-mono text-stone-500 dark:text-neutral-400 truncate bg-white dark:bg-neutral-900 border-t border-stone-100 dark:border-neutral-800">
+                        {activeRun.lines.at(-1)}
+                      </p>
+                    )}
+                  </button>
                 )}
                 {/* Tab bar — icon only with count, label as tooltip */}
                 <div className="flex items-center justify-around px-2 pt-3 pb-0 border-b border-stone-200 dark:border-neutral-800 shrink-0">
@@ -1058,6 +1047,9 @@ export function TaskDetailDrawer({
           )}
         </div>
       </div>
+      {showRunDrawer && task && (
+        <AiRunDrawer task={task} onClose={() => setShowRunDrawer(false)} />
+      )}
     </div>
   );
 }
