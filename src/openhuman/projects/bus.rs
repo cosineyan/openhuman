@@ -20,6 +20,23 @@ static AI_RUNNER_HANDLE: OnceLock<SubscriptionHandle> = OnceLock::new();
 
 const LOG: &str = "[projects::ai_runner]";
 
+fn emit_task_log(task_id: &str, line: &str, kind: &str) {
+    use crate::core::socketio::WebChannelEvent;
+    use crate::openhuman::channels::providers::web::event_bus::publish_web_channel_event;
+    use serde_json::json;
+
+    let payload = json!({ "task_id": task_id, "line": line, "kind": kind });
+    publish_web_channel_event(WebChannelEvent {
+        event: "project:task_log".to_string(),
+        client_id: "system".to_string(),
+        thread_id: format!("project-task-{task_id}"),
+        request_id: String::new(),
+        message: Some(line.to_string()),
+        output: Some(payload.to_string()),
+        ..WebChannelEvent::default()
+    });
+}
+
 // ---------------------------------------------------------------------------
 // Registration
 // ---------------------------------------------------------------------------
@@ -95,9 +112,10 @@ impl EventHandler for ProjectAiRunner {
         let title = title.clone();
         let description = description.clone();
 
-        tokio::spawn(async move {
-            run_ai_task(config, task_id, project_id, title, description, buckets).await;
+        let join = tokio::spawn(async move {
+            run_ai_task(config, task_id.clone(), project_id, title, description, buckets).await;
         });
+        crate::openhuman::projects::run_registry::register(&task_id, join.abort_handle());
     }
 }
 
@@ -128,6 +146,7 @@ async fn run_ai_task(
         Some(id) => id,
         None => {
             log::warn!("{LOG} task={task_id} no 'Doing' bucket found — aborting");
+            crate::openhuman::projects::run_registry::deregister(&task_id);
             return;
         }
     };
@@ -138,9 +157,11 @@ async fn run_ai_task(
     };
     if let Err(e) = store::update_task(&config, &task_id, &patch_doing, "ai") {
         log::error!("{LOG} task={task_id} failed to move to Doing: {e}");
+        crate::openhuman::projects::run_registry::deregister(&task_id);
         return;
     }
     let _ = store::add_comment(&config, &task_id, "ai", "Starting to work on this task…");
+    emit_task_log(&task_id, "Starting to work on this task…", "log");
 
     // ── 2. Build prompt ───────────────────────────────────────────────────
     let prompt = build_prompt(&title, description.as_deref());
@@ -150,16 +171,36 @@ async fn run_ai_task(
     let finished_at = Utc::now();
 
     // ── 4. Write back ─────────────────────────────────────────────────────
-    let (status, response_text) = match &outcome {
-        Ok(response) => {
-            let _ = store::add_comment(&config, &task_id, "ai", response);
-            let done_id = buckets
-                .iter()
-                .find(|b| b.is_done_bucket)
-                .map(|b| b.id.clone())
-                .or_else(|| find_bucket("done"));
-            match done_id {
-                Some(id) => {
+    // Detect cancellation: tokio abort surfaces as a string containing "cancelled"
+    let was_cancelled = matches!(&outcome, Err(msg) if msg.to_lowercase().contains("cancelled"));
+
+    let (status, response_text) = if was_cancelled {
+        let comment = "Cancelled by user.";
+        let _ = store::add_comment(&config, &task_id, "ai", comment);
+        emit_task_log(&task_id, comment, "cancelled");
+        if let Some(id) = find_bucket("block") {
+            let patch = TaskPatch {
+                bucket_id: Some(id),
+                ..TaskPatch::default()
+            };
+            if let Err(e) = store::update_task(&config, &task_id, &patch, "ai") {
+                log::error!("{LOG} task={task_id} failed to move to Blocked after cancel: {e}");
+            }
+        } else {
+            log::warn!("{LOG} task={task_id} no Blocked bucket for cancelled task");
+        }
+        ("cancelled", comment)
+    } else {
+        match &outcome {
+            Ok(response) => {
+                let _ = store::add_comment(&config, &task_id, "ai", response);
+                emit_task_log(&task_id, response, "done");
+                let done_id = buckets
+                    .iter()
+                    .find(|b| b.is_done_bucket)
+                    .map(|b| b.id.clone())
+                    .or_else(|| find_bucket("done"));
+                if let Some(id) = done_id {
                     let patch = TaskPatch {
                         bucket_id: Some(id),
                         ..TaskPatch::default()
@@ -170,18 +211,14 @@ async fn run_ai_task(
                         log::debug!("{LOG} task={task_id} moved to Done");
                     }
                 }
-                None => {
-                    log::warn!("{LOG} task={task_id} no Done bucket found — task stays in Doing");
-                }
+                ("done", response.as_str())
             }
-            ("done", response.as_str())
-        }
-        Err(err_msg) => {
-            log::warn!("{LOG} task={task_id} AI failed: {err_msg}");
-            let comment = format!("Encountered an issue:\n\n{err_msg}");
-            let _ = store::add_comment(&config, &task_id, "ai", &comment);
-            match find_bucket("block") {
-                Some(id) => {
+            Err(err_msg) => {
+                log::warn!("{LOG} task={task_id} AI failed: {err_msg}");
+                let comment = format!("Encountered an issue:\n\n{err_msg}");
+                let _ = store::add_comment(&config, &task_id, "ai", &comment);
+                emit_task_log(&task_id, &comment, "error");
+                if let Some(id) = find_bucket("block") {
                     let patch = TaskPatch {
                         bucket_id: Some(id),
                         ..TaskPatch::default()
@@ -192,15 +229,8 @@ async fn run_ai_task(
                         log::debug!("{LOG} task={task_id} moved to Blocked");
                     }
                 }
-                None => {
-                    log::warn!(
-                        "{LOG} task={task_id} no 'Blocked' bucket found — task stays in Doing. \
-                         Available buckets: {:?}",
-                        buckets.iter().map(|b| &b.title).collect::<Vec<_>>()
-                    );
-                }
+                ("blocked", err_msg.as_str())
             }
-            ("blocked", err_msg.as_str())
         }
     };
 
@@ -217,8 +247,9 @@ async fn run_ai_task(
         finished_at,
     );
 
-    let _ = project_id;
+    crate::openhuman::projects::run_registry::deregister(&task_id);
     log::debug!("{LOG} task={task_id} complete (status={status})");
+    let _ = project_id;
 }
 
 // ---------------------------------------------------------------------------
