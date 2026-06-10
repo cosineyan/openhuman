@@ -114,6 +114,9 @@ pub fn with_connection<T>(config: &Config, f: impl FnOnce(&Connection) -> Result
     )
     .context("Failed to fix stale done flags")?;
 
+    cleanup_stale_ai_doing_tasks(&conn)
+        .context("Failed to clean up stale AI doing tasks")?;
+
     f(&conn)
 }
 
@@ -1096,6 +1099,77 @@ fn add_column_if_missing(conn: &Connection, table: &str, name: &str, sql_type: &
 }
 
 // ---------------------------------------------------------------------------
+// Startup cleanup
+// ---------------------------------------------------------------------------
+
+/// On process startup, move any tasks that are assigned to AI and sitting in a
+/// non-done "Doing"-style bucket to the Blocked bucket. This handles the case
+/// where the process exited while an AI run was in flight.
+pub fn cleanup_stale_ai_doing_tasks(conn: &Connection) -> Result<()> {
+    let project_ids: Vec<String> = {
+        let mut stmt = conn.prepare("SELECT id FROM projects")?;
+        let collected = stmt
+            .query_map([], |row| row.get(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        collected
+    };
+
+    for project_id in project_ids {
+        let blocked_id: Option<String> = conn
+            .query_row(
+                "SELECT id FROM project_buckets \
+                 WHERE project_id = ?1 AND LOWER(title) LIKE '%block%' AND is_done_bucket = 0 \
+                 LIMIT 1",
+                params![project_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+
+        let Some(blocked_id) = blocked_id else {
+            continue;
+        };
+
+        let stale_task_ids: Vec<String> = {
+            let mut stmt = conn.prepare(
+                "SELECT t.id FROM project_tasks t \
+                 JOIN project_buckets b ON b.id = t.bucket_id \
+                 WHERE t.project_id = ?1 \
+                   AND t.assignee = 'ai' \
+                   AND b.is_done_bucket = 0 \
+                   AND (LOWER(b.title) LIKE '%doing%' OR LOWER(b.title) LIKE '%in progress%') \
+                   AND t.parent_task_id IS NULL",
+            )?;
+            let collected = stmt
+                .query_map(params![project_id], |row| row.get(0))?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            collected
+        };
+
+        for task_id in stale_task_ids {
+            let now_str = chrono::Utc::now().to_rfc3339();
+            conn.execute(
+                "UPDATE project_tasks \
+                 SET bucket_id = ?1, updated = ?2 \
+                 WHERE id = ?3",
+                params![blocked_id, now_str, task_id],
+            )?;
+            conn.execute(
+                "INSERT INTO project_task_events \
+                 (id, task_id, kind, actor, field, old_value, new_value, body, created) \
+                 VALUES (lower(hex(randomblob(16))), ?1, 'comment', 'system', NULL, NULL, NULL, \
+                 'Moved to Blocked after unexpected app restart — move back to To Do to retry.', \
+                 ?2)",
+                params![task_id, now_str],
+            )?;
+            log::info!(
+                "[projects] startup cleanup: moved stale AI task={task_id} to Blocked"
+            );
+        }
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -1288,5 +1362,46 @@ mod tests {
         )
         .unwrap();
         assert_eq!(cleared.assignee, None);
+    }
+
+    #[test]
+    fn startup_moves_ai_doing_tasks_to_blocked() {
+        let tmp = TempDir::new().unwrap();
+        let config = test_config(&tmp);
+
+        let project_id = ensure_default_project(&config).unwrap();
+        let buckets = list_buckets(&config, &project_id).unwrap();
+        let todo_bucket = buckets.iter().find(|b| b.title == "To Do").unwrap();
+        let doing_bucket = buckets.iter().find(|b| b.title == "Doing").unwrap();
+        let blocked_bucket = buckets.iter().find(|b| b.title == "Blocked").unwrap();
+
+        let task = create_task(
+            &config,
+            &project_id,
+            &todo_bucket.id,
+            "AI task",
+            None,
+            0,
+            None,
+            "me",
+            None,
+        )
+        .unwrap();
+        let patch = TaskPatch {
+            bucket_id: Some(doing_bucket.id.clone()),
+            assignee: Some(Some("ai".to_string())),
+            ..TaskPatch::default()
+        };
+        update_task(&config, &task.id, &patch, "me").unwrap();
+
+        // Run the cleanup directly.
+        with_connection(&config, |conn| {
+            cleanup_stale_ai_doing_tasks(conn)
+        })
+        .unwrap();
+
+        // Task should now be in Blocked.
+        let tasks = list_tasks(&config, &project_id, Some(&blocked_bucket.id)).unwrap();
+        assert!(tasks.iter().any(|t| t.id == task.id), "task should be in Blocked");
     }
 }
