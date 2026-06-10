@@ -22,7 +22,7 @@ const LOG: &str = "[projects::ai_runner]";
 
 fn emit_task_log(task_id: &str, line: &str, kind: &str) {
     use crate::core::socketio::WebChannelEvent;
-    use crate::openhuman::channels::providers::web::event_bus::publish_web_channel_event;
+    use crate::openhuman::channels::providers::web::publish_web_channel_event;
     use serde_json::json;
 
     let payload = json!({ "task_id": task_id, "line": line, "kind": kind });
@@ -112,10 +112,12 @@ impl EventHandler for ProjectAiRunner {
         let title = title.clone();
         let description = description.clone();
 
-        let join = tokio::spawn(async move {
-            run_ai_task(config, task_id.clone(), project_id, title, description, buckets).await;
+        let cancel_token = tokio_util::sync::CancellationToken::new();
+        let cancel_token_task = cancel_token.clone();
+        crate::openhuman::projects::run_registry::register(&task_id, cancel_token);
+        tokio::spawn(async move {
+            run_ai_task(config, task_id, project_id, title, description, buckets, cancel_token_task).await;
         });
-        crate::openhuman::projects::run_registry::register(&task_id, join.abort_handle());
     }
 }
 
@@ -130,6 +132,7 @@ async fn run_ai_task(
     title: String,
     description: Option<String>,
     buckets: Vec<crate::openhuman::projects::Bucket>,
+    cancel_token: tokio_util::sync::CancellationToken,
 ) {
     let started_at = Utc::now();
     log::debug!("{LOG} picking up task={task_id} title={title:?}");
@@ -167,12 +170,14 @@ async fn run_ai_task(
     let prompt = build_prompt(&title, description.as_deref());
 
     // ── 3. Run AI ─────────────────────────────────────────────────────────
-    let outcome = run_agent(&config, &task_id, &prompt).await;
+    let outcome = tokio::select! {
+        result = run_agent(&config, &task_id, &prompt) => result,
+        _ = cancel_token.cancelled() => Err("Cancelled by user.".to_string()),
+    };
     let finished_at = Utc::now();
 
     // ── 4. Write back ─────────────────────────────────────────────────────
-    // Detect cancellation: tokio abort surfaces as a string containing "cancelled"
-    let was_cancelled = matches!(&outcome, Err(msg) if msg.to_lowercase().contains("cancelled"));
+    let was_cancelled = matches!(&outcome, Err(msg) if msg == "Cancelled by user.");
 
     let (status, response_text) = if was_cancelled {
         let comment = "Cancelled by user.";
@@ -187,14 +192,13 @@ async fn run_ai_task(
                 log::error!("{LOG} task={task_id} failed to move to Blocked after cancel: {e}");
             }
         } else {
-            log::warn!("{LOG} task={task_id} no Blocked bucket for cancelled task");
+            log::warn!("{LOG} task={task_id} no Blocked bucket — task stays in Doing");
         }
         ("cancelled", comment)
     } else {
         match &outcome {
             Ok(response) => {
                 let _ = store::add_comment(&config, &task_id, "ai", response);
-                emit_task_log(&task_id, response, "done");
                 let done_id = buckets
                     .iter()
                     .find(|b| b.is_done_bucket)
@@ -210,7 +214,10 @@ async fn run_ai_task(
                     } else {
                         log::debug!("{LOG} task={task_id} moved to Done");
                     }
+                } else {
+                    log::warn!("{LOG} task={task_id} no Done bucket found — task stays in Doing");
                 }
+                emit_task_log(&task_id, response, "done");
                 ("done", response.as_str())
             }
             Err(err_msg) => {
@@ -228,6 +235,8 @@ async fn run_ai_task(
                     } else {
                         log::debug!("{LOG} task={task_id} moved to Blocked");
                     }
+                } else {
+                    log::warn!("{LOG} task={task_id} no Blocked bucket — task stays in Doing");
                 }
                 ("blocked", err_msg.as_str())
             }
