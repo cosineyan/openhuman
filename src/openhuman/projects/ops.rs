@@ -371,3 +371,25 @@ pub fn delete_subtask(
         format!("subtask deleted: {subtask_id}"),
     ))
 }
+
+/// Hard-cancel an in-flight AI task. Cancels the CancellationToken registered
+/// for this task, which causes `run_ai_task` to write a comment and move to Blocked.
+/// Returns `true` when a running task was found and cancelled.
+pub fn cancel_ai_task(task_id: &str) -> RpcOutcome<serde_json::Value> {
+    let cancelled = crate::openhuman::projects::run_registry::cancel(task_id);
+    log::debug!("[projects] cancel_ai_task task={task_id} found={cancelled}");
+    RpcOutcome::single_log(
+        serde_json::json!({ "cancelled": cancelled }),
+        format!("cancel_ai_task task={task_id} cancelled={cancelled}"),
+    )
+}
+
+/// List task IDs that currently have a registered CancellationToken (i.e. are
+/// actively being processed by the AI runner).
+pub fn list_running_ai_tasks() -> RpcOutcome<serde_json::Value> {
+    let task_ids = crate::openhuman::projects::run_registry::list_running();
+    RpcOutcome::single_log(
+        serde_json::json!({ "task_ids": task_ids }),
+        format!("list_running_ai_tasks count={}", task_ids.len()),
+    )
+}

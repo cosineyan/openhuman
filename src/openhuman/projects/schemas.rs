@@ -28,6 +28,8 @@ pub fn all_controller_schemas() -> Vec<ControllerSchema> {
         schemas("list_subtasks"),
         schemas("create_subtask"),
         schemas("delete_subtask"),
+        schemas("cancel_ai_task"),
+        schemas("list_running_ai_tasks"),
     ]
 }
 
@@ -88,6 +90,14 @@ pub fn all_registered_controllers() -> Vec<RegisteredController> {
         RegisteredController {
             schema: schemas("delete_subtask"),
             handler: handle_delete_subtask,
+        },
+        RegisteredController {
+            schema: schemas("cancel_ai_task"),
+            handler: handle_cancel_ai_task,
+        },
+        RegisteredController {
+            schema: schemas("list_running_ai_tasks"),
+            handler: handle_list_running_ai_tasks,
         },
     ]
 }
@@ -352,6 +362,30 @@ pub fn schemas(function: &str) -> ControllerSchema {
             inputs: vec![FieldSchema { name: "task_id", ty: TypeSchema::String, comment: "Identifier of the subtask to delete.", required: true }],
             outputs: vec![FieldSchema { name: "result", ty: TypeSchema::Json, comment: "{ task_id, deleted: true }.", required: true }],
         },
+        "cancel_ai_task" => ControllerSchema {
+            namespace: "projects",
+            function: "cancel_ai_task",
+            description: "Hard-cancel an in-flight AI task. Moves task to Blocked with a cancellation comment.",
+            inputs: vec![task_id_input("ID of the running AI task to cancel.")],
+            outputs: vec![FieldSchema {
+                name: "cancelled",
+                ty: TypeSchema::Bool,
+                comment: "true if the task was found and cancelled; false if it had already finished.",
+                required: true,
+            }],
+        },
+        "list_running_ai_tasks" => ControllerSchema {
+            namespace: "projects",
+            function: "list_running_ai_tasks",
+            description: "Return the IDs of all project tasks currently being processed by the AI runner.",
+            inputs: vec![],
+            outputs: vec![FieldSchema {
+                name: "task_ids",
+                ty: TypeSchema::Json,
+                comment: "Array of task ID strings.",
+                required: true,
+            }],
+        },
         _other => ControllerSchema {
             namespace: "projects",
             function: "unknown",
@@ -548,6 +582,21 @@ fn handle_delete_subtask(params: Map<String, Value>) -> ControllerFuture {
         let task_id = get_str(&params, "task_id")?.to_string();
         tracing::debug!(task_id = %task_id, "[rpc][projects] delete_subtask entry");
         to_json(ops::delete_subtask(&config, &task_id, "me")?)
+    })
+}
+
+fn handle_cancel_ai_task(params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let task_id = get_str(&params, "task_id")?.to_string();
+        tracing::debug!(task_id = %task_id, "[rpc][projects] cancel_ai_task entry");
+        to_json(ops::cancel_ai_task(&task_id))
+    })
+}
+
+fn handle_list_running_ai_tasks(_params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async {
+        tracing::debug!("[rpc][projects] list_running_ai_tasks entry");
+        to_json(ops::list_running_ai_tasks())
     })
 }
 
