@@ -116,7 +116,16 @@ impl EventHandler for ProjectAiRunner {
         let cancel_token_task = cancel_token.clone();
         crate::openhuman::projects::run_registry::register(&task_id, cancel_token);
         tokio::spawn(async move {
-            run_ai_task(config, task_id, project_id, title, description, buckets, cancel_token_task).await;
+            run_ai_task(
+                config,
+                task_id,
+                project_id,
+                title,
+                description,
+                buckets,
+                cancel_token_task,
+            )
+            .await;
         });
     }
 }

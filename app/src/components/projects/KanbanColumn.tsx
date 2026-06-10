@@ -179,7 +179,12 @@ export function KanbanColumn({
                     {...dragProvided.draggableProps}
                     {...dragProvided.dragHandleProps}
                     className={dragSnapshot.isDragging ? 'opacity-80 rotate-1' : ''}>
-                    <KanbanCard task={task} subtaskInfo={subtaskCounts[task.id]} boardVersion={boardVersion} onClick={onTaskClick} />
+                    <KanbanCard
+                      task={task}
+                      subtaskInfo={subtaskCounts[task.id]}
+                      boardVersion={boardVersion}
+                      onClick={onTaskClick}
+                    />
                   </div>
                 )}
               </Draggable>

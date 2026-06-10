@@ -55,10 +55,13 @@ export function useAiTaskRuns() {
       if (!task_id || !line || !kind) return;
 
       const status: AiTaskRunStatus =
-        kind === 'done' ? 'done'
-        : kind === 'cancelled' ? 'cancelled'
-        : kind === 'error' ? 'error'
-        : 'running';
+        kind === 'done'
+          ? 'done'
+          : kind === 'cancelled'
+            ? 'cancelled'
+            : kind === 'error'
+              ? 'error'
+              : 'running';
 
       setRuns(prev => {
         const next = new Map(prev);
@@ -89,20 +92,11 @@ export function useAiTaskRuns() {
     };
   }, []);
 
-  const isRunning = useCallback(
-    (taskId: string) => runs.get(taskId)?.status === 'running',
-    [runs]
-  );
+  const isRunning = useCallback((taskId: string) => runs.get(taskId)?.status === 'running', [runs]);
 
-  const getLines = useCallback(
-    (taskId: string): string[] => runs.get(taskId)?.lines ?? [],
-    [runs]
-  );
+  const getLines = useCallback((taskId: string): string[] => runs.get(taskId)?.lines ?? [], [runs]);
 
-  const getRun = useCallback(
-    (taskId: string): AiTaskRun | undefined => runs.get(taskId),
-    [runs]
-  );
+  const getRun = useCallback((taskId: string): AiTaskRun | undefined => runs.get(taskId), [runs]);
 
   return { isRunning, getLines, getRun, runs };
 }

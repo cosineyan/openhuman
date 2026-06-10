@@ -2679,20 +2679,20 @@ const GlobalOwnModelSelector = ({
           {t('settings.ai.globalModel.appliesToAll')}
         </div>
 
-          <div className="flex justify-end">
-            <button
-              type="button"
-              disabled={!canApply || saving || isSaved}
-              onClick={() => void applySelection(source, model)}
-              className="rounded-lg bg-primary-500 px-3 py-2 text-xs font-medium text-white hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50">
-              {saving
-                ? t('settings.ai.globalModel.saving')
-                : isSaved
-                  ? t('settings.ai.globalModel.saved')
-                  : t('common.save')}
-            </button>
-          </div>
-        </>
+        <div className="flex justify-end">
+          <button
+            type="button"
+            disabled={!canApply || saving || isSaved}
+            onClick={() => void applySelection(source, model)}
+            className="rounded-lg bg-primary-500 px-3 py-2 text-xs font-medium text-white hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50">
+            {saving
+              ? t('settings.ai.globalModel.saving')
+              : isSaved
+                ? t('settings.ai.globalModel.saved')
+                : t('common.save')}
+          </button>
+        </div>
+      </>
     </div>
   );
 };

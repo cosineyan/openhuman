@@ -92,12 +92,13 @@ export function ProjectsPage() {
   // Poll every 5s while any task with assignee=ai is in a non-terminal bucket
   // (i.e. AI may be actively working). This keeps the board + open drawer fresh.
   useEffect(() => {
-    const hasActiveAiTask = board?.buckets.some(b =>
-      !b.bucket.is_done_bucket &&
-      b.tasks.some(t => t.assignee === 'ai' && !t.done)
+    const hasActiveAiTask = board?.buckets.some(
+      b => !b.bucket.is_done_bucket && b.tasks.some(t => t.assignee === 'ai' && !t.done)
     );
     if (!hasActiveAiTask) return;
-    const interval = setInterval(() => { void reload(); }, 5000);
+    const interval = setInterval(() => {
+      void reload();
+    }, 5000);
     return () => clearInterval(interval);
   }, [board, reload]);
 
@@ -278,11 +279,15 @@ export function ProjectsPage() {
           setTaskStack([]);
           setCreateBucketId(null);
         }}
-        onBack={taskStack.length > 0 ? () => {
-          const parent = taskStack[taskStack.length - 1];
-          setTaskStack(prev => prev.slice(0, -1));
-          setSelectedTask(parent);
-        } : undefined}
+        onBack={
+          taskStack.length > 0
+            ? () => {
+                const parent = taskStack[taskStack.length - 1];
+                setTaskStack(prev => prev.slice(0, -1));
+                setSelectedTask(parent);
+              }
+            : undefined
+        }
         onSave={handleSaveTask}
         onDelete={handleDeleteTask}
         onMove={handleMoveTaskFromDrawer}

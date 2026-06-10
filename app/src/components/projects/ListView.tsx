@@ -64,7 +64,7 @@ export function ListView({ board, onTaskClick }: Props) {
                   key={task.id}
                   task={task}
                   bucket={bucket}
-                  subtaskCount={(board.subtask_counts?.[task.id]?.[0]) ?? 0}
+                  subtaskCount={board.subtask_counts?.[task.id]?.[0] ?? 0}
                   isLast={i === tasks.length - 1}
                   onClick={onTaskClick}
                 />
@@ -121,7 +121,12 @@ function TaskRow({
       {subtaskCount > 0 && (
         <span className="shrink-0 flex items-center gap-0.5 text-xs text-stone-400 dark:text-neutral-500">
           <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
-            <path d="M2 2h8M2 6h5M2 10h3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            <path
+              d="M2 2h8M2 6h5M2 10h3"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+            />
           </svg>
           {subtaskCount}
         </span>

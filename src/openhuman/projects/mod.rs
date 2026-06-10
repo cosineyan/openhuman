@@ -1,6 +1,6 @@
 pub mod bus;
-pub(crate) mod run_registry;
 mod ops;
+pub(crate) mod run_registry;
 mod schemas;
 pub(crate) mod store;
 pub mod tools;

@@ -1,19 +1,14 @@
-import { renderHook, act, waitFor } from '@testing-library/react';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../services/socketService', () => ({
-  socketService: {
-    on: vi.fn(),
-    off: vi.fn(),
-  },
-}));
+import { socketService } from '../../services/socketService';
+import { useAiTaskRuns } from './useAiTaskRuns';
+
+vi.mock('../../services/socketService', () => ({ socketService: { on: vi.fn(), off: vi.fn() } }));
 
 vi.mock('../../services/api/projectsApi', () => ({
   listRunningAiTasks: vi.fn().mockResolvedValue({ task_ids: ['task-existing'] }),
 }));
-
-import { socketService } from '../../services/socketService';
-import { useAiTaskRuns } from './useAiTaskRuns';
 
 describe('useAiTaskRuns', () => {
   beforeEach(() => {
@@ -42,9 +37,7 @@ describe('useAiTaskRuns', () => {
     )?.[1] as ((data: unknown) => void) | undefined;
 
     act(() => {
-      listener?.({
-        output: JSON.stringify({ task_id: 'task-new', line: 'hello', kind: 'log' }),
-      });
+      listener?.({ output: JSON.stringify({ task_id: 'task-new', line: 'hello', kind: 'log' }) });
     });
 
     expect(result.current.isRunning('task-new')).toBe(true);
@@ -59,9 +52,7 @@ describe('useAiTaskRuns', () => {
     )?.[1] as ((data: unknown) => void) | undefined;
 
     act(() => {
-      listener?.({
-        output: JSON.stringify({ task_id: 'task-fin', line: 'Done!', kind: 'done' }),
-      });
+      listener?.({ output: JSON.stringify({ task_id: 'task-fin', line: 'Done!', kind: 'done' }) });
     });
 
     expect(result.current.isRunning('task-fin')).toBe(false);
