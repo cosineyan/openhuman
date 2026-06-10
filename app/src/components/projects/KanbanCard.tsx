@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { Task } from '../../services/api/projectsApi';
-import { listSubtasks } from '../../services/api/projectsApi';
+
+import { listSubtasks, type Task } from '../../services/api/projectsApi';
 import { useAiTaskRuns } from './useAiTaskRuns';
 
 interface Props {
@@ -23,8 +23,13 @@ const PRIORITY_FLAG_COLOR: Record<number, string> = {
 function FlagIcon({ className }: { className?: string }) {
   return (
     <svg className={className} width="11" height="11" viewBox="0 0 16 16" fill="none">
-      <path d="M3 2v12M3 2h8l-2 3 2 3H3" stroke="currentColor" strokeWidth="1.6"
-        strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M3 2v12M3 2h8l-2 3 2 3H3"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -33,7 +38,12 @@ function CalIcon() {
   return (
     <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
       <rect x="1.5" y="3" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M5 1.5V4M11 1.5V4M1.5 6.5h13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path
+        d="M5 1.5V4M11 1.5V4M1.5 6.5h13"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
@@ -47,7 +57,8 @@ function SubMiniCard({ sub, onClick }: { sub: Task; onClick: (t: Task) => void }
       onClick={() => onClick(sub)}
       onKeyDown={e => e.key === 'Enter' && onClick(sub)}
       className="rounded-lg bg-white dark:bg-neutral-800 border border-stone-200 dark:border-neutral-700 px-3 pt-2.5 pb-2.5 cursor-pointer hover:border-stone-300 dark:hover:border-neutral-600 hover:shadow-sm transition-all">
-      <p className={`text-sm font-medium leading-snug ${hasFooter ? 'mb-2' : ''} ${sub.done ? 'line-through text-stone-400 dark:text-neutral-500' : 'text-stone-800 dark:text-neutral-100'}`}>
+      <p
+        className={`text-sm font-medium leading-snug ${hasFooter ? 'mb-2' : ''} ${sub.done ? 'line-through text-stone-400 dark:text-neutral-500' : 'text-stone-800 dark:text-neutral-100'}`}>
         {sub.title}
       </p>
       {hasFooter && (
@@ -66,15 +77,19 @@ function SubMiniCard({ sub, onClick }: { sub: Task; onClick: (t: Task) => void }
                 {(() => {
                   const d = new Date(sub.due_date!);
                   const sameYear = d.getFullYear() === new Date().getFullYear();
-                  return d.toLocaleDateString(undefined, sameYear
-                    ? { month: 'short', day: 'numeric' }
-                    : { month: 'short', day: 'numeric', year: 'numeric' });
+                  return d.toLocaleDateString(
+                    undefined,
+                    sameYear
+                      ? { month: 'short', day: 'numeric' }
+                      : { month: 'short', day: 'numeric', year: 'numeric' }
+                  );
                 })()}
               </span>
             </div>
           )}
           {sub.priority > 0 && (
-            <div className={`flex items-center border border-stone-200 dark:border-neutral-700 rounded px-1.5 py-0.5 ${PRIORITY_FLAG_COLOR[sub.priority]}`}>
+            <div
+              className={`flex items-center border border-stone-200 dark:border-neutral-700 rounded px-1.5 py-0.5 ${PRIORITY_FLAG_COLOR[sub.priority]}`}>
               <FlagIcon />
             </div>
           )}
@@ -121,7 +136,8 @@ export function KanbanCard({ task, subtaskInfo, boardVersion, onClick }: Props) 
         tabIndex={0}
         onClick={() => onClick(task)}
         onKeyDown={e => e.key === 'Enter' && onClick(task)}>
-        <p className={`text-sm font-medium leading-snug ${(hasFooter || hasSubtasks) ? 'mb-2' : ''} ${task.done ? 'line-through text-stone-400 dark:text-neutral-500' : 'text-stone-800 dark:text-neutral-100'}`}>
+        <p
+          className={`text-sm font-medium leading-snug ${hasFooter || hasSubtasks ? 'mb-2' : ''} ${task.done ? 'line-through text-stone-400 dark:text-neutral-500' : 'text-stone-800 dark:text-neutral-100'}`}>
           {task.title}
         </p>
         {lastLogLine && (
@@ -134,11 +150,24 @@ export function KanbanCard({ task, subtaskInfo, boardVersion, onClick }: Props) 
         {hasSubtasks && (
           <div className="flex items-center gap-1.5 mb-1.5">
             {/* done/total progress circle icon */}
-            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" className="text-stone-400 dark:text-neutral-500 shrink-0">
-              <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.3"/>
-              <path d="M4.5 7l2 2 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 14 14"
+              fill="none"
+              className="text-stone-400 dark:text-neutral-500 shrink-0">
+              <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.3" />
+              <path
+                d="M4.5 7l2 2 3-3"
+                stroke="currentColor"
+                strokeWidth="1.3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
-            <span className="text-xs text-stone-500 dark:text-neutral-400">{done}/{total}</span>
+            <span className="text-xs text-stone-500 dark:text-neutral-400">
+              {done}/{total}
+            </span>
           </div>
         )}
 
@@ -148,7 +177,14 @@ export function KanbanCard({ task, subtaskInfo, boardVersion, onClick }: Props) 
               <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-ocean-100 dark:bg-ocean-900 text-ocean-700 dark:text-ocean-300 flex items-center gap-1">
                 {aiRunning && (
                   <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                   </svg>
                 )}
@@ -162,15 +198,19 @@ export function KanbanCard({ task, subtaskInfo, boardVersion, onClick }: Props) 
                   {(() => {
                     const d = new Date(task.due_date);
                     const sameYear = d.getFullYear() === new Date().getFullYear();
-                    return d.toLocaleDateString(undefined, sameYear
-                      ? { month: 'short', day: 'numeric' }
-                      : { month: 'short', day: 'numeric', year: 'numeric' });
+                    return d.toLocaleDateString(
+                      undefined,
+                      sameYear
+                        ? { month: 'short', day: 'numeric' }
+                        : { month: 'short', day: 'numeric', year: 'numeric' }
+                    );
                   })()}
                 </span>
               </div>
             )}
             {task.priority > 0 && (
-              <div className={`flex items-center border border-stone-200 dark:border-neutral-700 rounded px-1.5 py-0.5 ${PRIORITY_FLAG_COLOR[task.priority]}`}>
+              <div
+                className={`flex items-center border border-stone-200 dark:border-neutral-700 rounded px-1.5 py-0.5 ${PRIORITY_FLAG_COLOR[task.priority]}`}>
                 <FlagIcon />
               </div>
             )}
@@ -185,11 +225,16 @@ export function KanbanCard({ task, subtaskInfo, boardVersion, onClick }: Props) 
           onClick={toggleExpand}
           className="flex items-center gap-1.5 px-1 py-0.5 text-xs text-stone-500 dark:text-neutral-400 hover:text-stone-700 dark:hover:text-neutral-200 transition-colors">
           <svg
-            width="8" height="8" viewBox="0 0 8 8" fill="currentColor"
+            width="8"
+            height="8"
+            viewBox="0 0 8 8"
+            fill="currentColor"
             className={`transition-transform duration-150 ${expanded ? '' : '-rotate-90'}`}>
-            <path d="M4 5.5L1 2.5h6L4 5.5z"/>
+            <path d="M4 5.5L1 2.5h6L4 5.5z" />
           </svg>
-          <span>{total} subtask{total !== 1 ? 's' : ''}</span>
+          <span>
+            {total} subtask{total !== 1 ? 's' : ''}
+          </span>
         </button>
       )}
 
