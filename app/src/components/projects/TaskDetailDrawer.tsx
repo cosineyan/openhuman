@@ -3,10 +3,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { formatFileSize } from '../../lib/attachments';
 import {
-  openWorkspacePath,
-  revealWorkspacePath,
-} from '../../utils/tauriCommands/workspacePaths';
-import {
   addAttachment,
   addComment,
   type Bucket,
@@ -21,6 +17,7 @@ import {
   type TaskAttachment,
   type TaskEvent,
 } from '../../services/api/projectsApi';
+import { openWorkspacePath, revealWorkspacePath } from '../../utils/tauriCommands/workspacePaths';
 import { useAiTaskRuns } from './useAiTaskRuns';
 
 interface SavePatch {
@@ -150,6 +147,7 @@ export function TaskDetailDrawer({
   const { getRun } = useAiTaskRuns();
   const activeRun = task ? getRun(task.id) : undefined;
   const logEndRef = useRef<HTMLDivElement>(null);
+  const prevRunStatusRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -164,6 +162,17 @@ export function TaskDetailDrawer({
       setEventsLoading(false);
     }
   }, []);
+
+  // When the AI run transitions from running → terminal, reload events so the
+  // new comments and bucket-change entries appear without needing a page switch.
+  useEffect(() => {
+    const prev = prevRunStatusRef.current;
+    const curr = activeRun?.status;
+    prevRunStatusRef.current = curr;
+    if (prev === 'running' && curr !== 'running' && task) {
+      void loadEvents(task.id);
+    }
+  }, [activeRun?.status, task, loadEvents]);
 
   const loadAttachments = useCallback(async (taskId: string) => {
     try {
@@ -355,32 +364,55 @@ export function TaskDetailDrawer({
   const filteredEvents =
     feedFilter === 'comments' ? events.filter(ev => ev.kind === 'comment') : events;
 
-  const TABS: { key: FeedFilter; label: string; count: number; Icon: () => React.ReactElement }[] = [
-    {
-      key: 'all', label: 'Activity', count: events.length,
-      Icon: () => (
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-          <path d="M3 4h10M3 8h7M3 12h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-        </svg>
-      ),
-    },
-    {
-      key: 'comments', label: 'Comments', count: commentCount,
-      Icon: () => (
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-          <path d="M14 10a2 2 0 01-2 2H5l-3 3V4a2 2 0 012-2h8a2 2 0 012 2v6z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-        </svg>
-      ),
-    },
-    {
-      key: 'attachments', label: 'Files', count: attachments.length,
-      Icon: () => (
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-          <path d="M13.5 8.5l-6 6a4 4 0 01-5.657-5.657l7-7a2.5 2.5 0 013.536 3.536l-7 7A1 1 0 014 11l6-6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      ),
-    },
-  ];
+  const TABS: { key: FeedFilter; label: string; count: number; Icon: () => React.ReactElement }[] =
+    [
+      {
+        key: 'all',
+        label: 'Activity',
+        count: events.length,
+        Icon: () => (
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path
+              d="M3 4h10M3 8h7M3 12h5"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
+        ),
+      },
+      {
+        key: 'comments',
+        label: 'Comments',
+        count: commentCount,
+        Icon: () => (
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path
+              d="M14 10a2 2 0 01-2 2H5l-3 3V4a2 2 0 012-2h8a2 2 0 012 2v6z"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinejoin="round"
+            />
+          </svg>
+        ),
+      },
+      {
+        key: 'attachments',
+        label: 'Files',
+        count: attachments.length,
+        Icon: () => (
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path
+              d="M13.5 8.5l-6 6a4 4 0 01-5.657-5.657l7-7a2.5 2.5 0 013.536 3.536l-7 7A1 1 0 014 11l6-6"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        ),
+      },
+    ];
 
   return (
     <div
@@ -399,7 +431,13 @@ export function TaskDetailDrawer({
                 onClick={onBack}
                 className="flex items-center gap-1 text-xs text-stone-400 dark:text-neutral-500 hover:text-stone-700 dark:hover:text-neutral-300 shrink-0">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path d="M8 2L4 6l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path
+                    d="M8 2L4 6l4 4"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                 </svg>
                 <span className="truncate max-w-[100px]">{parentTask.title}</span>
               </button>
@@ -438,7 +476,8 @@ export function TaskDetailDrawer({
                     {b.title}
                   </option>
                 ))}
-              </select>            </div>
+              </select>{' '}
+            </div>
             <div>
               <label className="text-xs font-medium text-stone-500 dark:text-neutral-400 block mb-1">
                 Title
@@ -509,13 +548,17 @@ export function TaskDetailDrawer({
               <div>
                 {/* Section header */}
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="text-sm font-semibold text-stone-800 dark:text-neutral-200">Subtasks</span>
+                  <span className="text-sm font-semibold text-stone-800 dark:text-neutral-200">
+                    Subtasks
+                  </span>
                   {subtasks.length > 0 && (
                     <>
                       <div className="flex-1 h-1 rounded-full bg-stone-200 dark:bg-neutral-700 max-w-[60px]">
                         <div
                           className="h-1 rounded-full bg-stone-400 dark:bg-neutral-500 transition-all"
-                          style={{ width: `${subtasks.length ? (subtasks.filter(s => s.done).length / subtasks.length) * 100 : 0}%` }}
+                          style={{
+                            width: `${subtasks.length ? (subtasks.filter(s => s.done).length / subtasks.length) * 100 : 0}%`,
+                          }}
                         />
                       </div>
                       <span className="text-xs text-stone-400 dark:text-neutral-500">
@@ -531,20 +574,69 @@ export function TaskDetailDrawer({
                   <div className="grid grid-cols-[1fr_32px_32px_32px_24px] items-center px-3 py-1.5 border-b border-stone-100 dark:border-neutral-800 text-[11px] text-stone-400 dark:text-neutral-500">
                     <span>Name</span>
                     <span className="text-center">
-                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" className="mx-auto"><circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4"/><path d="M2 14c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
+                      <svg
+                        width="13"
+                        height="13"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        className="mx-auto">
+                        <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4" />
+                        <path
+                          d="M2 14c0-3.314 2.686-6 6-6s6 2.686 6 6"
+                          stroke="currentColor"
+                          strokeWidth="1.4"
+                          strokeLinecap="round"
+                        />
+                      </svg>
                     </span>
                     <span className="text-center">
-                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="mx-auto"><path d="M3 2v12M3 2h8l-2 3 2 3H3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        className="mx-auto">
+                        <path
+                          d="M3 2v12M3 2h8l-2 3 2 3H3"
+                          stroke="currentColor"
+                          strokeWidth="1.4"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
                     </span>
                     <span className="text-center">
-                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="mx-auto"><rect x="1.5" y="3" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.4"/><path d="M5 1.5V4M11 1.5V4M1.5 6.5h13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        className="mx-auto">
+                        <rect
+                          x="1.5"
+                          y="3"
+                          width="13"
+                          height="11"
+                          rx="1.5"
+                          stroke="currentColor"
+                          strokeWidth="1.4"
+                        />
+                        <path
+                          d="M5 1.5V4M11 1.5V4M1.5 6.5h13"
+                          stroke="currentColor"
+                          strokeWidth="1.4"
+                          strokeLinecap="round"
+                        />
+                      </svg>
                     </span>
                     <span />
                   </div>
 
                   {/* Rows */}
                   {subtasks.length === 0 && (
-                    <div className="px-3 py-3 text-xs text-stone-400 dark:text-neutral-500 italic">No subtasks yet.</div>
+                    <div className="px-3 py-3 text-xs text-stone-400 dark:text-neutral-500 italic">
+                      No subtasks yet.
+                    </div>
                   )}
                   {subtasks.map(sub => (
                     <SubtaskRow
@@ -562,18 +654,34 @@ export function TaskDetailDrawer({
 
                   {/* Add Task row */}
                   <div className="flex items-center gap-2 px-3 py-2 border-t border-stone-100 dark:border-neutral-800">
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="shrink-0 text-stone-400 dark:text-neutral-500">
-                      <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      className="shrink-0 text-stone-400 dark:text-neutral-500">
+                      <path
+                        d="M6 1v10M1 6h10"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                      />
                     </svg>
                     <input
                       value={newSubtaskTitle}
                       onChange={e => setNewSubtaskTitle(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') void handleAddSubtask(); if (e.key === 'Escape') setNewSubtaskTitle(''); }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') void handleAddSubtask();
+                        if (e.key === 'Escape') setNewSubtaskTitle('');
+                      }}
                       placeholder="Add Task"
                       className="flex-1 text-xs bg-transparent text-stone-800 dark:text-neutral-200 placeholder:text-stone-400 dark:placeholder:text-neutral-500 focus:outline-none"
                     />
                     {newSubtaskTitle.trim() && (
-                      <button type="button" disabled={addingSubtask} onClick={() => void handleAddSubtask()}
+                      <button
+                        type="button"
+                        disabled={addingSubtask}
+                        onClick={() => void handleAddSubtask()}
                         className="shrink-0 text-[10px] text-primary-500 hover:text-primary-600 font-medium disabled:opacity-40">
                         Add ↵
                       </button>
@@ -598,19 +706,31 @@ export function TaskDetailDrawer({
                       <span className="text-xs font-medium text-stone-600 dark:text-neutral-300 flex items-center gap-1.5">
                         {activeRun.status === 'running' && (
                           <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8v8H4z"
+                            />
                           </svg>
                         )}
-                        {activeRun.status === 'running' ? 'AI is working…' : `AI finished — ${activeRun.status}`}
+                        {activeRun.status === 'running'
+                          ? 'AI is working…'
+                          : `AI finished — ${activeRun.status}`}
                       </span>
                       {activeRun.status === 'running' && (
                         <button
                           onClick={() => {
                             void cancelAiTask(task!.id);
                           }}
-                          className="text-xs text-red-600 dark:text-red-400 hover:underline font-medium"
-                        >
+                          className="text-xs text-red-600 dark:text-red-400 hover:underline font-medium">
                           Stop
                         </button>
                       )}
@@ -636,11 +756,12 @@ export function TaskDetailDrawer({
                       }`}>
                       <tab.Icon />
                       {tab.count > 0 && (
-                        <span className={`text-[9px] font-medium leading-none ${
-                          feedFilter === tab.key
-                            ? 'text-primary-600 dark:text-primary-400'
-                            : 'text-stone-400 dark:text-neutral-500'
-                        }`}>
+                        <span
+                          className={`text-[9px] font-medium leading-none ${
+                            feedFilter === tab.key
+                              ? 'text-primary-600 dark:text-primary-400'
+                              : 'text-stone-400 dark:text-neutral-500'
+                          }`}>
                           {tab.count}
                         </span>
                       )}
@@ -688,7 +809,13 @@ export function TaskDetailDrawer({
                               title="Open"
                               className="shrink-0 opacity-0 group-hover:opacity-100 text-stone-400 hover:text-primary-500 dark:hover:text-primary-400 transition-opacity">
                               <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                                <path d="M6 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1v-3M10 2h4m0 0v4m0-4L7 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                <path
+                                  d="M6 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1v-3M10 2h4m0 0v4m0-4L7 9"
+                                  stroke="currentColor"
+                                  strokeWidth="1.5"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
                               </svg>
                             </button>
                             {/* Reveal in Finder */}
@@ -698,8 +825,17 @@ export function TaskDetailDrawer({
                               title="Show in Finder"
                               className="shrink-0 opacity-0 group-hover:opacity-100 text-stone-400 hover:text-stone-600 dark:hover:text-neutral-200 transition-opacity">
                               <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                                <path d="M2 4a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V4z" stroke="currentColor" strokeWidth="1.4"/>
-                                <path d="M5 8h6M8 5v6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                                <path
+                                  d="M2 4a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V4z"
+                                  stroke="currentColor"
+                                  strokeWidth="1.4"
+                                />
+                                <path
+                                  d="M5 8h6M8 5v6"
+                                  stroke="currentColor"
+                                  strokeWidth="1.4"
+                                  strokeLinecap="round"
+                                />
                               </svg>
                             </button>
                             {/* Delete */}
@@ -730,22 +866,32 @@ export function TaskDetailDrawer({
                           {ev.kind === 'comment' ? (
                             /* Comment — compact: actor badge + text inline */
                             <div className="flex gap-2 text-xs">
-                              <span className={`shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium self-start ${ev.actor === 'ai' ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300' : 'bg-primary-100 text-primary-800 dark:bg-primary-500/20 dark:text-primary-300'}`}>
+                              <span
+                                className={`shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium self-start ${ev.actor === 'ai' ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300' : 'bg-primary-100 text-primary-800 dark:bg-primary-500/20 dark:text-primary-300'}`}>
                                 {ev.actor === 'ai' ? 'AI' : 'Me'}
                               </span>
                               <div className="flex-1 min-w-0 bg-stone-50 dark:bg-neutral-800 rounded-lg border-l-2 border-primary-400 dark:border-primary-500 px-2.5 py-1.5">
-                                <p className="text-stone-800 dark:text-neutral-200 break-words">{ev.body}</p>
-                                <p className="text-stone-400 dark:text-neutral-500 text-[10px] mt-0.5">{formatTime(ev.created)}</p>
+                                <p className="text-stone-800 dark:text-neutral-200 break-words">
+                                  {ev.body}
+                                </p>
+                                <p className="text-stone-400 dark:text-neutral-500 text-[10px] mt-0.5">
+                                  {formatTime(ev.created)}
+                                </p>
                               </div>
                             </div>
                           ) : (
                             /* Change event — single tight line */
                             <div className="flex gap-1.5 text-xs items-baseline">
-                              <div className={`shrink-0 mt-[5px] w-1 h-1 rounded-full ${
-                                ev.field === 'attachment' || ev.field === 'subtask_added' ? 'bg-primary-400 dark:bg-primary-500'
-                                : ev.field === 'attachment_removed' || ev.field === 'subtask_removed' ? 'bg-coral-400 dark:bg-coral-500'
-                                : 'bg-stone-300 dark:bg-neutral-600'
-                              }`} />
+                              <div
+                                className={`shrink-0 mt-[5px] w-1 h-1 rounded-full ${
+                                  ev.field === 'attachment' || ev.field === 'subtask_added'
+                                    ? 'bg-primary-400 dark:bg-primary-500'
+                                    : ev.field === 'attachment_removed' ||
+                                        ev.field === 'subtask_removed'
+                                      ? 'bg-coral-400 dark:bg-coral-500'
+                                      : 'bg-stone-300 dark:bg-neutral-600'
+                                }`}
+                              />
                               <p className="flex-1 min-w-0 text-stone-500 dark:text-neutral-400 leading-relaxed">
                                 <span
                                   className={`font-medium mr-1 ${ev.actor === 'ai' ? 'text-amber-700 dark:text-amber-400' : 'text-primary-600 dark:text-primary-400'}`}>
@@ -773,11 +919,26 @@ export function TaskDetailDrawer({
                                     </span>
                                   </>
                                 ) : ev.field === 'subtask_added' ? (
-                                  <>added subtask <span className="font-medium text-stone-700 dark:text-neutral-300">{ev.new_value}</span></>
+                                  <>
+                                    added subtask{' '}
+                                    <span className="font-medium text-stone-700 dark:text-neutral-300">
+                                      {ev.new_value}
+                                    </span>
+                                  </>
                                 ) : ev.field === 'subtask_removed' ? (
-                                  <>removed subtask <span className="line-through text-stone-400">{ev.old_value}</span></>
+                                  <>
+                                    removed subtask{' '}
+                                    <span className="line-through text-stone-400">
+                                      {ev.old_value}
+                                    </span>
+                                  </>
                                 ) : ev.field === 'subtask_updated' ? (
-                                  <>updated subtask <span className="font-medium text-stone-700 dark:text-neutral-300">{ev.new_value}</span></>
+                                  <>
+                                    updated subtask{' '}
+                                    <span className="font-medium text-stone-700 dark:text-neutral-300">
+                                      {ev.new_value}
+                                    </span>
+                                  </>
                                 ) : ev.old_value == null && ev.new_value == null ? (
                                   <>
                                     updated{' '}
@@ -913,7 +1074,13 @@ function SubtaskRow({
 }: {
   sub: Task;
   onOpen: () => void;
-  onUpdate: (patch: { title?: string; assignee?: string | null; priority?: number; due_date?: string | null; done?: boolean }) => Promise<void>;
+  onUpdate: (patch: {
+    title?: string;
+    assignee?: string | null;
+    priority?: number;
+    due_date?: string | null;
+    done?: boolean;
+  }) => Promise<void>;
   onDelete: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -935,7 +1102,6 @@ function SubtaskRow({
 
   return (
     <div className="grid grid-cols-[1fr_32px_32px_32px_24px] items-center px-3 py-2 border-t border-stone-100 dark:border-neutral-800 hover:bg-stone-50 dark:hover:bg-neutral-800/40 group text-xs first:border-t-0">
-
       {/* Name cell */}
       <div className="flex items-center gap-2 min-w-0">
         {/* Done circle — dashed when incomplete */}
@@ -945,12 +1111,25 @@ function SubtaskRow({
           className="shrink-0">
           {sub.done ? (
             <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-              <circle cx="8" cy="8" r="7" fill="#22c55e"/>
-              <path d="M5 8l2.5 2.5L11 5.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="8" cy="8" r="7" fill="#22c55e" />
+              <path
+                d="M5 8l2.5 2.5L11 5.5"
+                stroke="white"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           ) : (
             <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-              <circle cx="8" cy="8" r="6.5" stroke="#d1d5db" strokeWidth="1.4" strokeDasharray="3 2"/>
+              <circle
+                cx="8"
+                cy="8"
+                r="6.5"
+                stroke="#d1d5db"
+                strokeWidth="1.4"
+                strokeDasharray="3 2"
+              />
             </svg>
           )}
         </button>
@@ -964,7 +1143,10 @@ function SubtaskRow({
             onBlur={commitEdit}
             onKeyDown={e => {
               if (e.key === 'Enter') commitEdit();
-              if (e.key === 'Escape') { setEditing(false); setTitleDraft(sub.title); }
+              if (e.key === 'Escape') {
+                setEditing(false);
+                setTitleDraft(sub.title);
+              }
             }}
             className="flex-1 min-w-0 bg-white dark:bg-neutral-800 border border-primary-400 rounded px-1.5 py-0.5 text-xs text-stone-900 dark:text-neutral-100 focus:outline-none"
           />
@@ -974,16 +1156,26 @@ function SubtaskRow({
               type="button"
               onClick={onOpen}
               className={`flex-1 min-w-0 text-left truncate text-sm font-medium ${
-                sub.done ? 'line-through text-stone-400 dark:text-neutral-500' : 'text-stone-800 dark:text-neutral-100'
+                sub.done
+                  ? 'line-through text-stone-400 dark:text-neutral-500'
+                  : 'text-stone-800 dark:text-neutral-100'
               }`}>
               {sub.title}
             </button>
             {/* Hover actions: rename + delete */}
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-              <button type="button" onClick={startEdit} title="Rename"
+              <button
+                type="button"
+                onClick={startEdit}
+                title="Rename"
                 className="p-0.5 rounded text-stone-400 hover:text-stone-600 hover:bg-stone-200 dark:hover:bg-neutral-700 transition-colors">
                 <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
-                  <path d="M8.5 1.5l2 2L4 10H2v-2L8.5 1.5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+                  <path
+                    d="M8.5 1.5l2 2L4 10H2v-2L8.5 1.5z"
+                    stroke="currentColor"
+                    strokeWidth="1.3"
+                    strokeLinejoin="round"
+                  />
                 </svg>
               </button>
             </div>
@@ -1000,11 +1192,25 @@ function SubtaskRow({
             </span>
           </div>
         ) : (
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 16 16"
+            fill="none"
             className="text-stone-300 dark:text-neutral-600 pointer-events-none">
-            <circle cx="8" cy="5.5" r="2.5" stroke="currentColor" strokeWidth="1.3"/>
-            <path d="M2 14.5c0-3.038 2.686-5.5 6-5.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-            <path d="M11 12v4M13 14h-4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            <circle cx="8" cy="5.5" r="2.5" stroke="currentColor" strokeWidth="1.3" />
+            <path
+              d="M2 14.5c0-3.038 2.686-5.5 6-5.5"
+              stroke="currentColor"
+              strokeWidth="1.3"
+              strokeLinecap="round"
+            />
+            <path
+              d="M11 12v4M13 14h-4"
+              stroke="currentColor"
+              strokeWidth="1.3"
+              strokeLinecap="round"
+            />
           </svg>
         )}
         <select
@@ -1021,16 +1227,40 @@ function SubtaskRow({
       {/* Priority — icon with hidden select overlay */}
       <div className="relative flex items-center justify-center">
         {sub.priority > 0 ? (
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 16 16"
+            fill="none"
             className={`pointer-events-none ${
-              sub.priority >= 4 ? 'text-coral-500' : sub.priority === 3 ? 'text-amber-500' : 'text-primary-400'
+              sub.priority >= 4
+                ? 'text-coral-500'
+                : sub.priority === 3
+                  ? 'text-amber-500'
+                  : 'text-primary-400'
             }`}>
-            <path d="M3 2v12M3 2h8l-2 3 2 3H3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+            <path
+              d="M3 2v12M3 2h8l-2 3 2 3H3"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
         ) : (
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 16 16"
+            fill="none"
             className="text-stone-300 dark:text-neutral-600 pointer-events-none">
-            <path d="M3 2v12M3 2h8l-2 3 2 3H3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+            <path
+              d="M3 2v12M3 2h8l-2 3 2 3H3"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
         )}
         <select
@@ -1051,19 +1281,41 @@ function SubtaskRow({
       <div className="relative flex items-center justify-center">
         {sub.due_date ? (
           <span className="text-[9px] text-amber-600 dark:text-amber-400 font-medium pointer-events-none leading-none">
-            {new Date(sub.due_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+            {new Date(sub.due_date).toLocaleDateString(undefined, {
+              month: 'short',
+              day: 'numeric',
+            })}
           </span>
         ) : (
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 16 16"
+            fill="none"
             className="text-stone-300 dark:text-neutral-600 pointer-events-none">
-            <rect x="1.5" y="3" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
-            <path d="M5 1.5V4M11 1.5V4M1.5 6.5h13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            <rect
+              x="1.5"
+              y="3"
+              width="13"
+              height="11"
+              rx="1.5"
+              stroke="currentColor"
+              strokeWidth="1.4"
+            />
+            <path
+              d="M5 1.5V4M11 1.5V4M1.5 6.5h13"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+            />
           </svg>
         )}
         <input
           type="date"
           value={sub.due_date ? sub.due_date.slice(0, 10) : ''}
-          onChange={e => void onUpdate({ due_date: e.target.value ? `${e.target.value}T00:00:00Z` : null })}
+          onChange={e =>
+            void onUpdate({ due_date: e.target.value ? `${e.target.value}T00:00:00Z` : null })
+          }
           title="Due date"
           className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
         />
@@ -1071,7 +1323,10 @@ function SubtaskRow({
 
       {/* Delete */}
       <div className="flex items-center justify-center">
-        <button type="button" onClick={onDelete} title="Delete"
+        <button
+          type="button"
+          onClick={onDelete}
+          title="Delete"
           className="opacity-0 group-hover:opacity-40 hover:!opacity-100 text-stone-400 hover:text-coral-500 dark:hover:text-coral-400 transition-opacity text-sm leading-none">
           ×
         </button>
@@ -1079,4 +1334,3 @@ function SubtaskRow({
     </div>
   );
 }
-
