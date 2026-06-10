@@ -100,6 +100,20 @@ pub fn with_connection<T>(config: &Config, f: impl FnOnce(&Connection) -> Result
     add_column_if_missing(&conn, "project_tasks", "ai_plan", "TEXT")?;
     add_column_if_missing(&conn, "project_tasks", "parent_task_id", "TEXT")?;
 
+    // Fix tasks that are marked done=1 but live in a non-done bucket — can
+    // happen when a task was moved back from a done bucket via a code path that
+    // predated the auto-clear logic in update_task.
+    conn.execute(
+        "UPDATE project_tasks
+         SET done = 0, done_at = NULL, updated = datetime('now')
+         WHERE done = 1
+           AND bucket_id IN (
+               SELECT id FROM project_buckets WHERE is_done_bucket = 0
+           )",
+        [],
+    )
+    .context("Failed to fix stale done flags")?;
+
     f(&conn)
 }
 
