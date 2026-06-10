@@ -278,3 +278,23 @@ export async function createSubtask(params: {
   });
   return res.result;
 }
+
+/** Hard-cancel a running AI task. Returns true if it was found and stopped. */
+export async function cancelAiTask(task_id: string): Promise<{ cancelled: boolean }> {
+  log('cancelAiTask task_id=%s', task_id);
+  const res = await callCoreRpc<RpcEnvelope<{ cancelled: boolean }>>({
+    method: 'openhuman.projects_cancel_ai_task',
+    params: { task_id },
+  });
+  return res.result;
+}
+
+/** Return the IDs of all tasks currently being processed by the AI runner. */
+export async function listRunningAiTasks(): Promise<{ task_ids: string[] }> {
+  log('listRunningAiTasks');
+  const res = await callCoreRpc<RpcEnvelope<{ task_ids: string[] }>>({
+    method: 'openhuman.projects_list_running_ai_tasks',
+    params: {},
+  });
+  return res.result;
+}
