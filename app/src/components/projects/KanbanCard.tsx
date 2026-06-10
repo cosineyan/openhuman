@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Task } from '../../services/api/projectsApi';
 import { listSubtasks } from '../../services/api/projectsApi';
+import { useAiTaskRuns } from './useAiTaskRuns';
 
 interface Props {
   task: Task;
@@ -90,6 +91,10 @@ export function KanbanCard({ task, subtaskInfo, boardVersion, onClick }: Props) 
   const hasSubtasks = total > 0;
   const hasFooter = task.assignee || task.due_date || task.priority > 0;
 
+  const { isRunning, getLines } = useAiTaskRuns();
+  const aiRunning = task.assignee === 'ai' && isRunning(task.id);
+  const lastLogLine = aiRunning ? getLines(task.id).at(-1) : undefined;
+
   // Re-fetch subtasks whenever the board reloads (boardVersion changes) and we're expanded
   useEffect(() => {
     if (expanded && hasSubtasks) {
@@ -119,6 +124,11 @@ export function KanbanCard({ task, subtaskInfo, boardVersion, onClick }: Props) 
         <p className={`text-sm font-medium leading-snug ${(hasFooter || hasSubtasks) ? 'mb-2' : ''} ${task.done ? 'line-through text-stone-400 dark:text-neutral-500' : 'text-stone-800 dark:text-neutral-100'}`}>
           {task.title}
         </p>
+        {lastLogLine && (
+          <p className="text-xs text-stone-400 dark:text-neutral-500 truncate mt-0.5">
+            {lastLogLine}
+          </p>
+        )}
 
         {/* Subtask count row — separate from assignee/date/priority */}
         {hasSubtasks && (
@@ -135,11 +145,15 @@ export function KanbanCard({ task, subtaskInfo, boardVersion, onClick }: Props) 
         {hasFooter && (
           <div className="flex items-center gap-2">
             {task.assignee && (
-              <div className="w-5 h-5 rounded-full bg-stone-500 dark:bg-neutral-500 flex items-center justify-center shrink-0">
-                <span className="text-[8px] font-bold text-white leading-none uppercase">
-                  {task.assignee === 'ai' ? 'AI' : 'ME'}
-                </span>
-              </div>
+              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-ocean-100 dark:bg-ocean-900 text-ocean-700 dark:text-ocean-300 flex items-center gap-1">
+                {aiRunning && (
+                  <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                )}
+                {task.assignee === 'ai' ? 'AI' : 'ME'}
+              </span>
             )}
             {task.due_date && (
               <div className="flex items-center gap-1 text-stone-500 dark:text-neutral-400 border border-stone-200 dark:border-neutral-700 rounded px-1.5 py-0.5">
