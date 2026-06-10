@@ -10,6 +10,7 @@ import {
   addAttachment,
   addComment,
   type Bucket,
+  cancelAiTask,
   createSubtask,
   deleteAttachment,
   deleteSubtask,
@@ -20,6 +21,7 @@ import {
   type TaskAttachment,
   type TaskEvent,
 } from '../../services/api/projectsApi';
+import { useAiTaskRuns } from './useAiTaskRuns';
 
 interface SavePatch {
   title?: string;
@@ -144,6 +146,14 @@ export function TaskDetailDrawer({
 
   const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
   const [attachUploading, setAttachUploading] = useState(false);
+
+  const { getRun } = useAiTaskRuns();
+  const activeRun = task ? getRun(task.id) : undefined;
+  const logEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [activeRun?.lines.length]);
 
   const loadEvents = useCallback(async (taskId: string) => {
     setEventsLoading(true);
@@ -582,6 +592,35 @@ export function TaskDetailDrawer({
               </div>
             ) : (
               <>
+                {activeRun && (
+                  <div className="mb-4 rounded-lg border border-stone-200 dark:border-neutral-700 overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2 bg-stone-50 dark:bg-neutral-800 border-b border-stone-200 dark:border-neutral-700">
+                      <span className="text-xs font-medium text-stone-600 dark:text-neutral-300 flex items-center gap-1.5">
+                        {activeRun.status === 'running' && (
+                          <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                          </svg>
+                        )}
+                        {activeRun.status === 'running' ? 'AI is working…' : `AI finished — ${activeRun.status}`}
+                      </span>
+                      {activeRun.status === 'running' && (
+                        <button
+                          onClick={() => {
+                            void cancelAiTask(task!.id);
+                          }}
+                          className="text-xs text-red-600 dark:text-red-400 hover:underline font-medium"
+                        >
+                          Stop
+                        </button>
+                      )}
+                    </div>
+                    <pre className="text-xs font-mono p-3 max-h-48 overflow-y-auto whitespace-pre-wrap break-words bg-white dark:bg-neutral-900 text-stone-700 dark:text-neutral-200">
+                      {activeRun.lines.join('\n') || '…'}
+                      <div ref={logEndRef} />
+                    </pre>
+                  </div>
+                )}
                 {/* Tab bar — icon only with count, label as tooltip */}
                 <div className="flex items-center justify-around px-2 pt-3 pb-0 border-b border-stone-200 dark:border-neutral-800 shrink-0">
                   {TABS.map(tab => (
