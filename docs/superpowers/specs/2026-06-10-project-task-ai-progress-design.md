@@ -131,7 +131,7 @@ User clicks "Stop"
 
 ## Error Handling
 
-- **Core restarts** while task is running: `AbortHandle` is lost. Task stays in "Doing" bucket. Frontend detects no `project:task_log` events on reconnect + `list_running_ai_tasks` returns empty → no spinner shown. User can manually move task back to To Do and re-assign to AI.
+- **Core restarts** while task is running: `AbortHandle` is lost. On startup, `with_connection` scans for tasks where `assignee = 'ai'` and the current bucket is a "Doing"-style bucket (non-done, title contains "doing" or "in progress"). Each such task is moved to the Blocked bucket with the comment: "Moved to Blocked after unexpected app restart. Move back to To Do to retry." This runs as part of the existing migration block in `store::with_connection` so it fires once per process start.
 - **Cancel called after completion**: RPC returns `{ cancelled: false }`, frontend shows "Task already finished" toast.
 - **Socket disconnect mid-run**: lines buffer in `useAiTaskRuns`; on reconnect the `list_running_ai_tasks` call restores the running state but prior log lines are lost (no replay — acceptable given the log is also written as a task attachment on completion).
 
@@ -143,6 +143,7 @@ User clicks "Stop"
 |------|--------|
 | `src/openhuman/projects/run_registry.rs` | New — global `AbortHandle` registry |
 | `src/openhuman/projects/bus.rs` | Register run, emit `project:task_log` events, detect cancellation |
+| `src/openhuman/projects/store.rs` | Startup cleanup: move AI-assigned Doing tasks to Blocked on process start |
 | `src/openhuman/projects/ops.rs` | New `cancel_ai_task` and `list_running_ai_tasks` ops |
 | `src/openhuman/projects/schemas.rs` | New RPC schemas + handlers |
 | `src/openhuman/projects/mod.rs` | Re-export `run_registry` |
