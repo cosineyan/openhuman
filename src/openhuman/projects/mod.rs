@@ -1,4 +1,5 @@
 pub mod bus;
+pub mod run_registry;
 mod ops;
 mod schemas;
 pub(crate) mod store;
