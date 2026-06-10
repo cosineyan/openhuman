@@ -179,10 +179,18 @@ async fn run_ai_task(
     let prompt = build_prompt(&title, description.as_deref());
 
     // ── 3. Run AI ─────────────────────────────────────────────────────────
-    let outcome = tokio::select! {
+    let (outcome, fwd) = tokio::select! {
         result = run_agent(&config, &task_id, &prompt) => result,
-        _ = cancel_token.cancelled() => Err("Cancelled by user.".to_string()),
+        _ = cancel_token.cancelled() => {
+            (Err("Cancelled by user.".to_string()), tokio::spawn(async {}))
+        }
     };
+    // Always abort + join the forwarder so it doesn't leak or emit stale log
+    // lines after cancellation. abort() is a no-op if the task already exited.
+    fwd.abort();
+    if let Err(e) = fwd.await {
+        log::warn!("{LOG} task={task_id} progress forwarder error: {e:?}");
+    }
     let finished_at = Utc::now();
 
     // ── 4. Write back ─────────────────────────────────────────────────────
@@ -363,12 +371,24 @@ fn build_prompt(title: &str, description: Option<&str>) -> String {
     prompt
 }
 
-async fn run_agent(config: &Config, task_id: &str, prompt: &str) -> Result<String, String> {
+async fn run_agent(
+    config: &Config,
+    task_id: &str,
+    prompt: &str,
+) -> (Result<String, String>, tokio::task::JoinHandle<()>) {
     use crate::openhuman::agent::progress::AgentProgress;
 
     log::debug!("{LOG} task={task_id} building agent");
-    let mut agent = crate::openhuman::agent::harness::session::Agent::from_config(config)
-        .map_err(|e| format!("failed to build agent: {e}"))?;
+    let mut agent =
+        match crate::openhuman::agent::harness::session::Agent::from_config(config) {
+            Ok(a) => a,
+            Err(e) => {
+                return (
+                    Err(format!("failed to build agent: {e}")),
+                    tokio::spawn(async {}),
+                );
+            }
+        };
 
     let run_id = uuid::Uuid::new_v4().to_string();
     let run_name = format!("project-task-runner-{run_id}");
@@ -385,9 +405,7 @@ async fn run_agent(config: &Config, task_id: &str, prompt: &str) -> Result<Strin
     let fwd = tokio::spawn(async move {
         while let Some(event) = progress_rx.recv().await {
             let line = match &event {
-                AgentProgress::TurnStarted => {
-                    Some("AI turn started".to_string())
-                }
+                AgentProgress::TurnStarted => Some("AI turn started".to_string()),
                 AgentProgress::IterationStarted { iteration, .. } => {
                     Some(format!("Thinking (step {iteration})…"))
                 }
@@ -406,6 +424,10 @@ async fn run_agent(config: &Config, task_id: &str, prompt: &str) -> Result<Strin
                         Some(format!("✗ {tool_name} failed ({elapsed_ms}ms)"))
                     }
                 }
+                AgentProgress::TurnCompleted { iterations } => Some(format!(
+                    "Completed ({iterations} step{})",
+                    if *iterations == 1 { "" } else { "s" }
+                )),
                 // Ignore noisy / redundant variants
                 _ => None,
             };
@@ -417,7 +439,6 @@ async fn run_agent(config: &Config, task_id: &str, prompt: &str) -> Result<Strin
 
     log::debug!("{LOG} task={task_id} running agent turn (agent_name={run_name})");
     let result = agent.run_single(prompt).await.map_err(|e| e.to_string());
-    // Wait for forwarder to drain before returning.
-    let _ = fwd.await;
-    result
+    // Return result and handle — caller is responsible for joining the forwarder.
+    (result, fwd)
 }
