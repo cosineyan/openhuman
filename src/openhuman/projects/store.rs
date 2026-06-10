@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashMap;
+use std::sync::OnceLock;
 use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
@@ -114,8 +115,14 @@ pub fn with_connection<T>(config: &Config, f: impl FnOnce(&Connection) -> Result
     )
     .context("Failed to fix stale done flags")?;
 
-    cleanup_stale_ai_doing_tasks(&conn)
-        .context("Failed to clean up stale AI doing tasks")?;
+    // Run once per process lifetime — guard with OnceLock so it doesn't fire
+    // on every DB call and incorrectly move actively-running AI tasks to Blocked.
+    static STARTUP_CLEANUP_DONE: OnceLock<()> = OnceLock::new();
+    if STARTUP_CLEANUP_DONE.get().is_none() {
+        cleanup_stale_ai_doing_tasks(&conn)
+            .context("Failed to clean up stale AI doing tasks")?;
+        let _ = STARTUP_CLEANUP_DONE.set(());
+    }
 
     f(&conn)
 }
@@ -1180,9 +1187,7 @@ pub fn cleanup_stale_ai_doing_tasks(conn: &Connection) -> Result<()> {
                  ?2)",
                 params![task_id, now_str],
             )?;
-            log::info!(
-                "[projects] startup cleanup: moved stale AI task={task_id} to Blocked"
-            );
+            log::info!("[projects] startup cleanup: moved stale AI task={task_id} to Blocked");
         }
     }
     Ok(())
@@ -1414,19 +1419,21 @@ mod tests {
         update_task(&config, &task.id, &patch, "me").unwrap();
 
         // Run the cleanup directly.
-        with_connection(&config, |conn| {
-            cleanup_stale_ai_doing_tasks(conn)
-        })
-        .unwrap();
+        with_connection(&config, |conn| cleanup_stale_ai_doing_tasks(conn)).unwrap();
 
         // Task should now be in Blocked.
         let tasks = list_tasks(&config, &project_id, Some(&blocked_bucket.id)).unwrap();
-        assert!(tasks.iter().any(|t| t.id == task.id), "task should be in Blocked");
+        assert!(
+            tasks.iter().any(|t| t.id == task.id),
+            "task should be in Blocked"
+        );
 
         // A system comment event should have been recorded.
         let events = list_events(&config, &task.id).unwrap();
         assert!(
-            events.iter().any(|e| e.kind == TaskEventKind::Comment && e.actor == "system"),
+            events
+                .iter()
+                .any(|e| e.kind == TaskEventKind::Comment && e.actor == "system"),
             "should have a system comment event"
         );
         // A change event for bucket_id should also have been recorded.
