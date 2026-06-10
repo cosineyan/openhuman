@@ -1137,7 +1137,7 @@ pub fn cleanup_stale_ai_doing_tasks(conn: &Connection) -> Result<()> {
                    AND t.assignee = 'ai' \
                    AND b.is_done_bucket = 0 \
                    AND (LOWER(b.title) LIKE '%doing%' OR LOWER(b.title) LIKE '%in progress%') \
-                   AND t.parent_task_id IS NULL",
+                   AND t.parent_task_id IS NULL -- subtasks share their parent's bucket; skip",
             )?;
             let collected = stmt
                 .query_map(params![project_id], |row| row.get(0))?
@@ -1145,14 +1145,33 @@ pub fn cleanup_stale_ai_doing_tasks(conn: &Connection) -> Result<()> {
             collected
         };
 
+        // Compute the batch timestamp once so all events in this pass share it.
+        let now_str = Utc::now().to_rfc3339();
+
         for task_id in stale_task_ids {
-            let now_str = chrono::Utc::now().to_rfc3339();
+            // Read the current bucket_id before moving, so we can record a change event.
+            let old_bucket_id: String = conn.query_row(
+                "SELECT bucket_id FROM project_tasks WHERE id = ?1",
+                params![task_id],
+                |row| row.get(0),
+            )?;
+
             conn.execute(
                 "UPDATE project_tasks \
                  SET bucket_id = ?1, updated = ?2 \
                  WHERE id = ?3",
                 params![blocked_id, now_str, task_id],
             )?;
+
+            // Record a change event for the bucket_id field (mirrors update_task behaviour).
+            conn.execute(
+                "INSERT INTO project_task_events \
+                 (id, task_id, kind, actor, field, old_value, new_value, body, created) \
+                 VALUES (lower(hex(randomblob(16))), ?1, 'change', 'system', 'bucket_id', ?2, ?3, NULL, ?4)",
+                params![task_id, old_bucket_id, blocked_id, now_str],
+            )?;
+
+            // Record a human-readable comment explaining why the task was moved.
             conn.execute(
                 "INSERT INTO project_task_events \
                  (id, task_id, kind, actor, field, old_value, new_value, body, created) \
@@ -1403,5 +1422,22 @@ mod tests {
         // Task should now be in Blocked.
         let tasks = list_tasks(&config, &project_id, Some(&blocked_bucket.id)).unwrap();
         assert!(tasks.iter().any(|t| t.id == task.id), "task should be in Blocked");
+
+        // A system comment event should have been recorded.
+        let events = list_events(&config, &task.id).unwrap();
+        assert!(
+            events.iter().any(|e| e.kind == TaskEventKind::Comment && e.actor == "system"),
+            "should have a system comment event"
+        );
+        // A change event for bucket_id should also have been recorded.
+        assert!(
+            events.iter().any(|e| {
+                e.kind == TaskEventKind::Change
+                    && e.actor == "system"
+                    && e.field.as_deref() == Some("bucket_id")
+                    && e.new_value.as_deref() == Some(&blocked_bucket.id)
+            }),
+            "should have a system change event for bucket_id"
+        );
     }
 }
