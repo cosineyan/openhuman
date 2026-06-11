@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react';
 
 import { cancelAiTask, type Task } from '../../services/api/projectsApi';
-import { useAiTaskRuns } from './useAiTaskRuns';
+import { type AiTaskRun } from './useAiTaskRuns';
 
 interface Props {
   task: Task;
+  run: AiTaskRun | undefined;
   onClose: () => void;
 }
 
@@ -22,9 +23,7 @@ const STATUS_COLOR: Record<string, string> = {
   error: 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300',
 };
 
-export function AiRunDrawer({ task, onClose }: Props) {
-  const { getRun } = useAiTaskRuns();
-  const run = getRun(task.id);
+export function AiRunDrawer({ task, run, onClose }: Props) {
   const logEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

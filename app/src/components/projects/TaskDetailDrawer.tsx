@@ -1048,7 +1048,7 @@ export function TaskDetailDrawer({
         </div>
       </div>
       {showRunDrawer && task && (
-        <AiRunDrawer task={task} onClose={() => setShowRunDrawer(false)} />
+        <AiRunDrawer task={task} run={activeRun} onClose={() => setShowRunDrawer(false)} />
       )}
     </div>
   );

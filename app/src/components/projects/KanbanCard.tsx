@@ -107,9 +107,10 @@ export function KanbanCard({ task, subtaskInfo, boardVersion, onClick }: Props) 
   const hasSubtasks = total > 0;
   const hasFooter = task.assignee || task.due_date || task.priority > 0;
 
-  const { isRunning, getLines } = useAiTaskRuns();
+  const { isRunning, getLines, getRun } = useAiTaskRuns();
   const aiRunning = task.assignee === 'ai' && isRunning(task.id);
   const lastLogLine = aiRunning ? getLines(task.id).at(-1) : undefined;
+  const activeRun = getRun(task.id);
   const [showRunDrawer, setShowRunDrawer] = useState(false);
 
   // Re-fetch subtasks whenever the board reloads (boardVersion changes) and we're expanded
@@ -254,7 +255,7 @@ export function KanbanCard({ task, subtaskInfo, boardVersion, onClick }: Props) 
         </div>
       )}
       {showRunDrawer && (
-        <AiRunDrawer task={task} onClose={() => setShowRunDrawer(false)} />
+        <AiRunDrawer task={task} run={activeRun} onClose={() => setShowRunDrawer(false)} />
       )}
     </div>
   );
