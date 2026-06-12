@@ -185,16 +185,20 @@ async fn run_ai_task(
             (Err("Cancelled by user.".to_string()), tokio::spawn(async {}))
         }
     };
-    // Always abort + join the forwarder so it doesn't leak or emit stale log
-    // lines after cancellation. abort() is a no-op if the task already exited.
-    fwd.abort();
+    let was_cancelled = matches!(&outcome, Err(msg) if msg == "Cancelled by user.");
+    // On cancellation abort the forwarder immediately so it doesn't emit stale
+    // log lines after the task has already moved to Blocked. On the normal path,
+    // just await it — the channel is already closed (agent dropped) so it drains
+    // instantly without needing an abort.
+    if was_cancelled {
+        fwd.abort();
+    }
     if let Err(e) = fwd.await {
-        log::warn!("{LOG} task={task_id} progress forwarder error: {e:?}");
+        if !was_cancelled {
+            log::warn!("{LOG} task={task_id} progress forwarder error: {e:?}");
+        }
     }
     let finished_at = Utc::now();
-
-    // ── 4. Write back ─────────────────────────────────────────────────────
-    let was_cancelled = matches!(&outcome, Err(msg) if msg == "Cancelled by user.");
 
     let (status, response_text) = if was_cancelled {
         let comment = "Cancelled by user.";
