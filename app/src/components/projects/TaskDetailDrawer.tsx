@@ -226,6 +226,21 @@ export function TaskDetailDrawer({
     }
   }, [task, createBucketId, loadEvents, loadAttachments, loadSubtasks]);
 
+  // When the board poller refreshes the task object (e.g. AI moved it to Done),
+  // reload events so the change feed stays current without requiring a page switch.
+  // Gated on `task.updated` so we don't fire on every poller tick when nothing changed.
+  const prevTaskUpdatedRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!task) return;
+    if (
+      prevTaskUpdatedRef.current !== undefined &&
+      prevTaskUpdatedRef.current !== task.updated
+    ) {
+      void loadEvents(task.id);
+    }
+    prevTaskUpdatedRef.current = task.updated;
+  }, [task?.updated, task?.id, loadEvents]);
+
   useEffect(() => {
     if (feedFilter === 'attachments') return;
     // Only scroll to bottom when new events appear, not on every reload.
