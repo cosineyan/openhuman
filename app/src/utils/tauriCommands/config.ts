@@ -331,6 +331,20 @@ export async function openhumanClaudeCodeLoginLaunch(): Promise<string> {
   return await invoke<string>('claude_code_login_launch');
 }
 
+/**
+ * Open the user's native terminal and run `claude --resume <sessionId>`.
+ * Returns the terminal emulator name on success.
+ * Throws on invalid UUID or if no terminal could be opened.
+ */
+export async function openhumanClaudeCodeResumeSession(
+  sessionId: string
+): Promise<string> {
+  if (!isTauri()) {
+    throw new Error('openhumanClaudeCodeResumeSession requires Tauri');
+  }
+  return await invoke<string>('claude_code_resume_session', { sessionId });
+}
+
 export async function openhumanUpdateModelSettings(
   update: ModelSettingsUpdate
 ): Promise<CommandResponse<ConfigSnapshot>> {

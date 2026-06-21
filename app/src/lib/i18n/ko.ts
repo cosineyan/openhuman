@@ -5085,6 +5085,14 @@ const messages: TranslationMap = {
   'notch.speaking': '말하는 중…',
   'notch.transcribing': '변환 중…',
   'notch.executing': '실행 중…',
+
+  // Projects — Claude Code resume card
+  'projects.resumeCard.title': 'Continue in Claude Code',
+  'projects.resumeCard.openTerminal': 'Open in Terminal',
+  'projects.resumeCard.opening': 'Opening…',
+  'projects.resumeCard.opened': 'Terminal opened',
+  'projects.resumeCard.copied': 'Copied!',
+  'projects.resumeCard.copyError': 'Could not open terminal — copy the command above and run it manually',
 };
 
 export default messages;
