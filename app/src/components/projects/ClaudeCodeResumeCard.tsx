@@ -5,11 +5,14 @@ import { openhumanClaudeCodeResumeSession } from '../../utils/tauriCommands/conf
 
 interface Props {
   sessionId: string;
+  workspaceDir: string | null;
 }
 
-export function ClaudeCodeResumeCard({ sessionId }: Props) {
+export function ClaudeCodeResumeCard({ sessionId, workspaceDir }: Props) {
   const { t } = useT();
-  const command = `claude --resume ${sessionId}`;
+  const command = workspaceDir
+    ? `claude --resume ${sessionId} --add-dir "${workspaceDir}"`
+    : `claude --resume ${sessionId}`;
   const [copyLabel, setCopyLabel] = useState<string | null>(null);
   const [openLabel, setOpenLabel] = useState<string | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
@@ -28,7 +31,7 @@ export function ClaudeCodeResumeCard({ sessionId }: Props) {
     setOpenError(null);
     setOpenLabel(t('projects.resumeCard.opening'));
     try {
-      await openhumanClaudeCodeResumeSession(sessionId);
+      await openhumanClaudeCodeResumeSession(sessionId, workspaceDir ?? undefined);
       setOpenLabel(t('projects.resumeCard.opened'));
       setTimeout(() => setOpenLabel(null), 2000);
     } catch (_err) {

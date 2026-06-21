@@ -206,7 +206,13 @@ async fn run_ai_task(
         emit_task_log(&task_id, comment, "cancelled");
         // Persist claude session UUID into ai_plan so the UI can offer resume.
         if let Some(uuid) = session_id_for_prompt(&config, &prompt) {
-            let plan = serde_json::json!({ "claude_session_id": uuid }).to_string();
+            let workspace_dir = config.config_path.parent()
+                .map(|p| p.display().to_string())
+                .unwrap_or_default();
+            let plan = serde_json::json!({
+                "claude_session_id": uuid,
+                "claude_workspace_dir": workspace_dir,
+            }).to_string();
             if let Err(e) = store::update_task(
                 &config,
                 &task_id,
@@ -237,7 +243,13 @@ async fn run_ai_task(
                 let _ = store::add_comment(&config, &task_id, "ai", response);
                 // Persist claude session UUID into ai_plan so the UI can offer resume.
                 if let Some(uuid) = session_id_for_prompt(&config, &prompt) {
-                    let plan = serde_json::json!({ "claude_session_id": uuid }).to_string();
+                    let workspace_dir = config.config_path.parent()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_default();
+                    let plan = serde_json::json!({
+                        "claude_session_id": uuid,
+                        "claude_workspace_dir": workspace_dir,
+                    }).to_string();
                     if let Err(e) = store::update_task(
                         &config,
                         &task_id,
@@ -297,7 +309,13 @@ async fn run_ai_task(
                 emit_task_log(&task_id, &comment, "error");
                 // Persist claude session UUID into ai_plan so the UI can offer resume.
                 if let Some(uuid) = session_id_for_prompt(&config, &prompt) {
-                    let plan = serde_json::json!({ "claude_session_id": uuid }).to_string();
+                    let workspace_dir = config.config_path.parent()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_default();
+                    let plan = serde_json::json!({
+                        "claude_session_id": uuid,
+                        "claude_workspace_dir": workspace_dir,
+                    }).to_string();
                     if let Err(e) = store::update_task(
                         &config,
                         &task_id,

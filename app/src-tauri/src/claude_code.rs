@@ -94,12 +94,23 @@ pub fn claude_code_login_launch() -> Result<String, String> {
 
 /// Open the user's native terminal and run `claude --resume <session_id>`.
 ///
+/// `workspace_dir` must be the directory openhuman used as `--add-dir` when
+/// it ran the task — claude uses it to locate the session file. When provided,
+/// `--add-dir <workspace_dir>` is appended so the CLI resolves the session.
+///
 /// Returns the terminal emulator name on success, or an error string.
 /// Fails fast with an error if `session_id` is not a valid UUID v4.
 #[tauri::command]
-pub fn claude_code_resume_session(session_id: String) -> Result<String, String> {
+pub fn claude_code_resume_session(
+    session_id: String,
+    workspace_dir: Option<String>,
+) -> Result<String, String> {
     if !is_valid_uuid_v4(&session_id) {
         return Err(format!("invalid session id: {session_id}"));
     }
-    open_terminal_with_command(&format!("claude --resume {session_id}"))
+    let cmd = match workspace_dir.as_deref().filter(|s| !s.is_empty()) {
+        Some(dir) => format!("claude --resume {session_id} --add-dir \"{dir}\""),
+        None => format!("claude --resume {session_id}"),
+    };
+    open_terminal_with_command(&cmd)
 }

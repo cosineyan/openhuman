@@ -337,12 +337,16 @@ export async function openhumanClaudeCodeLoginLaunch(): Promise<string> {
  * Throws on invalid UUID or if no terminal could be opened.
  */
 export async function openhumanClaudeCodeResumeSession(
-  sessionId: string
+  sessionId: string,
+  workspaceDir?: string
 ): Promise<string> {
   if (!isTauri()) {
     throw new Error('openhumanClaudeCodeResumeSession requires Tauri');
   }
-  return await invoke<string>('claude_code_resume_session', { sessionId });
+  return await invoke<string>('claude_code_resume_session', {
+    sessionId,
+    workspaceDir: workspaceDir ?? null,
+  });
 }
 
 export async function openhumanUpdateModelSettings(

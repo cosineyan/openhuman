@@ -22,7 +22,12 @@ import { ClaudeCodeResumeCard } from './ClaudeCodeResumeCard';
 import { useAiTaskRuns } from './useAiTaskRuns';
 
 /** Extract claude_session_id from task.ai_plan JSON, or null if absent/invalid. */
-function parseClaudeSessionId(aiPlan: string | null | undefined): string | null {
+interface ClaudeResumeInfo {
+  sessionId: string;
+  workspaceDir: string | null;
+}
+
+function parseClaudeSessionId(aiPlan: string | null | undefined): ClaudeResumeInfo | null {
   if (!aiPlan) return null;
   try {
     const parsed = JSON.parse(aiPlan) as unknown;
@@ -33,7 +38,12 @@ function parseClaudeSessionId(aiPlan: string | null | undefined): string | null 
       typeof (parsed as Record<string, unknown>).claude_session_id === 'string' &&
       (parsed as Record<string, unknown>).claude_session_id !== ''
     ) {
-      return (parsed as Record<string, unknown>).claude_session_id as string;
+      const sessionId = (parsed as Record<string, unknown>).claude_session_id as string;
+      const workspaceDir =
+        typeof (parsed as Record<string, unknown>).claude_workspace_dir === 'string'
+          ? ((parsed as Record<string, unknown>).claude_workspace_dir as string)
+          : null;
+      return { sessionId, workspaceDir };
     }
   } catch {
     // malformed JSON — silent
@@ -275,9 +285,9 @@ export function TaskDetailDrawer({
   const isTerminalState =
     (currentBucket?.is_done_bucket === true) ||
     (currentBucket?.title.toLowerCase().includes('block') ?? false);
-  const claudeSessionId = task ? parseClaudeSessionId(task.ai_plan) : null;
+  const claudeResumeInfo = task ? parseClaudeSessionId(task.ai_plan) : null;
   const showResumeCard =
-    task?.assignee === 'ai' && claudeSessionId !== null && isTerminalState;
+    task?.assignee === 'ai' && claudeResumeInfo !== null && isTerminalState;
 
   if (!task && !isCreateMode) return null;
 
@@ -774,8 +784,11 @@ export function TaskDetailDrawer({
                     )}
                   </button>
                 )}
-                {showResumeCard && claudeSessionId && (
-                  <ClaudeCodeResumeCard sessionId={claudeSessionId} />
+                {showResumeCard && claudeResumeInfo && (
+                  <ClaudeCodeResumeCard
+                    sessionId={claudeResumeInfo.sessionId}
+                    workspaceDir={claudeResumeInfo.workspaceDir}
+                  />
                 )}
                 {/* Tab bar — icon only with count, label as tooltip */}
                 <div className="flex items-center justify-around px-2 pt-3 pb-0 border-b border-stone-200 dark:border-neutral-800 shrink-0">
