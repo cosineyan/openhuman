@@ -702,11 +702,18 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch, actor: &st
         let due_str = new_due_date.map(|d| d.to_rfc3339());
         let done_at_str = new_done_at.map(|d| d.to_rfc3339());
 
+        // Resolve ai_plan: explicit patch wins, else keep existing value.
+        let new_ai_plan: Option<&str> = match &patch.ai_plan {
+            Some(s) => Some(s.as_str()),
+            None => task.ai_plan.as_deref(),
+        };
+
         conn.execute(
             "UPDATE project_tasks
              SET bucket_id = ?1, title = ?2, description = ?3,
                  done = ?4, done_at = ?5, priority = ?6, due_date = ?7,
-                 hex_color = ?8, position = ?9, updated = ?10
+                 hex_color = ?8, position = ?9, updated = ?10,
+                 ai_plan = ?12
              WHERE id = ?11",
             params![
                 new_bucket_id,
@@ -720,6 +727,7 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch, actor: &st
                 new_position,
                 now.to_rfc3339(),
                 task_id,
+                new_ai_plan,
             ],
         )
         .context("Failed to update task")?;

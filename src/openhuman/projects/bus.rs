@@ -5,7 +5,7 @@
 //! 2. Moves the task to the "Doing" bucket (In Progress).
 //! 3. Runs the AI using the task title + description as prompt.
 //! 4. On success: posts result as a comment, moves to "Done", uploads AI log.
-//! 5. On failure: posts error as a comment, moves to "Blocked", uploads AI log.
+//! 5. On failure (hard error or AI self-reports "BLOCKED: …"): posts comment, moves to "Blocked".
 
 use std::sync::{Arc, OnceLock};
 
@@ -204,6 +204,19 @@ async fn run_ai_task(
         let comment = "Cancelled by user.";
         let _ = store::add_comment(&config, &task_id, "ai", comment);
         emit_task_log(&task_id, comment, "cancelled");
+        // Persist claude session UUID into ai_plan so the UI can offer resume.
+        if let Some(uuid) = session_id_for_prompt(&config, &prompt) {
+            let plan = serde_json::json!({ "claude_session_id": uuid }).to_string();
+            let _ = store::update_task(
+                &config,
+                &task_id,
+                &crate::openhuman::projects::TaskPatch {
+                    ai_plan: Some(plan),
+                    ..crate::openhuman::projects::TaskPatch::default()
+                },
+                "ai",
+            );
+        }
         if let Some(id) = find_bucket("block") {
             let patch = TaskPatch {
                 bucket_id: Some(id),
@@ -220,32 +233,77 @@ async fn run_ai_task(
         match &outcome {
             Ok(response) => {
                 let _ = store::add_comment(&config, &task_id, "ai", response);
-                let done_id = buckets
-                    .iter()
-                    .find(|b| b.is_done_bucket)
-                    .map(|b| b.id.clone())
-                    .or_else(|| find_bucket("done"));
-                if let Some(id) = done_id {
-                    let patch = TaskPatch {
-                        bucket_id: Some(id),
-                        ..TaskPatch::default()
-                    };
-                    if let Err(e) = store::update_task(&config, &task_id, &patch, "ai") {
-                        log::error!("{LOG} task={task_id} failed to move to Done: {e}");
-                    } else {
-                        log::debug!("{LOG} task={task_id} moved to Done");
-                    }
-                } else {
-                    log::warn!("{LOG} task={task_id} no Done bucket found — task stays in Doing");
+                // Persist claude session UUID into ai_plan so the UI can offer resume.
+                if let Some(uuid) = session_id_for_prompt(&config, &prompt) {
+                    let plan = serde_json::json!({ "claude_session_id": uuid }).to_string();
+                    let _ = store::update_task(
+                        &config,
+                        &task_id,
+                        &crate::openhuman::projects::TaskPatch {
+                            ai_plan: Some(plan),
+                            ..crate::openhuman::projects::TaskPatch::default()
+                        },
+                        "ai",
+                    );
                 }
-                emit_task_log(&task_id, response, "done");
-                ("done", response.as_str())
+                if response.starts_with("BLOCKED:") {
+                    log::warn!("{LOG} task={task_id} AI self-reported blocked: {response}");
+                    if let Some(id) = find_bucket("block") {
+                        let patch = TaskPatch {
+                            bucket_id: Some(id),
+                            ..TaskPatch::default()
+                        };
+                        if let Err(e) = store::update_task(&config, &task_id, &patch, "ai") {
+                            log::error!("{LOG} task={task_id} failed to move to Blocked: {e}");
+                        } else {
+                            log::debug!("{LOG} task={task_id} moved to Blocked (self-reported)");
+                        }
+                    } else {
+                        log::warn!("{LOG} task={task_id} no Blocked bucket — task stays in Doing");
+                    }
+                    emit_task_log(&task_id, response, "blocked");
+                    ("blocked", response.as_str())
+                } else {
+                    let done_id = buckets
+                        .iter()
+                        .find(|b| b.is_done_bucket)
+                        .map(|b| b.id.clone())
+                        .or_else(|| find_bucket("done"));
+                    if let Some(id) = done_id {
+                        let patch = TaskPatch {
+                            bucket_id: Some(id),
+                            ..TaskPatch::default()
+                        };
+                        if let Err(e) = store::update_task(&config, &task_id, &patch, "ai") {
+                            log::error!("{LOG} task={task_id} failed to move to Done: {e}");
+                        } else {
+                            log::debug!("{LOG} task={task_id} moved to Done");
+                        }
+                    } else {
+                        log::warn!("{LOG} task={task_id} no Done bucket found — task stays in Doing");
+                    }
+                    emit_task_log(&task_id, response, "done");
+                    ("done", response.as_str())
+                }
             }
             Err(err_msg) => {
                 log::warn!("{LOG} task={task_id} AI failed: {err_msg}");
                 let comment = format!("Encountered an issue:\n\n{err_msg}");
                 let _ = store::add_comment(&config, &task_id, "ai", &comment);
                 emit_task_log(&task_id, &comment, "error");
+                // Persist claude session UUID into ai_plan so the UI can offer resume.
+                if let Some(uuid) = session_id_for_prompt(&config, &prompt) {
+                    let plan = serde_json::json!({ "claude_session_id": uuid }).to_string();
+                    let _ = store::update_task(
+                        &config,
+                        &task_id,
+                        &crate::openhuman::projects::TaskPatch {
+                            ai_plan: Some(plan),
+                            ..crate::openhuman::projects::TaskPatch::default()
+                        },
+                        "ai",
+                    );
+                }
                 if let Some(id) = find_bucket("block") {
                     let patch = TaskPatch {
                         bucket_id: Some(id),
@@ -360,6 +418,46 @@ fn upload_ai_log(
 // Helpers
 // ---------------------------------------------------------------------------
 
+/// Look up the claude session UUID for a given task prompt.
+///
+/// Computes the same thread_id hash that `ClaudeCodeProvider` uses
+/// (`hash_<first-16-bytes-of-sha256-of-prompt>`) then reads the
+/// session store at `<workspace_dir>/claude-code-sessions.json`.
+/// Returns `None` when the provider is not claude-code, the session
+/// store does not exist, or no entry is found for this prompt.
+fn session_id_for_prompt(config: &crate::openhuman::config::Config, prompt: &str) -> Option<String> {
+    // Only attempt lookup when chat_provider is claude-code:*
+    let is_claude_code = config
+        .chat_provider
+        .as_deref()
+        .map(|p| p.starts_with("claude-code:"))
+        .unwrap_or(false);
+    if !is_claude_code {
+        return None;
+    }
+
+    // Compute thread_id: SHA-256 of prompt, first 16 bytes as hex
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(prompt.as_bytes());
+    let thread_id = format!(
+        "hash_{:032x}",
+        u128::from_be_bytes(digest[..16].try_into().ok()?)
+    );
+
+    // Read session store: <workspace_dir>/claude-code-sessions.json
+    let store_path = config.workspace_dir.join("claude-code-sessions.json");
+    let content = std::fs::read_to_string(&store_path).ok()?;
+    let store: serde_json::Value = serde_json::from_str(&content).ok()?;
+    let uuid = store["sessions"][&thread_id].as_str()?.to_string();
+    if uuid.is_empty() {
+        return None;
+    }
+    log::debug!(
+        "{LOG} session_id_for_prompt thread_id={thread_id} uuid={uuid}"
+    );
+    Some(uuid)
+}
+
 fn build_prompt(title: &str, description: Option<&str>) -> String {
     let mut prompt = format!(
         "You are an AI agent processing a task in a project management system.\n\n\
@@ -370,7 +468,19 @@ fn build_prompt(title: &str, description: Option<&str>) -> String {
     }
     prompt.push_str(
         "\n\nPlease complete this task and provide your result. \
-         Be concise and actionable. Respond with the outcome directly.",
+         Be concise and actionable. Respond with the outcome directly.\n\n\
+         IMPORTANT RULES:\n\
+         1. You MUST use tools to complete the task — do NOT answer from memory \
+         or prior context. Every task requires live action (fetching data, \
+         running a skill, calling a service, etc.).\n\
+         2. If the task requires a skill (e.g. checking leave quota, sending \
+         email, querying SAP), use the `run_skill` tool to invoke it.\n\
+         3. If you cannot complete the task because a required tool, service, \
+         or resource is unavailable or unreachable (e.g. a browser extension \
+         is not connected, credentials are missing, an external system is down), \
+         start your response with exactly \"BLOCKED: \" followed by a short \
+         explanation of what is missing and how to resolve it. \
+         Do NOT mark the task as done when you cannot complete it.",
     );
     prompt
 }
@@ -397,46 +507,68 @@ async fn run_agent(
     let run_id = uuid::Uuid::new_v4().to_string();
     let run_name = format!("project-task-runner-{run_id}");
     agent.set_agent_definition_name(&run_name);
+    // Disable memory agent recall: project tasks must fetch live data, not
+    // replay a cached answer from a prior conversation.
+    agent.set_trigger_memory_agent(
+        crate::openhuman::agent::harness::definition::TriggerMemoryAgent::Never,
+    );
     agent.set_event_context(&format!("project-task-{task_id}-{run_id}"), "background");
 
-    // Attach a progress channel so we can forward granular events.
+    // Attach a progress channel so we can forward granular events from
+    // openhuman's own engine (IterationStarted, ToolCallStarted, etc.).
     let (progress_tx, mut progress_rx) =
         tokio::sync::mpsc::channel::<AgentProgress>(64);
     agent.set_on_progress(Some(progress_tx));
 
+    // Also attach a plain-string channel for providers that run an external
+    // subprocess (e.g. ClaudeAgentSdkProvider). These providers emit tool
+    // names as strings directly, bypassing the AgentProgress machinery.
+    let (sdk_progress_tx, mut sdk_progress_rx) =
+        tokio::sync::mpsc::channel::<String>(64);
+    agent.set_provider_progress_tx(sdk_progress_tx);
+
     // Spawn a task that forwards AgentProgress events as task log lines.
     let task_id_fwd = task_id.to_string();
     let fwd = tokio::spawn(async move {
-        while let Some(event) = progress_rx.recv().await {
-            let line = match &event {
-                AgentProgress::TurnStarted => Some("AI turn started".to_string()),
-                AgentProgress::IterationStarted { iteration, .. } => {
-                    Some(format!("Thinking (step {iteration})…"))
-                }
-                AgentProgress::ToolCallStarted { tool_name, .. } => {
-                    Some(format!("Using tool: {tool_name}"))
-                }
-                AgentProgress::ToolCallCompleted {
-                    tool_name,
-                    success,
-                    elapsed_ms,
-                    ..
-                } => {
-                    if *success {
-                        Some(format!("✓ {tool_name} ({elapsed_ms}ms)"))
-                    } else {
-                        Some(format!("✗ {tool_name} failed ({elapsed_ms}ms)"))
+        loop {
+            tokio::select! {
+                event = progress_rx.recv() => {
+                    let Some(event) = event else { break };
+                    let line = match &event {
+                        AgentProgress::TurnStarted => Some("AI turn started".to_string()),
+                        AgentProgress::IterationStarted { iteration, .. } => {
+                            Some(format!("Thinking (step {iteration})…"))
+                        }
+                        AgentProgress::ToolCallStarted { tool_name, .. } => {
+                            Some(format!("Using tool: {tool_name}"))
+                        }
+                        AgentProgress::ToolCallCompleted {
+                            tool_name,
+                            success,
+                            elapsed_ms,
+                            ..
+                        } => {
+                            if *success {
+                                Some(format!("✓ {tool_name} ({elapsed_ms}ms)"))
+                            } else {
+                                Some(format!("✗ {tool_name} failed ({elapsed_ms}ms)"))
+                            }
+                        }
+                        AgentProgress::TurnCompleted { iterations } => Some(format!(
+                            "Completed ({iterations} step{})",
+                            if *iterations == 1 { "" } else { "s" }
+                        )),
+                        // Ignore noisy / redundant variants
+                        _ => None,
+                    };
+                    if let Some(line) = line {
+                        emit_task_log(&task_id_fwd, &line, "log");
                     }
                 }
-                AgentProgress::TurnCompleted { iterations } => Some(format!(
-                    "Completed ({iterations} step{})",
-                    if *iterations == 1 { "" } else { "s" }
-                )),
-                // Ignore noisy / redundant variants
-                _ => None,
-            };
-            if let Some(line) = line {
-                emit_task_log(&task_id_fwd, &line, "log");
+                line = sdk_progress_rx.recv() => {
+                    let Some(line) = line else { continue };
+                    emit_task_log(&task_id_fwd, &line, "log");
+                }
             }
         }
     });

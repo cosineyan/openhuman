@@ -161,6 +161,7 @@ pub struct TaskPatch {
     pub assignee: Option<Option<String>>,
     pub position: Option<f64>,
     pub done: Option<bool>,
+    pub ai_plan: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
