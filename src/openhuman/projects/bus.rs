@@ -190,12 +190,14 @@ async fn run_ai_task(
     let cc_workspace_dir = config.action_dir.display().to_string();
 
     // ── 3. Run AI ─────────────────────────────────────────────────────────
-    let (outcome, fwd) = tokio::select! {
+    let (outcome, fwd, actual_session_id) = tokio::select! {
         result = run_agent(&config, &task_id, &prompt, &cc_session_uuid) => result,
         _ = cancel_token.cancelled() => {
-            (Err("Cancelled by user.".to_string()), tokio::spawn(async {}))
+            (Err("Cancelled by user.".to_string()), tokio::spawn(async {}), None)
         }
     };
+    // Use the real claude session UUID if captured; otherwise fall back to the hint key.
+    let claude_resume_uuid = actual_session_id.unwrap_or_else(|| cc_session_uuid.clone());
     let was_cancelled = matches!(&outcome, Err(msg) if msg == "Cancelled by user.");
     // On cancellation abort the forwarder immediately so it doesn't emit stale
     // log lines after the task has already moved to Blocked. On the normal path,
@@ -210,23 +212,6 @@ async fn run_ai_task(
         }
     }
     let finished_at = Utc::now();
-
-    // Read the real claude session UUID from the session store (the driver
-    // writes the actual claude-assigned UUID under our hint_thread_id key).
-    // Fall back to cc_session_uuid itself if not found (non-claude-code path).
-    let claude_resume_uuid = {
-        use crate::openhuman::inference::provider::claude_code::session_store::SessionStore;
-        let store_path = config
-            .config_path
-            .parent()
-            .map(|p| p.join("claude-code-sessions.json"));
-        store_path
-            .and_then(|p| {
-                let s = SessionStore::open(p.parent().unwrap_or(std::path::Path::new(".")));
-                s.get(&cc_session_uuid)
-            })
-            .unwrap_or_else(|| cc_session_uuid.clone())
-    };
 
     let (status, response_text) = if was_cancelled {
         let comment = "Cancelled by user.";
@@ -501,7 +486,7 @@ async fn run_agent(
     task_id: &str,
     prompt: &str,
     hint_thread_id: &str,
-) -> (Result<String, String>, tokio::task::JoinHandle<()>) {
+) -> (Result<String, String>, tokio::task::JoinHandle<()>, Option<String>) {
     use crate::openhuman::inference::provider::claude_code::{
         workspace_dir_from_config, ClaudeCodeProvider,
     };
@@ -529,6 +514,7 @@ async fn run_agent(
             return (
                 Err(format!("failed to build ClaudeCodeProvider: {e}")),
                 tokio::spawn(async {}),
+                None,
             );
         }
     };
@@ -580,6 +566,24 @@ async fn run_agent(
         .and_then(|p| p.strip_prefix("claude-code:"))
         .unwrap_or("claude-sonnet-latest");
 
+    // Snapshot session store keys before the run so we can detect the new UUID
+    // written by the driver (via system init event capture).
+    let workspace = crate::openhuman::inference::provider::claude_code::workspace_dir_from_config(config);
+    let keys_before: std::collections::HashSet<String> = {
+        use crate::openhuman::inference::provider::claude_code::session_store::SessionStore;
+        // Re-read from disk to get current keys; the store doesn't expose iteration,
+        // so re-open a fresh instance and check hint_thread_id key.
+        // We use a simpler approach: read the JSON file directly.
+        let path = workspace.join("claude-code-sessions.json");
+        std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+            .and_then(|v| v.get("sessions").cloned())
+            .and_then(|s| s.as_object().cloned())
+            .map(|m| m.keys().cloned().collect())
+            .unwrap_or_default()
+    };
+
     let result = provider
         .chat(request, model, 0.0)
         .await
@@ -587,5 +591,34 @@ async fn run_agent(
         .map_err(|e| e.to_string());
 
     drop(stream_tx); // close channel so forwarder task ends
-    (result, fwd)
+
+    // After the run, find the newly added session store entry (written by the
+    // driver's system event capture). Return it alongside the result so the
+    // caller can store the real resumable UUID in ai_plan.
+    let actual_session_id: Option<String> = {
+        let path = workspace.join("claude-code-sessions.json");
+        std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+            .and_then(|v| v.get("sessions").cloned())
+            .and_then(|s| s.as_object().cloned())
+            .and_then(|m| {
+                // First try the hint_thread_id key directly
+                m.get(hint_thread_id)
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string)
+                    .or_else(|| {
+                        // Fall back: find any new UUID key added since the snapshot
+                        m.iter()
+                            .filter(|(k, _)| !keys_before.contains(*k) && !k.starts_with("hash_"))
+                            .filter_map(|(_, v)| v.as_str().map(str::to_string))
+                            .next()
+                    })
+            })
+    };
+
+    (result, fwd, actual_session_id)
 }
+
+// Wrapper to maintain backward-compatible call signature with 3-tuple return.
+// run_agent now returns (Result, JoinHandle, Option<actual_session_id>).
