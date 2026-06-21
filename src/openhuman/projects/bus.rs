@@ -182,7 +182,8 @@ async fn run_ai_task(
     // the run regardless of outcome.  ClaudeCodeProvider will use this as
     // its thread_id (via hint_thread_id on ChatRequest) so the on-disk
     // session store entry matches what we record here.
-    let cc_session_uuid = crate::openhuman::inference::provider::claude_code::session_store::generate_uuid_v4();
+    let cc_session_uuid =
+        crate::openhuman::inference::provider::claude_code::session_store::generate_uuid_v4();
     // claude CLI saves the session under the cwd it was launched with,
     // which is action_dir (the user's project root). The resume card must
     // cd there before running --resume, so store action_dir here.
@@ -215,7 +216,9 @@ async fn run_ai_task(
     // Fall back to cc_session_uuid itself if not found (non-claude-code path).
     let claude_resume_uuid = {
         use crate::openhuman::inference::provider::claude_code::session_store::SessionStore;
-        let store_path = config.config_path.parent()
+        let store_path = config
+            .config_path
+            .parent()
             .map(|p| p.join("claude-code-sessions.json"));
         store_path
             .and_then(|p| {
@@ -233,7 +236,8 @@ async fn run_ai_task(
         let plan = serde_json::json!({
             "claude_session_id": claude_resume_uuid,
             "claude_workspace_dir": cc_workspace_dir,
-        }).to_string();
+        })
+        .to_string();
         if let Err(e) = store::update_task(
             &config,
             &task_id,
@@ -265,7 +269,8 @@ async fn run_ai_task(
                 let plan = serde_json::json!({
                     "claude_session_id": claude_resume_uuid,
                     "claude_workspace_dir": cc_workspace_dir,
-                }).to_string();
+                })
+                .to_string();
                 if let Err(e) = store::update_task(
                     &config,
                     &task_id,
@@ -311,7 +316,9 @@ async fn run_ai_task(
                             log::debug!("{LOG} task={task_id} moved to Done");
                         }
                     } else {
-                        log::warn!("{LOG} task={task_id} no Done bucket found — task stays in Doing");
+                        log::warn!(
+                            "{LOG} task={task_id} no Done bucket found — task stays in Doing"
+                        );
                     }
                     emit_task_log(&task_id, response, "done");
                     ("done", response.as_str())
@@ -326,7 +333,8 @@ async fn run_ai_task(
                 let plan = serde_json::json!({
                     "claude_session_id": claude_resume_uuid,
                     "claude_workspace_dir": cc_workspace_dir,
-                }).to_string();
+                })
+                .to_string();
                 if let Err(e) = store::update_task(
                     &config,
                     &task_id,
@@ -488,8 +496,8 @@ async fn run_agent(
     use crate::openhuman::inference::provider::claude_code::{
         workspace_dir_from_config, ClaudeCodeProvider,
     };
-    use crate::openhuman::inference::provider::{ChatMessage, Provider};
     use crate::openhuman::inference::provider::traits::ChatRequest;
+    use crate::openhuman::inference::provider::{ChatMessage, Provider};
 
     log::debug!("{LOG} task={task_id} building ClaudeCodeProvider directly");
 
@@ -499,7 +507,9 @@ async fn run_agent(
     let workspace = workspace_dir_from_config(config);
     let provider = match ClaudeCodeProvider::from_env(
         // Extract model from chat_provider string ("claude-code:<model>")
-        config.chat_provider.as_deref()
+        config
+            .chat_provider
+            .as_deref()
             .and_then(|p| p.strip_prefix("claude-code:"))
             .unwrap_or("claude-sonnet-latest"),
         workspace,
@@ -542,11 +552,15 @@ async fn run_agent(
     };
 
     // Determine model from config
-    let model = config.chat_provider.as_deref()
+    let model = config
+        .chat_provider
+        .as_deref()
         .and_then(|p| p.strip_prefix("claude-code:"))
         .unwrap_or("claude-sonnet-latest");
 
-    let result = provider.chat(request, model, 0.0).await
+    let result = provider
+        .chat(request, model, 0.0)
+        .await
         .map(|resp| resp.text.unwrap_or_default())
         .map_err(|e| e.to_string());
 

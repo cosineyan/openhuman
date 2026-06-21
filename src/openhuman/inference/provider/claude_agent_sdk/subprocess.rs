@@ -122,11 +122,8 @@ impl Provider for ClaudeAgentSdkProvider {
         let mut error_message: Option<String> = None;
         // Clone the sender out of the mutex once so we don't hold the lock
         // across await points.
-        let progress_tx: Option<mpsc::Sender<String>> = self
-            .progress_tx
-            .lock()
-            .ok()
-            .and_then(|g| g.clone());
+        let progress_tx: Option<mpsc::Sender<String>> =
+            self.progress_tx.lock().ok().and_then(|g| g.clone());
 
         let read_result = timeout(Duration::from_secs(120), async {
             while let Some(line) = lines.next_line().await? {

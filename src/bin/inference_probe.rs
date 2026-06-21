@@ -190,7 +190,7 @@ Emit tool calls as `<tool_call>name[arg1|arg2]</tool_call>` blocks.
         tools: tools_for_request.as_deref(),
         stream: None,
         max_tokens: None,
-                hint_thread_id: None,
+        hint_thread_id: None,
     };
 
     eprintln!("[probe] >>> raw provider.chat()...");

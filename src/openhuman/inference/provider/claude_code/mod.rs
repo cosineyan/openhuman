@@ -234,7 +234,7 @@ impl Provider for ClaudeCodeProvider {
             tools: None,
             stream: None,
             max_tokens: None,
-                hint_thread_id: None,
+            hint_thread_id: None,
         };
         let resp = self.run_chat(request, Some(model)).await?;
         Ok(resp.text.unwrap_or_default())
@@ -251,7 +251,7 @@ impl Provider for ClaudeCodeProvider {
             tools: None,
             stream: None,
             max_tokens: None,
-                hint_thread_id: None,
+            hint_thread_id: None,
         };
         let resp = self.run_chat(request, Some(model)).await?;
         Ok(resp.text.unwrap_or_default())

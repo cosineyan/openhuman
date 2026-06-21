@@ -327,7 +327,7 @@ mod tests {
             temperature: 0.0,
             kind: "test",
             max_tokens: None,
-                hint_thread_id: None,
+            hint_thread_id: None,
         };
         assert_eq!(p.chat_for_json(&prompt).await.unwrap(), "hello");
         assert_eq!(p.calls.load(std::sync::atomic::Ordering::SeqCst), 1);
@@ -346,7 +346,7 @@ mod tests {
             temperature: 0.0,
             kind: "test",
             max_tokens: None,
-                hint_thread_id: None,
+            hint_thread_id: None,
         };
         let (text, usage) = p.chat_for_text_with_usage(&prompt).await.unwrap();
         assert_eq!(text, "summary text");

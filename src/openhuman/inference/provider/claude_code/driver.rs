@@ -416,7 +416,11 @@ async fn run_turn_inner(ctx: &TurnContext<'_>, force_new: bool) -> anyhow::Resul
     // Capture the real session UUID assigned by claude (from the `system` init
     // event). For new sessions we omit --session-id so claude persists the
     // session to ~/.claude/projects/ and makes it resumable with --resume.
-    let mut actual_session_id: Option<String> = if is_new { None } else { Some(cc_session_id.clone()) };
+    let mut actual_session_id: Option<String> = if is_new {
+        None
+    } else {
+        Some(cc_session_id.clone())
+    };
 
     // Drain stderr in parallel into a buffer for diagnostics.
     let stderr_task = tokio::spawn(async move {

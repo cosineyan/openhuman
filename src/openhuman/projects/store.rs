@@ -119,8 +119,7 @@ pub fn with_connection<T>(config: &Config, f: impl FnOnce(&Connection) -> Result
     // on every DB call and incorrectly move actively-running AI tasks to Blocked.
     static STARTUP_CLEANUP_DONE: OnceLock<()> = OnceLock::new();
     if STARTUP_CLEANUP_DONE.get().is_none() {
-        cleanup_stale_ai_doing_tasks(&conn)
-            .context("Failed to clean up stale AI doing tasks")?;
+        cleanup_stale_ai_doing_tasks(&conn).context("Failed to clean up stale AI doing tasks")?;
         let _ = STARTUP_CLEANUP_DONE.set(());
     }
 

@@ -58,7 +58,8 @@ fn open_terminal_with_command(cmd: &str) -> Result<String, String> {
         }
         return Err(
             "no terminal emulator found (tried x-terminal-emulator, gnome-terminal, konsole, \
-             xfce4-terminal, xterm). Run the command manually.".into()
+             xfce4-terminal, xterm). Run the command manually."
+                .into(),
         );
     }
 
