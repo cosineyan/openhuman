@@ -215,9 +215,15 @@ fn row_to_task(row: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
 // ---------------------------------------------------------------------------
 
 fn parse_rfc3339(raw: &str) -> Result<DateTime<Utc>> {
-    let parsed = DateTime::parse_from_rfc3339(raw)
-        .with_context(|| format!("Invalid RFC3339 timestamp in projects DB: {raw}"))?;
-    Ok(parsed.with_timezone(&Utc))
+    // Primary: RFC3339 (e.g. "2026-06-21T12:17:57Z") — written by current code.
+    if let Ok(parsed) = DateTime::parse_from_rfc3339(raw) {
+        return Ok(parsed.with_timezone(&Utc));
+    }
+    // Fallback: SQLite CURRENT_TIMESTAMP format "YYYY-MM-DD HH:MM:SS" — treat as UTC.
+    if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(raw, "%Y-%m-%d %H:%M:%S") {
+        return Ok(naive.and_utc());
+    }
+    anyhow::bail!("Invalid RFC3339 timestamp in projects DB: {raw}")
 }
 
 fn sql_err(err: anyhow::Error) -> rusqlite::Error {
