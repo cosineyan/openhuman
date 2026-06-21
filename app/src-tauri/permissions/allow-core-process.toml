@@ -131,6 +131,16 @@ allow = [
     # CEF / PROFILE
     # =========================
     "schedule_cef_profile_purge",
+
+    # =========================
+    # CLAUDE CODE CLI
+    # =========================
+    # Open a native terminal window for Claude Code CLI operations.
+    # `claude_code_login_launch` runs `claude login` (OAuth flow).
+    # `claude_code_resume_session` runs `claude --resume <uuid>` to
+    # resume a prior AI project task session interactively.
+    "claude_code_login_launch",
+    "claude_code_resume_session",
 ]
 
 deny = []
