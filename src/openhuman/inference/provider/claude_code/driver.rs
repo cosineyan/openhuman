@@ -200,7 +200,9 @@ fn write_mcp_http_config(
 /// and retries once as a new session.
 pub async fn run_turn(ctx: TurnContext<'_>) -> anyhow::Result<ChatResponse> {
     let stored = ctx.session_store.get(&ctx.thread_id);
-    let is_new = !stored.as_deref().map(is_uuid_v4).unwrap_or(false);
+    // hint_thread_id may already be a real claude session UUID (from a prior run's ai_plan).
+    let hint_is_real_session = is_uuid_v4(&ctx.thread_id) && stored.is_none();
+    let is_new = !stored.as_deref().map(is_uuid_v4).unwrap_or(false) && !hint_is_real_session;
 
     let result = run_turn_inner(&ctx, is_new).await;
 
@@ -224,7 +226,14 @@ pub async fn run_turn(ctx: TurnContext<'_>) -> anyhow::Result<ChatResponse> {
 
 async fn run_turn_inner(ctx: &TurnContext<'_>, force_new: bool) -> anyhow::Result<ChatResponse> {
     let stored = ctx.session_store.get(&ctx.thread_id);
-    let is_new = force_new || !stored.as_deref().map(is_uuid_v4).unwrap_or(false);
+    // If hint_thread_id is itself a valid UUID (i.e. the caller passed a
+    // prior claude session UUID directly rather than a synthetic hint key),
+    // treat it as an existing session to resume even if not in session_store.
+    let hint_is_real_session = is_uuid_v4(&ctx.thread_id)
+        && stored.is_none();
+    let is_new = !force_new
+        && (stored.as_deref().map(is_uuid_v4).unwrap_or(false) || hint_is_real_session);
+    let is_new = !is_new; // invert: is_new=true means start fresh
     let cc_session_id = if is_new {
         // Do NOT pre-assign a session-id for new sessions: passing --session-id
         // to claude in -p mode creates a session that is NOT persisted to
@@ -233,6 +242,9 @@ async fn run_turn_inner(ctx: &TurnContext<'_>, force_new: bool) -> anyhow::Resul
         // `system` init event; we then write that UUID to session_store so
         // subsequent turns use --resume and the session appears in /resume picker.
         String::new() // placeholder — replaced below from the system event
+    } else if hint_is_real_session {
+        // hint_thread_id is already the real claude session UUID
+        ctx.thread_id.clone()
     } else {
         stored.expect("checked Some above")
     };
