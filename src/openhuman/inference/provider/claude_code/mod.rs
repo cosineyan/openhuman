@@ -160,10 +160,14 @@ impl ClaudeCodeProvider {
             .find(|m| m.role == "system")
             .map(|m| m.content.clone());
 
-        // OpenHuman doesn't pass thread_id directly through ChatRequest yet
-        // (Phase 4 will). For Phase 2 we key sessions on a stable hash of
-        // the conversation so /resume kicks in across consecutive turns.
-        let thread_id = thread_key_from_messages(request.messages);
+        // Use hint_thread_id if provided (e.g. from project task runner which
+        // pre-generates a UUID so it can write it to ai_plan after the turn).
+        // Otherwise fall back to a stable hash of the first user message so
+        // /resume works across consecutive turns in normal chat.
+        let thread_id = request
+            .hint_thread_id
+            .map(str::to_string)
+            .unwrap_or_else(|| thread_key_from_messages(request.messages));
 
         let model = model_override.unwrap_or(&self.model).to_string();
 
@@ -230,6 +234,7 @@ impl Provider for ClaudeCodeProvider {
             tools: None,
             stream: None,
             max_tokens: None,
+                hint_thread_id: None,
         };
         let resp = self.run_chat(request, Some(model)).await?;
         Ok(resp.text.unwrap_or_default())
@@ -246,6 +251,7 @@ impl Provider for ClaudeCodeProvider {
             tools: None,
             stream: None,
             max_tokens: None,
+                hint_thread_id: None,
         };
         let resp = self.run_chat(request, Some(model)).await?;
         Ok(resp.text.unwrap_or_default())

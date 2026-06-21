@@ -214,6 +214,7 @@ async fn run(
         &[],
         None,
         autocompact,
+        None, // hint_thread_id
     )
     .await
     .expect("turn engine should complete")

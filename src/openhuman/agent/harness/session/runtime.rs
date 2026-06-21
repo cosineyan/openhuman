@@ -248,6 +248,13 @@ impl Agent {
         self.rebuild_tool_policy_session();
     }
 
+    /// Pre-pin the thread id passed to the provider in every `ChatRequest`.
+    /// Used by callers (e.g. project task runner) that need to know the
+    /// session key before the turn runs so they can persist it afterwards.
+    pub fn set_hint_thread_id(&mut self, id: impl Into<String>) {
+        self.hint_thread_id = Some(id.into());
+    }
+
     pub(super) fn rebuild_tool_policy_session(&mut self) {
         self.tool_policy_session = ToolPolicyEngine::build_session(
             &self.agent_definition_name,

@@ -502,6 +502,8 @@ impl Agent {
             };
             let turn_run_queue = self.run_queue.clone();
             let cached_prefix = self.cached_transcript_messages.take();
+            // Extract hint_thread_id before `agent: self` takes the mutable borrow.
+            let hint_thread_id_owned = self.hint_thread_id.clone();
             // Resolve the context window once per turn through the provider so
             // local providers (LM Studio) trim to their runtime-loaded n_ctx
             // rather than the trained-max table (#3550 / TAURI-RUST-6V0).
@@ -569,6 +571,7 @@ impl Agent {
                     &[],
                     turn_run_queue,
                     None, // main agent compacts via its ContextManager in before_dispatch
+                    hint_thread_id_owned.as_deref(), // thread id hint for ClaudeCodeProvider
                         )),
                     ),
                 )

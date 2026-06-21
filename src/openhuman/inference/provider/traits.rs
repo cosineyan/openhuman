@@ -172,6 +172,12 @@ pub struct ChatRequest<'a> {
     /// low-balance BYO user who could easily afford the few thousand tokens
     /// an extraction actually needs (TAURI-RUST-C62).
     pub max_tokens: Option<u32>,
+    /// Optional thread identifier hint for providers that key sessions on a
+    /// stable id (e.g. ClaudeCodeProvider). When `Some`, the provider uses
+    /// this value instead of deriving one from message content, so the caller
+    /// can know the session key before the turn runs and read it back
+    /// afterwards.
+    pub hint_thread_id: Option<&'a str>,
 }
 
 /// A tool result to feed back to the LLM.

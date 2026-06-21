@@ -110,6 +110,7 @@ pub(crate) async fn run_turn_engine(
     // `ContextManager` in `observer.before_dispatch` instead — so only the
     // sub-agent loop (which has no `ContextManager`) opts in.
     autocompact: Option<&EngineAutocompact>,
+    hint_thread_id: Option<&str>,
 ) -> Result<TurnEngineOutcome> {
     // Resolve the model's context window once per turn. Local providers (e.g.
     // LM Studio) report their *runtime-loaded* window here, which can be far
@@ -446,6 +447,7 @@ pub(crate) async fn run_turn_engine(
                     tools: request_tools,
                     stream: delta_tx_opt.as_ref(),
                     max_tokens: None,
+                    hint_thread_id,
                 },
                 model,
                 temperature,

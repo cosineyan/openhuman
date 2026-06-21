@@ -767,6 +767,7 @@ impl Provider for ReliableProvider {
                         tools: request.tools,
                         stream: stream_this_attempt,
                         max_tokens: request.max_tokens,
+                        hint_thread_id: request.hint_thread_id,
                     };
                     match provider.chat(req, current_model, temperature).await {
                         Ok(resp) => {

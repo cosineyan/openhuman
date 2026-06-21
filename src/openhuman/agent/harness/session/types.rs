@@ -290,6 +290,11 @@ pub struct Agent {
     ///
     /// Empty at construction time and whenever `tools` is fully reconciled.
     pub(super) pending_synthesized_tools_mask: std::collections::HashSet<String>,
+    /// Optional thread-id hint passed through to the provider in each
+    /// `ChatRequest`. Used by the project task runner to pre-pin a UUID
+    /// so it can write it to `ai_plan` after the turn without needing to
+    /// reverse-engineer the provider's own session-key hash.
+    pub(super) hint_thread_id: Option<String>,
 }
 
 /// A builder for creating `Agent` instances with custom configuration.

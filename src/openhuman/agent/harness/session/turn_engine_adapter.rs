@@ -473,6 +473,7 @@ impl CheckpointStrategy for AgentCheckpoint {
                     tools: None,
                     stream: delta_tx_opt.as_ref(),
                     max_tokens: None,
+                hint_thread_id: None,
                 },
                 &self.model,
                 self.temperature,

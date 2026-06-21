@@ -214,6 +214,7 @@ pub(super) async fn run_inner_loop(
             &["ask_user_clarification"],
             run_queue, // steering channel for `steer_subagent` (None = non-steerable)
             autocompact.as_ref(),
+            None, // hint_thread_id: sub-agents don't need session pinning
         )),
     )
     .await?;

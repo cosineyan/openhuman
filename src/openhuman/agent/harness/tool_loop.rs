@@ -374,6 +374,7 @@ pub(crate) async fn run_tool_call_loop(
         &[],
         None,
         None, // channel/CLI/triage loop: context guard + token-budget trim only
+        None, // hint_thread_id: not needed outside project task runner
     )
     .await
     .map(|outcome| outcome.text)

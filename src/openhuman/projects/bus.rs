@@ -178,9 +178,18 @@ async fn run_ai_task(
     // ── 2. Build prompt ───────────────────────────────────────────────────
     let prompt = build_prompt(&title, description.as_deref());
 
+    // Pre-generate the CC session UUID so we can write it to ai_plan after
+    // the run regardless of outcome.  ClaudeCodeProvider will use this as
+    // its thread_id (via hint_thread_id on ChatRequest) so the on-disk
+    // session store entry matches what we record here.
+    let cc_session_uuid = crate::openhuman::inference::provider::claude_code::session_store::generate_uuid_v4();
+    let cc_workspace_dir = config.config_path.parent()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
+
     // ── 3. Run AI ─────────────────────────────────────────────────────────
     let (outcome, fwd) = tokio::select! {
-        result = run_agent(&config, &task_id, &prompt) => result,
+        result = run_agent(&config, &task_id, &prompt, &cc_session_uuid) => result,
         _ = cancel_token.cancelled() => {
             (Err("Cancelled by user.".to_string()), tokio::spawn(async {}))
         }
@@ -204,26 +213,21 @@ async fn run_ai_task(
         let comment = "Cancelled by user.";
         let _ = store::add_comment(&config, &task_id, "ai", comment);
         emit_task_log(&task_id, comment, "cancelled");
-        // Persist claude session UUID into ai_plan so the UI can offer resume.
-        if let Some(uuid) = session_id_for_prompt(&config, &prompt) {
-            let workspace_dir = config.config_path.parent()
-                .map(|p| p.display().to_string())
-                .unwrap_or_default();
-            let plan = serde_json::json!({
-                "claude_session_id": uuid,
-                "claude_workspace_dir": workspace_dir,
-            }).to_string();
-            if let Err(e) = store::update_task(
-                &config,
-                &task_id,
-                &crate::openhuman::projects::TaskPatch {
-                    ai_plan: Some(plan),
-                    ..crate::openhuman::projects::TaskPatch::default()
-                },
-                "ai",
-            ) {
-                log::warn!("{LOG} task={task_id} failed to write ai_plan: {e}");
-            }
+        // Persist the pre-generated CC session UUID so the UI can offer resume.
+        let plan = serde_json::json!({
+            "claude_session_id": cc_session_uuid,
+            "claude_workspace_dir": cc_workspace_dir,
+        }).to_string();
+        if let Err(e) = store::update_task(
+            &config,
+            &task_id,
+            &crate::openhuman::projects::TaskPatch {
+                ai_plan: Some(plan),
+                ..crate::openhuman::projects::TaskPatch::default()
+            },
+            "ai",
+        ) {
+            log::warn!("{LOG} task={task_id} failed to write ai_plan: {e}");
         }
         if let Some(id) = find_bucket("block") {
             let patch = TaskPatch {
@@ -241,26 +245,21 @@ async fn run_ai_task(
         match &outcome {
             Ok(response) => {
                 let _ = store::add_comment(&config, &task_id, "ai", response);
-                // Persist claude session UUID into ai_plan so the UI can offer resume.
-                if let Some(uuid) = session_id_for_prompt(&config, &prompt) {
-                    let workspace_dir = config.config_path.parent()
-                        .map(|p| p.display().to_string())
-                        .unwrap_or_default();
-                    let plan = serde_json::json!({
-                        "claude_session_id": uuid,
-                        "claude_workspace_dir": workspace_dir,
-                    }).to_string();
-                    if let Err(e) = store::update_task(
-                        &config,
-                        &task_id,
-                        &crate::openhuman::projects::TaskPatch {
-                            ai_plan: Some(plan),
-                            ..crate::openhuman::projects::TaskPatch::default()
-                        },
-                        "ai",
-                    ) {
-                        log::warn!("{LOG} task={task_id} failed to write ai_plan: {e}");
-                    }
+                // Persist the pre-generated CC session UUID so the UI can offer resume.
+                let plan = serde_json::json!({
+                    "claude_session_id": cc_session_uuid,
+                    "claude_workspace_dir": cc_workspace_dir,
+                }).to_string();
+                if let Err(e) = store::update_task(
+                    &config,
+                    &task_id,
+                    &crate::openhuman::projects::TaskPatch {
+                        ai_plan: Some(plan),
+                        ..crate::openhuman::projects::TaskPatch::default()
+                    },
+                    "ai",
+                ) {
+                    log::warn!("{LOG} task={task_id} failed to write ai_plan: {e}");
                 }
                 if response.starts_with("BLOCKED:") {
                     log::warn!("{LOG} task={task_id} AI self-reported blocked: {response}");
@@ -307,26 +306,21 @@ async fn run_ai_task(
                 let comment = format!("Encountered an issue:\n\n{err_msg}");
                 let _ = store::add_comment(&config, &task_id, "ai", &comment);
                 emit_task_log(&task_id, &comment, "error");
-                // Persist claude session UUID into ai_plan so the UI can offer resume.
-                if let Some(uuid) = session_id_for_prompt(&config, &prompt) {
-                    let workspace_dir = config.config_path.parent()
-                        .map(|p| p.display().to_string())
-                        .unwrap_or_default();
-                    let plan = serde_json::json!({
-                        "claude_session_id": uuid,
-                        "claude_workspace_dir": workspace_dir,
-                    }).to_string();
-                    if let Err(e) = store::update_task(
-                        &config,
-                        &task_id,
-                        &crate::openhuman::projects::TaskPatch {
-                            ai_plan: Some(plan),
-                            ..crate::openhuman::projects::TaskPatch::default()
-                        },
-                        "ai",
-                    ) {
-                        log::warn!("{LOG} task={task_id} failed to write ai_plan: {e}");
-                    }
+                // Persist the pre-generated CC session UUID so the UI can offer resume.
+                let plan = serde_json::json!({
+                    "claude_session_id": cc_session_uuid,
+                    "claude_workspace_dir": cc_workspace_dir,
+                }).to_string();
+                if let Err(e) = store::update_task(
+                    &config,
+                    &task_id,
+                    &crate::openhuman::projects::TaskPatch {
+                        ai_plan: Some(plan),
+                        ..crate::openhuman::projects::TaskPatch::default()
+                    },
+                    "ai",
+                ) {
+                    log::warn!("{LOG} task={task_id} failed to write ai_plan: {e}");
                 }
                 if let Some(id) = find_bucket("block") {
                     let patch = TaskPatch {
@@ -442,46 +436,6 @@ fn upload_ai_log(
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Look up the claude session UUID for a given task prompt.
-///
-/// Computes the same thread_id hash that `ClaudeCodeProvider` uses
-/// (`hash_<first-16-bytes-of-sha256-of-prompt>`) then reads the
-/// session store at `<workspace_dir>/claude-code-sessions.json`.
-/// Returns `None` when the provider is not claude-code, the session
-/// store does not exist, or no entry is found for this prompt.
-fn session_id_for_prompt(config: &crate::openhuman::config::Config, prompt: &str) -> Option<String> {
-    // Only attempt lookup when chat_provider is claude-code:*
-    let is_claude_code = config
-        .chat_provider
-        .as_deref()
-        .map(|p| p.starts_with("claude-code:"))
-        .unwrap_or(false);
-    if !is_claude_code {
-        return None;
-    }
-
-    // Compute thread_id: SHA-256 of prompt, first 16 bytes as hex
-    use sha2::{Digest, Sha256};
-    let digest = Sha256::digest(prompt.as_bytes());
-    let thread_id = format!(
-        "hash_{:032x}",
-        u128::from_be_bytes(digest[..16].try_into().ok()?)
-    );
-
-    // Read session store: <config_dir>/claude-code-sessions.json
-    let store_path = config.config_path.parent()?.join("claude-code-sessions.json");
-    let content = std::fs::read_to_string(&store_path).ok()?;
-    let store: serde_json::Value = serde_json::from_str(&content).ok()?;
-    let uuid = store["sessions"][&thread_id].as_str()?.to_string();
-    if uuid.is_empty() {
-        return None;
-    }
-    log::debug!(
-        "{LOG} session_id_for_prompt thread_id={thread_id} uuid={uuid}"
-    );
-    Some(uuid)
-}
-
 fn build_prompt(title: &str, description: Option<&str>) -> String {
     let mut prompt = format!(
         "You are an AI agent processing a task in a project management system.\n\n\
@@ -513,6 +467,7 @@ async fn run_agent(
     config: &Config,
     task_id: &str,
     prompt: &str,
+    hint_thread_id: &str,
 ) -> (Result<String, String>, tokio::task::JoinHandle<()>) {
     use crate::openhuman::agent::progress::AgentProgress;
 
@@ -527,6 +482,10 @@ async fn run_agent(
                 );
             }
         };
+
+    // Pin the session UUID so ClaudeCodeProvider uses exactly this thread_id,
+    // allowing the caller to write it to ai_plan without hash-based lookup.
+    agent.set_hint_thread_id(hint_thread_id);
 
     let run_id = uuid::Uuid::new_v4().to_string();
     let run_name = format!("project-task-runner-{run_id}");

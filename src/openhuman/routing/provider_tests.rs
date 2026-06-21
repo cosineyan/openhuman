@@ -593,6 +593,7 @@ async fn tools_present_forces_remote_even_when_local_healthy_and_lightweight() {
         tools: Some(&tools),
         stream: None,
         max_tokens: None,
+                hint_thread_id: None,
     };
 
     r.chat(request, "hint:reaction", 0.7).await.unwrap();
