@@ -169,7 +169,7 @@ export function ProjectsPage() {
                   ...bwt,
                   tasks: [
                     ...bwt.tasks.slice(0, destIndex),
-                    { ...task, bucket_id: destBucketId, position },
+                    { ...task, bucket_id: destBucketId, position, done: destBucket.bucket.is_done_bucket },
                     ...bwt.tasks.slice(destIndex),
                   ],
                 }

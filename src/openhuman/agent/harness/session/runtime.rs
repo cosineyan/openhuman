@@ -11,6 +11,7 @@ use super::types::{Agent, AgentBuilder};
 use crate::core::event_bus::{publish_global, DomainEvent};
 use crate::openhuman::agent::dispatcher::ParsedToolCall;
 use crate::openhuman::agent::error::AgentError;
+use crate::openhuman::agent::harness::definition::TriggerMemoryAgent;
 use crate::openhuman::agent_tool_policy::ToolPolicyEngine;
 use crate::openhuman::inference::provider::{self, ConversationMessage, Provider, ToolCall};
 use crate::openhuman::memory::Memory;
@@ -63,6 +64,22 @@ impl Agent {
     /// rate-limit state).
     pub fn provider_arc(&self) -> Arc<dyn Provider> {
         Arc::clone(&self.provider)
+    }
+
+    /// Forward progress lines from the underlying provider (if it supports it)
+    /// to the given channel. Only has an effect on providers that implement
+    /// `set_progress_tx` — currently only `ClaudeAgentSdkProvider`. For all
+    /// other providers this is a no-op.
+    pub fn set_provider_progress_tx(&self, tx: tokio::sync::mpsc::Sender<String>) {
+        self.provider.set_progress_tx(tx);
+    }
+
+    /// Override the memory-agent trigger policy for this session.
+    /// Pass `TriggerMemoryAgent::Never` to prevent prior-conversation recall
+    /// from being injected into the prompt (e.g. for background task runners
+    /// that must fetch live data rather than replay a cached answer).
+    pub fn set_trigger_memory_agent(&mut self, policy: TriggerMemoryAgent) {
+        self.trigger_memory_agent = policy;
     }
 
     /// Borrow the agent's tools as a slice. Used by the sub-agent runner

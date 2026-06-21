@@ -1,28 +1,48 @@
 //! Subprocess lifecycle for the Claude Agent SDK provider.
 
+use std::sync::Mutex;
+
 use anyhow::Context;
 use async_trait::async_trait;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
+use tokio::sync::mpsc;
 use tokio::time::{timeout, Duration};
 
 use crate::openhuman::config::schema::claude_agent_sdk::ClaudeAgentSdkConfig;
 use crate::openhuman::inference::provider::traits::Provider;
 
-use super::protocol::SdkMessage;
+use super::protocol::{ContentBlock, SdkMessage};
 
 pub struct ClaudeAgentSdkProvider {
     pub(super) config: ClaudeAgentSdkConfig,
+    /// Optional channel for forwarding human-readable progress lines (tool names,
+    /// etc.) to callers that display live task logs. Interior mutability so the
+    /// sender can be injected after the provider is constructed and before it is
+    /// wrapped in an `Arc`. Lines are best-effort: a full channel or dropped
+    /// receiver is silently ignored.
+    progress_tx: Mutex<Option<mpsc::Sender<String>>>,
 }
 
 impl ClaudeAgentSdkProvider {
     pub fn new(config: ClaudeAgentSdkConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            progress_tx: Mutex::new(None),
+        }
     }
 }
 
 #[async_trait]
 impl Provider for ClaudeAgentSdkProvider {
+    /// Attach a progress line sender. Emits one line per tool call the
+    /// claude subprocess makes, e.g. `"Using tool: Bash"`.
+    fn set_progress_tx(&self, tx: mpsc::Sender<String>) {
+        if let Ok(mut guard) = self.progress_tx.lock() {
+            *guard = Some(tx);
+        }
+    }
+
     async fn chat_with_system(
         &self,
         system_prompt: Option<&str>,
@@ -51,14 +71,15 @@ impl Provider for ClaudeAgentSdkProvider {
             .arg(model)
             .arg("--output-format")
             .arg("stream-json")
-            .arg("--no-color")
+            // --verbose is required by the current claude CLI when using
+            // stream-json with -p, otherwise it exits with an error.
+            .arg("--verbose")
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .stdin(std::process::Stdio::null());
 
         if let Some(budget) = self.config.max_budget_usd {
             cmd.arg("--max-turns").arg("10");
-            // Note: --budget flag controls the spend cap in the Claude CLI
             cmd.arg("--budget").arg(format!("{budget:.4}"));
         }
 
@@ -99,6 +120,13 @@ impl Provider for ClaudeAgentSdkProvider {
         let mut text_parts: Vec<String> = Vec::new();
         let mut result_text: Option<String> = None;
         let mut error_message: Option<String> = None;
+        // Clone the sender out of the mutex once so we don't hold the lock
+        // across await points.
+        let progress_tx: Option<mpsc::Sender<String>> = self
+            .progress_tx
+            .lock()
+            .ok()
+            .and_then(|g| g.clone());
 
         let read_result = timeout(Duration::from_secs(120), async {
             while let Some(line) = lines.next_line().await? {
@@ -113,6 +141,19 @@ impl Provider for ClaudeAgentSdkProvider {
                 match serde_json::from_str::<SdkMessage>(&line) {
                     Ok(SdkMessage::Text { text }) => {
                         text_parts.push(text);
+                    }
+                    Ok(SdkMessage::Assistant { message }) => {
+                        // Forward each tool_use block as a progress line so
+                        // the task log shows what the claude subprocess is doing.
+                        if let Some(ref tx) = progress_tx {
+                            for block in &message.content {
+                                if let ContentBlock::ToolUse { name } = block {
+                                    let log_line = format!("Using tool: {name}");
+                                    tracing::debug!("[claude_agent_sdk] {log_line}");
+                                    let _ = tx.try_send(log_line);
+                                }
+                            }
+                        }
                     }
                     Ok(SdkMessage::Result {
                         result,
@@ -212,5 +253,15 @@ mod tests {
         let config = ClaudeAgentSdkConfig::default();
         assert!(!config.enabled);
         assert!(config.max_budget_usd.is_none());
+    }
+
+    #[test]
+    fn set_progress_tx_stores_sender() {
+        let config = ClaudeAgentSdkConfig::default();
+        let provider = ClaudeAgentSdkProvider::new(config);
+        assert!(provider.progress_tx.lock().unwrap().is_none());
+        let (tx, _rx) = mpsc::channel(8);
+        provider.set_progress_tx(tx);
+        assert!(provider.progress_tx.lock().unwrap().is_some());
     }
 }

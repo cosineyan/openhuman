@@ -44,7 +44,6 @@ impl Agent {
     ///    extraction asynchronously.
     pub async fn turn(&mut self, user_message: &str) -> Result<String> {
         let turn_started = std::time::Instant::now();
-        self.emit_progress(AgentProgress::TurnStarted).await;
         log::info!("[agent] turn started — awaiting user message processing");
         log::info!(
             "[agent_loop] turn start message_chars={} history_len={} max_tool_iterations={}",

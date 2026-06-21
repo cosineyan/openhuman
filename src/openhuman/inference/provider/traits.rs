@@ -546,6 +546,12 @@ pub trait Provider: Send + Sync {
         let chunk = StreamChunk::error(format!("{} does not support streaming", provider_name));
         stream::once(async move { Ok(chunk) }).boxed()
     }
+
+    /// Attach a channel for forwarding human-readable progress lines emitted
+    /// during a request (e.g. tool names from a subprocess provider). The
+    /// default implementation is a no-op; only providers that internally run
+    /// a subprocess with observable steps need to override this.
+    fn set_progress_tx(&self, _tx: tokio::sync::mpsc::Sender<String>) {}
 }
 
 /// Build tool instructions text for prompt-guided tool calling.
