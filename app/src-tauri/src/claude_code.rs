@@ -94,9 +94,10 @@ pub fn claude_code_login_launch() -> Result<String, String> {
 
 /// Open the user's native terminal and run `claude --resume <session_id>`.
 ///
-/// `workspace_dir` must be the directory openhuman used as `--add-dir` when
-/// it ran the task — claude uses it to locate the session file. When provided,
-/// `--add-dir <workspace_dir>` is appended so the CLI resolves the session.
+/// `workspace_dir` must be the directory openhuman used as cwd when it ran
+/// the task — claude resolves session files relative to cwd via
+/// `~/.claude/projects/<sanitized-cwd>/`. The terminal is opened with
+/// `cd <workspace_dir> && claude --resume <uuid>` so the session is found.
 ///
 /// Returns the terminal emulator name on success, or an error string.
 /// Fails fast with an error if `session_id` is not a valid UUID v4.
@@ -109,7 +110,7 @@ pub fn claude_code_resume_session(
         return Err(format!("invalid session id: {session_id}"));
     }
     let cmd = match workspace_dir.as_deref().filter(|s| !s.is_empty()) {
-        Some(dir) => format!("claude --resume {session_id} --add-dir \"{dir}\""),
+        Some(dir) => format!("cd \"{dir}\" && claude --resume {session_id}"),
         None => format!("claude --resume {session_id}"),
     };
     open_terminal_with_command(&cmd)

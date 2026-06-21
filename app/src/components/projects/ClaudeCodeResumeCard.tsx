@@ -11,7 +11,7 @@ interface Props {
 export function ClaudeCodeResumeCard({ sessionId, workspaceDir }: Props) {
   const { t } = useT();
   const command = workspaceDir
-    ? `claude --resume ${sessionId} --add-dir "${workspaceDir}"`
+    ? `cd "${workspaceDir}" && claude --resume ${sessionId}`
     : `claude --resume ${sessionId}`;
   const [copyLabel, setCopyLabel] = useState<string | null>(null);
   const [openLabel, setOpenLabel] = useState<string | null>(null);
