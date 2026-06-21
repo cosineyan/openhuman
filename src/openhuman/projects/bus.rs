@@ -209,13 +209,28 @@ async fn run_ai_task(
     }
     let finished_at = Utc::now();
 
+    // Read the real claude session UUID from the session store (the driver
+    // writes the actual claude-assigned UUID under our hint_thread_id key).
+    // Fall back to cc_session_uuid itself if not found (non-claude-code path).
+    let claude_resume_uuid = {
+        use crate::openhuman::inference::provider::claude_code::session_store::SessionStore;
+        let store_path = config.config_path.parent()
+            .map(|p| p.join("claude-code-sessions.json"));
+        store_path
+            .and_then(|p| {
+                let s = SessionStore::open(p.parent().unwrap_or(std::path::Path::new(".")));
+                s.get(&cc_session_uuid)
+            })
+            .unwrap_or_else(|| cc_session_uuid.clone())
+    };
+
     let (status, response_text) = if was_cancelled {
         let comment = "Cancelled by user.";
         let _ = store::add_comment(&config, &task_id, "ai", comment);
         emit_task_log(&task_id, comment, "cancelled");
         // Persist the pre-generated CC session UUID so the UI can offer resume.
         let plan = serde_json::json!({
-            "claude_session_id": cc_session_uuid,
+            "claude_session_id": claude_resume_uuid,
             "claude_workspace_dir": cc_workspace_dir,
         }).to_string();
         if let Err(e) = store::update_task(
@@ -247,7 +262,7 @@ async fn run_ai_task(
                 let _ = store::add_comment(&config, &task_id, "ai", response);
                 // Persist the pre-generated CC session UUID so the UI can offer resume.
                 let plan = serde_json::json!({
-                    "claude_session_id": cc_session_uuid,
+                    "claude_session_id": claude_resume_uuid,
                     "claude_workspace_dir": cc_workspace_dir,
                 }).to_string();
                 if let Err(e) = store::update_task(
@@ -308,7 +323,7 @@ async fn run_ai_task(
                 emit_task_log(&task_id, &comment, "error");
                 // Persist the pre-generated CC session UUID so the UI can offer resume.
                 let plan = serde_json::json!({
-                    "claude_session_id": cc_session_uuid,
+                    "claude_session_id": claude_resume_uuid,
                     "claude_workspace_dir": cc_workspace_dir,
                 }).to_string();
                 if let Err(e) = store::update_task(
