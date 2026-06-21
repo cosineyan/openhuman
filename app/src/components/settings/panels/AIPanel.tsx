@@ -2765,6 +2765,7 @@ const GlobalOwnModelSelector = ({
 
           <div className="rounded-lg bg-neutral-50 dark:bg-neutral-800/60 px-3 py-2 text-xs text-neutral-500 dark:text-neutral-400">
             {t('settings.ai.globalModel.appliesToAll')}
+          </div>
 
           <div className="flex justify-end">
             <Button

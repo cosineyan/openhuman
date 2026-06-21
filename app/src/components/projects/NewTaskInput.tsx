@@ -18,16 +18,6 @@ const PRIORITIES = [
   { value: 5, label: 'Critical' },
 ];
 
-const QUICK_DATES: { label: string; days: number }[] = [
-  { label: 'Today', days: 0 },
-  { label: 'Tomorrow', days: 1 },
-  { label: 'This weekend', days: -1 }, // computed below
-  { label: 'Next week', days: 7 },
-  { label: 'Next weekend', days: -2 },
-  { label: '2 weeks', days: 14 },
-  { label: '4 weeks', days: 28 },
-];
-
 function addDays(d: Date, n: number): Date {
   const r = new Date(d);
   r.setDate(r.getDate() + n);
@@ -299,7 +289,7 @@ export function NewTaskInput({ open: openProp, onOpenChange, addTaskColor, onAdd
 
   const openPopover = (
     e: React.MouseEvent<HTMLButtonElement>,
-    setter: (v: boolean) => void,
+    setter: React.Dispatch<React.SetStateAction<boolean>>,
     closeOthers: () => void
   ) => {
     closeOthers();

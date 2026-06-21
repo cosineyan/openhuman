@@ -348,6 +348,7 @@ export function TaskDetailDrawer({
   };
 
   const handlePickFile = async () => {
+    if (!task) return;
     let absPath: string | null = null;
     try {
       absPath = await invoke<string | null>('pick_file');
@@ -370,6 +371,7 @@ export function TaskDetailDrawer({
   };
 
   const handleDeleteAttachment = async (attachmentId: string) => {
+    if (!task) return;
     await deleteAttachment(attachmentId);
     setAttachments(prev => prev.filter(a => a.id !== attachmentId));
     void loadEvents(task.id);
@@ -393,6 +395,7 @@ export function TaskDetailDrawer({
   };
 
   const handleAddComment = async () => {
+    if (!task) return;
     const body = commentDraft.trim();
     if (!body || submittingComment) return;
     setSubmittingComment(true);

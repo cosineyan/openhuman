@@ -33,7 +33,7 @@ describe('useAiTaskRuns', () => {
     const { result } = renderHook(() => useAiTaskRuns());
 
     const listener = (socketService.on as ReturnType<typeof vi.fn>).mock.calls.find(
-      ([event]: [string]) => event === 'project:task_log'
+      (call: unknown[]) => call[0] === 'project:task_log'
     )?.[1] as ((data: unknown) => void) | undefined;
 
     act(() => {
@@ -48,7 +48,7 @@ describe('useAiTaskRuns', () => {
     const { result } = renderHook(() => useAiTaskRuns());
 
     const listener = (socketService.on as ReturnType<typeof vi.fn>).mock.calls.find(
-      ([event]: [string]) => event === 'project:task_log'
+      (call: unknown[]) => call[0] === 'project:task_log'
     )?.[1] as ((data: unknown) => void) | undefined;
 
     act(() => {
