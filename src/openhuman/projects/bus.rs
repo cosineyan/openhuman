@@ -444,8 +444,8 @@ fn session_id_for_prompt(config: &crate::openhuman::config::Config, prompt: &str
         u128::from_be_bytes(digest[..16].try_into().ok()?)
     );
 
-    // Read session store: <workspace_dir>/claude-code-sessions.json
-    let store_path = config.workspace_dir.join("claude-code-sessions.json");
+    // Read session store: <config_dir>/claude-code-sessions.json
+    let store_path = config.config_path.parent()?.join("claude-code-sessions.json");
     let content = std::fs::read_to_string(&store_path).ok()?;
     let store: serde_json::Value = serde_json::from_str(&content).ok()?;
     let uuid = store["sessions"][&thread_id].as_str()?.to_string();
