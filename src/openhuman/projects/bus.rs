@@ -486,7 +486,11 @@ async fn run_agent(
     task_id: &str,
     prompt: &str,
     hint_thread_id: &str,
-) -> (Result<String, String>, tokio::task::JoinHandle<()>, Option<String>) {
+) -> (
+    Result<String, String>,
+    tokio::task::JoinHandle<()>,
+    Option<String>,
+) {
     use crate::openhuman::inference::provider::claude_code::{
         workspace_dir_from_config, ClaudeCodeProvider,
     };
@@ -568,7 +572,8 @@ async fn run_agent(
 
     // Snapshot session store keys before the run so we can detect the new UUID
     // written by the driver (via system init event capture).
-    let workspace = crate::openhuman::inference::provider::claude_code::workspace_dir_from_config(config);
+    let workspace =
+        crate::openhuman::inference::provider::claude_code::workspace_dir_from_config(config);
     let keys_before: std::collections::HashSet<String> = {
         use crate::openhuman::inference::provider::claude_code::session_store::SessionStore;
         // Re-read from disk to get current keys; the store doesn't expose iteration,
