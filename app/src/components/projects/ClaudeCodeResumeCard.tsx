@@ -77,7 +77,15 @@ export function ClaudeCodeResumeCard({ sessionId, workspaceDir }: Props) {
           className="shrink-0 text-xs text-stone-400 hover:text-stone-700 dark:text-neutral-500 dark:hover:text-neutral-200 transition-colors px-1.5 py-0.5 rounded">
           {copyLabel ?? (
             <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-              <rect x="4.5" y="1" width="7.5" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+              <rect
+                x="4.5"
+                y="1"
+                width="7.5"
+                height="9"
+                rx="1.5"
+                stroke="currentColor"
+                strokeWidth="1.2"
+              />
               <path d="M1 4.5H8.5V12H1V4.5Z" stroke="currentColor" strokeWidth="1.2" />
             </svg>
           )}

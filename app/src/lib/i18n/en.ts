@@ -5394,7 +5394,8 @@ const en: TranslationMap = {
   'projects.resumeCard.opening': 'Opening…',
   'projects.resumeCard.opened': 'Terminal opened',
   'projects.resumeCard.copied': 'Copied!',
-  'projects.resumeCard.copyError': 'Could not open terminal — copy the command above and run it manually',
+  'projects.resumeCard.copyError':
+    'Could not open terminal — copy the command above and run it manually',
 };
 
 export default en;

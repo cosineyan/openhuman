@@ -263,10 +263,7 @@ export function TaskDetailDrawer({
   const prevTaskUpdatedRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (!task) return;
-    if (
-      prevTaskUpdatedRef.current !== undefined &&
-      prevTaskUpdatedRef.current !== task.updated
-    ) {
+    if (prevTaskUpdatedRef.current !== undefined && prevTaskUpdatedRef.current !== task.updated) {
       void loadEvents(task.id);
     }
     prevTaskUpdatedRef.current = task.updated;
@@ -283,11 +280,10 @@ export function TaskDetailDrawer({
 
   const currentBucket = buckets.find(b => b.id === (task?.bucket_id ?? bucketId));
   const isTerminalState =
-    (currentBucket?.is_done_bucket === true) ||
+    currentBucket?.is_done_bucket === true ||
     (currentBucket?.title.toLowerCase().includes('block') ?? false);
   const claudeResumeInfo = task ? parseClaudeSessionId(task.ai_plan) : null;
-  const showResumeCard =
-    task?.assignee === 'ai' && claudeResumeInfo !== null && isTerminalState;
+  const showResumeCard = task?.assignee === 'ai' && claudeResumeInfo !== null && isTerminalState;
 
   if (!task && !isCreateMode) return null;
 
@@ -773,9 +769,13 @@ export function TaskDetailDrawer({
                             />
                           </svg>
                         )}
-                        {activeRun.status === 'running' ? 'AI is working…' : `AI finished — ${activeRun.status}`}
+                        {activeRun.status === 'running'
+                          ? 'AI is working…'
+                          : `AI finished — ${activeRun.status}`}
                       </span>
-                      <span className="text-xs text-stone-400 dark:text-neutral-500">View log →</span>
+                      <span className="text-xs text-stone-400 dark:text-neutral-500">
+                        View log →
+                      </span>
                     </div>
                     {activeRun.lines.at(-1) && (
                       <p className="px-3 py-1.5 text-xs font-mono text-stone-500 dark:text-neutral-400 truncate bg-white dark:bg-neutral-900 border-t border-stone-100 dark:border-neutral-800">

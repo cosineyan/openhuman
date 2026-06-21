@@ -36,10 +36,7 @@ export function AiRunDrawer({ task, run, onClose }: Props) {
   return (
     <>
       {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm" onClick={onClose} />
 
       {/* Drawer panel */}
       <div className="fixed top-0 right-0 bottom-0 z-50 w-[480px] max-w-full bg-white dark:bg-neutral-900 shadow-2xl flex flex-col">
@@ -65,11 +62,7 @@ export function AiRunDrawer({ task, run, onClose }: Props) {
                     stroke="currentColor"
                     strokeWidth="4"
                   />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8v8H4z"
-                  />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                 </svg>
               )}
               {STATUS_LABEL[status] ?? status}
