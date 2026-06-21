@@ -3526,6 +3526,7 @@ pub fn run() {
             loopback_oauth::start_loopback_oauth_listener,
             loopback_oauth::stop_loopback_oauth_listener,
             claude_code::claude_code_login_launch,
+            claude_code::claude_code_resume_session,
             pick_file
         ])
         .build(tauri::generate_context!())

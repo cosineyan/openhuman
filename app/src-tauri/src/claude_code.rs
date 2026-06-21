@@ -1,33 +1,23 @@
 //! Tauri commands for the Claude Code CLI provider.
 //!
-//! Provides a cross-platform "open a terminal and run `claude login`"
-//! helper. The CLI's OAuth flow is interactive (it prints a URL and
-//! waits for the user to paste a code), so we can't host it in-app — we
-//! detach into the user's native terminal so they complete login there,
-//! then return to OpenHuman and click Recheck in the settings card.
+//! Provides cross-platform helpers for opening a native terminal and running
+//! a `claude` command inside it. Used for `claude login` (OAuth flow) and
+//! `claude --resume <uuid>` (session resume).
 
 use std::process::Command;
 
-/// Open the user's native terminal and run `claude login` inside it.
-///
-/// Returns the name of the terminal emulator we launched (for UI
-/// confirmation) or an error string if no terminal could be opened.
+/// Open the user's native terminal and run `cmd` inside it.
 ///
 /// Platform behaviour:
-///   - Windows: `cmd /c start "" cmd /k claude login`
-///   - macOS:   `osascript` → Terminal.app `do script "claude login"`
+///   - Windows: `cmd /c start "" cmd /k <cmd>`
+///   - macOS:   `osascript` → Terminal.app `do script "<cmd>"`
 ///   - Linux:   try `x-terminal-emulator`, then `gnome-terminal`,
 ///              `konsole`, `xterm` in that order
-#[tauri::command]
-pub fn claude_code_login_launch() -> Result<String, String> {
+fn open_terminal_with_command(cmd: &str) -> Result<String, String> {
     #[cfg(target_os = "windows")]
     {
-        // `start ""` opens a new console window; the empty quoted title
-        // prevents cmd from interpreting the first arg as a title.
-        // `cmd /k` keeps the window open after `claude login` exits so
-        // the user can read any final output.
         Command::new("cmd")
-            .args(["/c", "start", "", "cmd", "/k", "claude login"])
+            .args(["/c", "start", "", "cmd", "/k", cmd])
             .spawn()
             .map_err(|e| format!("failed to open cmd: {e}"))?;
         return Ok("cmd".into());
@@ -35,12 +25,11 @@ pub fn claude_code_login_launch() -> Result<String, String> {
 
     #[cfg(target_os = "macos")]
     {
-        let script = r#"tell application "Terminal"
-    activate
-    do script "claude login"
-end tell"#;
+        let script = format!(
+            "tell application \"Terminal\"\n    activate\n    do script \"{cmd}\"\nend tell"
+        );
         Command::new("osascript")
-            .args(["-e", script])
+            .args(["-e", &script])
             .spawn()
             .map_err(|e| format!("failed to open Terminal.app: {e}"))?;
         return Ok("Terminal.app".into());
@@ -49,11 +38,11 @@ end tell"#;
     #[cfg(target_os = "linux")]
     {
         let terminals: &[(&str, &[&str])] = &[
-            ("x-terminal-emulator", &["-e", "claude", "login"]),
-            ("gnome-terminal", &["--", "claude", "login"]),
-            ("konsole", &["-e", "claude", "login"]),
-            ("xfce4-terminal", &["-e", "claude login"]),
-            ("xterm", &["-e", "claude", "login"]),
+            ("x-terminal-emulator", &["-e", cmd]),
+            ("gnome-terminal", &["--", cmd]),
+            ("konsole", &["-e", cmd]),
+            ("xfce4-terminal", &["-e", cmd]),
+            ("xterm", &["-e", cmd]),
         ];
         for (term, args) in terminals {
             match Command::new(term).args(*args).spawn() {
@@ -61,11 +50,56 @@ end tell"#;
                 Err(_) => continue,
             }
         }
-        return Err("no terminal emulator found (tried x-terminal-emulator, gnome-terminal, konsole, xfce4-terminal, xterm). Run `claude login` manually.".into());
+        return Err(
+            "no terminal emulator found (tried x-terminal-emulator, gnome-terminal, konsole, \
+             xfce4-terminal, xterm). Run the command manually.".into()
+        );
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
     {
-        Err("claude_code_login_launch is not supported on this platform".into())
+        Err("open_terminal_with_command is not supported on this platform".into())
     }
+}
+
+/// Validate that `s` is a well-formed RFC-4122 v4 UUID.
+fn is_valid_uuid_v4(s: &str) -> bool {
+    let b = s.as_bytes();
+    if b.len() != 36 {
+        return false;
+    }
+    let hyphens = [8usize, 13, 18, 23];
+    for (i, c) in b.iter().enumerate() {
+        if hyphens.contains(&i) {
+            if *c != b'-' {
+                return false;
+            }
+        } else if !c.is_ascii_hexdigit() {
+            return false;
+        }
+    }
+    // Version nibble (index 14) must be '4'.
+    // Variant nibble (index 19) must be one of 8/9/a/b.
+    b[14] == b'4' && matches!(b[19], b'8' | b'9' | b'a' | b'b' | b'A' | b'B')
+}
+
+/// Open the user's native terminal and run `claude login` inside it.
+///
+/// Returns the name of the terminal emulator launched (for UI confirmation)
+/// or an error string if no terminal could be opened.
+#[tauri::command]
+pub fn claude_code_login_launch() -> Result<String, String> {
+    open_terminal_with_command("claude login")
+}
+
+/// Open the user's native terminal and run `claude --resume <session_id>`.
+///
+/// Returns the terminal emulator name on success, or an error string.
+/// Fails fast with an error if `session_id` is not a valid UUID v4.
+#[tauri::command]
+pub fn claude_code_resume_session(session_id: String) -> Result<String, String> {
+    if !is_valid_uuid_v4(&session_id) {
+        return Err(format!("invalid session id: {session_id}"));
+    }
+    open_terminal_with_command(&format!("claude --resume {session_id}"))
 }
