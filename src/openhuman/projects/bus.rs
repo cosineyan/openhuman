@@ -178,12 +178,25 @@ async fn run_ai_task(
     // ── 2. Build prompt ───────────────────────────────────────────────────
     let prompt = build_prompt(&title, description.as_deref());
 
-    // Pre-generate the CC session UUID so we can write it to ai_plan after
-    // the run regardless of outcome.  ClaudeCodeProvider will use this as
-    // its thread_id (via hint_thread_id on ChatRequest) so the on-disk
-    // session store entry matches what we record here.
-    let cc_session_uuid =
-        crate::openhuman::inference::provider::claude_code::session_store::generate_uuid_v4();
+    // Check if there's a previous claude session to resume. If the task has
+    // been run before and has a valid session UUID in ai_plan, pass it as
+    // hint_thread_id so the driver uses --resume instead of starting fresh.
+    // This lets claude see the full prior conversation history.
+    let existing_session_id: Option<String> = store::get_task(&config, &task_id)
+        .ok()
+        .and_then(|t| t.ai_plan)
+        .and_then(|plan| serde_json::from_str::<serde_json::Value>(&plan).ok())
+        .and_then(|v| {
+            v.get("claude_session_id")
+                .and_then(|s| s.as_str())
+                .map(str::to_string)
+        })
+        .filter(|id| crate::openhuman::inference::provider::claude_code::session_store::is_uuid_v4(id));
+
+    // Use existing session if available (resume), otherwise generate a new hint UUID.
+    let cc_session_uuid = existing_session_id.unwrap_or_else(
+        crate::openhuman::inference::provider::claude_code::session_store::generate_uuid_v4,
+    );
     // claude CLI saves the session under the cwd it was launched with,
     // which is action_dir (the user's project root). The resume card must
     // cd there before running --resume, so store action_dir here.
