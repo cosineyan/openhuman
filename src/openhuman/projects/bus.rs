@@ -282,7 +282,11 @@ async fn run_ai_task(
                 ) {
                     log::warn!("{LOG} task={task_id} failed to write ai_plan: {e}");
                 }
-                if response.starts_with("BLOCKED:") {
+                // Check any line of the response for the BLOCKED: marker.
+                // claude CLI may emit preamble text before the marker so a
+                // simple starts_with check is insufficient.
+                let is_blocked = response.lines().any(|l| l.trim_start().starts_with("BLOCKED:"));
+                if is_blocked {
                     log::warn!("{LOG} task={task_id} AI self-reported blocked: {response}");
                     if let Some(id) = find_bucket("block") {
                         let patch = TaskPatch {
