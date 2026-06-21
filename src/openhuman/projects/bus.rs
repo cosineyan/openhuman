@@ -264,6 +264,11 @@ async fn run_ai_task(
     } else {
         match &outcome {
             Ok(response) => {
+                log::info!(
+                    "{LOG} task={task_id} AI response received chars={} first_100={:?}",
+                    response.len(),
+                    response.chars().take(100).collect::<String>()
+                );
                 let _ = store::add_comment(&config, &task_id, "ai", response);
                 // Persist the pre-generated CC session UUID so the UI can offer resume.
                 let plan = serde_json::json!({
@@ -282,10 +287,10 @@ async fn run_ai_task(
                 ) {
                     log::warn!("{LOG} task={task_id} failed to write ai_plan: {e}");
                 }
-                // Check any line of the response for the BLOCKED: marker.
-                // claude CLI may emit preamble text before the marker so a
-                // simple starts_with check is insufficient.
-                let is_blocked = response.lines().any(|l| l.trim_start().starts_with("BLOCKED:"));
+                // Check if the response contains the BLOCKED: marker anywhere.
+                // claude CLI may emit the marker mid-paragraph without a leading
+                // newline, so scanning line starts is insufficient.
+                let is_blocked = response.contains("BLOCKED:");
                 if is_blocked {
                     log::warn!("{LOG} task={task_id} AI self-reported blocked: {response}");
                     if let Some(id) = find_bucket("block") {
