@@ -18,7 +18,28 @@ import {
 } from '../../services/api/projectsApi';
 import { openWorkspacePath, revealWorkspacePath } from '../../utils/tauriCommands/workspacePaths';
 import { AiRunDrawer } from './AiRunDrawer';
+import { ClaudeCodeResumeCard } from './ClaudeCodeResumeCard';
 import { useAiTaskRuns } from './useAiTaskRuns';
+
+/** Extract claude_session_id from task.ai_plan JSON, or null if absent/invalid. */
+function parseClaudeSessionId(aiPlan: string | null | undefined): string | null {
+  if (!aiPlan) return null;
+  try {
+    const parsed = JSON.parse(aiPlan) as unknown;
+    if (
+      parsed !== null &&
+      typeof parsed === 'object' &&
+      'claude_session_id' in parsed &&
+      typeof (parsed as Record<string, unknown>).claude_session_id === 'string' &&
+      (parsed as Record<string, unknown>).claude_session_id !== ''
+    ) {
+      return (parsed as Record<string, unknown>).claude_session_id as string;
+    }
+  } catch {
+    // malformed JSON — silent
+  }
+  return null;
+}
 
 interface SavePatch {
   title?: string;
@@ -249,6 +270,14 @@ export function TaskDetailDrawer({
     }
     prevEventCountRef.current = events.length;
   }, [events, feedFilter]);
+
+  const currentBucket = buckets.find(b => b.id === (task?.bucket_id ?? bucketId));
+  const isTerminalState =
+    (currentBucket?.is_done_bucket === true) ||
+    (currentBucket?.title.toLowerCase().includes('block') ?? false);
+  const claudeSessionId = task ? parseClaudeSessionId(task.ai_plan) : null;
+  const showResumeCard =
+    task?.assignee === 'ai' && claudeSessionId !== null && isTerminalState;
 
   if (!task && !isCreateMode) return null;
 
@@ -744,6 +773,9 @@ export function TaskDetailDrawer({
                       </p>
                     )}
                   </button>
+                )}
+                {showResumeCard && claudeSessionId && (
+                  <ClaudeCodeResumeCard sessionId={claudeSessionId} />
                 )}
                 {/* Tab bar — icon only with count, label as tooltip */}
                 <div className="flex items-center justify-around px-2 pt-3 pb-0 border-b border-stone-200 dark:border-neutral-800 shrink-0">
