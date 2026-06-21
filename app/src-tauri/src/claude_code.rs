@@ -28,8 +28,11 @@ fn open_terminal_with_command(cmd: &str) -> Result<String, String> {
         // AppleScript `do script` wraps the command in double-quotes, so any
         // literal `"` inside the command must be escaped as `\"`.
         let escaped = cmd.replace('"', "\\\"");
+        // If Terminal.app has no windows yet (first launch), `do script` would
+        // open a blank window then a second one for the command. Run in the
+        // front window when one exists to avoid the extra blank window.
         let script = format!(
-            "tell application \"Terminal\"\n    activate\n    do script \"{escaped}\"\nend tell"
+            "tell application \"Terminal\"\nif (count of windows) is 0 then\ndo script \"{escaped}\"\nelse\ndo script \"{escaped}\" in front window\nend if\nactivate\nend tell"
         );
         Command::new("osascript")
             .args(["-e", &script])
