@@ -530,15 +530,28 @@ async fn run_agent(
 
     let task_id_fwd = task_id.to_string();
     let fwd = tokio::spawn(async move {
+        use crate::openhuman::inference::provider::ProviderDelta;
+        // Buffer streaming text deltas and emit whole lines only.
+        // claude CLI streams text character-by-character; emitting each
+        // delta as a separate log line would split words mid-character.
+        let mut buf = String::new();
         while let Some(delta) = stream_rx.recv().await {
-            use crate::openhuman::inference::provider::ProviderDelta;
-            let line = match delta {
-                ProviderDelta::TextDelta { delta } if !delta.trim().is_empty() => Some(delta),
-                _ => None,
-            };
-            if let Some(line) = line {
-                emit_task_log(&task_id_fwd, &line, "log");
+            if let ProviderDelta::TextDelta { delta: text } = delta {
+                buf.push_str(&text);
+                // Emit every complete line (terminated by '\n').
+                while let Some(pos) = buf.find('\n') {
+                    let line = buf[..pos].trim_end_matches('\r').to_string();
+                    buf = buf[pos + 1..].to_string();
+                    if !line.is_empty() {
+                        emit_task_log(&task_id_fwd, &line, "log");
+                    }
+                }
             }
+        }
+        // Emit any remaining text that had no trailing newline.
+        let remainder = buf.trim().to_string();
+        if !remainder.is_empty() {
+            emit_task_log(&task_id_fwd, &remainder, "log");
         }
     });
 
