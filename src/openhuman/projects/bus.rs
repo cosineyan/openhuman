@@ -191,7 +191,9 @@ async fn run_ai_task(
                 .and_then(|s| s.as_str())
                 .map(str::to_string)
         })
-        .filter(|id| crate::openhuman::inference::provider::claude_code::session_store::is_uuid_v4(id));
+        .filter(|id| {
+            crate::openhuman::inference::provider::claude_code::session_store::is_uuid_v4(id)
+        });
 
     // Use existing session if available (resume), otherwise generate a new hint UUID.
     let cc_session_uuid = existing_session_id.unwrap_or_else(

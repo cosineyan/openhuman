@@ -229,10 +229,9 @@ async fn run_turn_inner(ctx: &TurnContext<'_>, force_new: bool) -> anyhow::Resul
     // If hint_thread_id is itself a valid UUID (i.e. the caller passed a
     // prior claude session UUID directly rather than a synthetic hint key),
     // treat it as an existing session to resume even if not in session_store.
-    let hint_is_real_session = is_uuid_v4(&ctx.thread_id)
-        && stored.is_none();
-    let is_new = !force_new
-        && (stored.as_deref().map(is_uuid_v4).unwrap_or(false) || hint_is_real_session);
+    let hint_is_real_session = is_uuid_v4(&ctx.thread_id) && stored.is_none();
+    let is_new =
+        !force_new && (stored.as_deref().map(is_uuid_v4).unwrap_or(false) || hint_is_real_session);
     let is_new = !is_new; // invert: is_new=true means start fresh
     let cc_session_id = if is_new {
         // Do NOT pre-assign a session-id for new sessions: passing --session-id
