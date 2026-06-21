@@ -94,7 +94,7 @@ export function KanbanColumn({
   boardVersion,
   onTaskClick,
   onAddTask,
-  onAddViaModal,
+  onAddViaModal: _onAddViaModal,
   onRenameColumn,
 }: Props) {
   const [editing, setEditing] = useState(false);
