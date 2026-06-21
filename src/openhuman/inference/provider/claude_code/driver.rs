@@ -22,7 +22,7 @@ const TURN_TIMEOUT: Duration = Duration::from_secs(7200);
 use super::event_mapper::EventMapper;
 use super::input_builder::build_stdin;
 use super::session_store::{generate_uuid_v4, is_uuid_v4, SessionStore};
-use super::stream_parser::StreamJsonParser;
+use super::stream_parser::{ClaudeCodeEvent, StreamJsonParser};
 use crate::openhuman::inference::provider::traits::{ChatMessage, ChatResponse, ProviderDelta};
 
 /// Tools withheld in the DEFAULT (`acceptEdits`) posture: Claude Code can
@@ -226,15 +226,13 @@ async fn run_turn_inner(ctx: &TurnContext<'_>, force_new: bool) -> anyhow::Resul
     let stored = ctx.session_store.get(&ctx.thread_id);
     let is_new = force_new || !stored.as_deref().map(is_uuid_v4).unwrap_or(false);
     let cc_session_id = if is_new {
-        let id = generate_uuid_v4();
-        if let Err(e) = ctx.session_store.set(&ctx.thread_id, &id) {
-            log::warn!(
-                "[claude-code][driver] failed to persist session uuid for thread {}: {}",
-                ctx.thread_id,
-                e
-            );
-        }
-        id
+        // Do NOT pre-assign a session-id for new sessions: passing --session-id
+        // to claude in -p mode creates a session that is NOT persisted to
+        // ~/.claude/projects/ and therefore cannot be resumed with --resume.
+        // Instead let claude generate its own UUID and capture it from the
+        // `system` init event; we then write that UUID to session_store so
+        // subsequent turns use --resume and the session appears in /resume picker.
+        String::new() // placeholder — replaced below from the system event
     } else {
         stored.expect("checked Some above")
     };
@@ -305,15 +303,18 @@ async fn run_turn_inner(ctx: &TurnContext<'_>, force_new: bool) -> anyhow::Resul
         // opt into `bypassPermissions` for the full toolset (see above).
         "--permission-mode".into(),
         permission_mode.to_string(),
-        if is_new {
-            "--session-id".into()
-        } else {
-            "--resume".into()
-        },
-        cc_session_id.clone(),
         "--model".into(),
         ctx.model.clone(),
     ];
+    // For new sessions: omit --session-id so claude persists the session to
+    // ~/.claude/projects/ under its own UUID (which we capture from the system
+    // init event and write to session_store). Passing --session-id in -p mode
+    // bypasses persistence and makes --resume impossible.
+    // For resumed sessions: pass --resume <uuid> as before.
+    if !is_new {
+        args.push("--resume".into());
+        args.push(cc_session_id.clone());
+    }
     if let Some(sp) = ctx
         .append_system_prompt
         .as_ref()
@@ -343,11 +344,11 @@ async fn run_turn_inner(ctx: &TurnContext<'_>, force_new: bool) -> anyhow::Resul
     }
 
     log::debug!(
-        "[claude-code][driver] spawn bin={} model={} is_new={} cc_session_id={}",
+        "[claude-code][driver] spawn bin={} model={} is_new={} hint_thread_id={}",
         ctx.bin_path.display(),
         ctx.model,
         is_new,
-        cc_session_id
+        ctx.thread_id
     );
 
     // Best-effort: ensure the project dir exists so spawn (cwd) doesn't fail.
@@ -412,6 +413,10 @@ async fn run_turn_inner(ctx: &TurnContext<'_>, force_new: bool) -> anyhow::Resul
     let mut parser = StreamJsonParser::new();
     let mut mapper = EventMapper::new();
     let mut buf = [0u8; 8192];
+    // Capture the real session UUID assigned by claude (from the `system` init
+    // event). For new sessions we omit --session-id so claude persists the
+    // session to ~/.claude/projects/ and makes it resumable with --resume.
+    let mut actual_session_id: Option<String> = if is_new { None } else { Some(cc_session_id.clone()) };
 
     // Drain stderr in parallel into a buffer for diagnostics.
     let stderr_task = tokio::spawn(async move {
@@ -441,6 +446,25 @@ async fn run_turn_inner(ctx: &TurnContext<'_>, force_new: bool) -> anyhow::Resul
                 break;
             }
             for ev in parser.feed_bytes(&buf[..n]) {
+                // Capture the real session UUID from the init event.
+                if is_new && actual_session_id.is_none() {
+                    if let ClaudeCodeEvent::System { session_id: Some(ref sid), .. } = ev {
+                        if is_uuid_v4(sid) {
+                            actual_session_id = Some(sid.clone());
+                            if let Err(e) = ctx.session_store.set(&ctx.thread_id, sid) {
+                                log::warn!(
+                                    "[claude-code][driver] failed to persist real session uuid {sid} for thread {}: {e}",
+                                    ctx.thread_id
+                                );
+                            } else {
+                                log::debug!(
+                                    "[claude-code][driver] captured real session uuid {sid} for thread {}",
+                                    ctx.thread_id
+                                );
+                            }
+                        }
+                    }
+                }
                 for delta in mapper.handle(ev) {
                     if let Some(tx) = ctx.stream {
                         let _ = tx.send(delta).await;
