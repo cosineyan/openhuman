@@ -207,7 +207,7 @@ async fn run_ai_task(
         // Persist claude session UUID into ai_plan so the UI can offer resume.
         if let Some(uuid) = session_id_for_prompt(&config, &prompt) {
             let plan = serde_json::json!({ "claude_session_id": uuid }).to_string();
-            let _ = store::update_task(
+            if let Err(e) = store::update_task(
                 &config,
                 &task_id,
                 &crate::openhuman::projects::TaskPatch {
@@ -215,7 +215,9 @@ async fn run_ai_task(
                     ..crate::openhuman::projects::TaskPatch::default()
                 },
                 "ai",
-            );
+            ) {
+                log::warn!("{LOG} task={task_id} failed to write ai_plan: {e}");
+            }
         }
         if let Some(id) = find_bucket("block") {
             let patch = TaskPatch {
@@ -236,7 +238,7 @@ async fn run_ai_task(
                 // Persist claude session UUID into ai_plan so the UI can offer resume.
                 if let Some(uuid) = session_id_for_prompt(&config, &prompt) {
                     let plan = serde_json::json!({ "claude_session_id": uuid }).to_string();
-                    let _ = store::update_task(
+                    if let Err(e) = store::update_task(
                         &config,
                         &task_id,
                         &crate::openhuman::projects::TaskPatch {
@@ -244,7 +246,9 @@ async fn run_ai_task(
                             ..crate::openhuman::projects::TaskPatch::default()
                         },
                         "ai",
-                    );
+                    ) {
+                        log::warn!("{LOG} task={task_id} failed to write ai_plan: {e}");
+                    }
                 }
                 if response.starts_with("BLOCKED:") {
                     log::warn!("{LOG} task={task_id} AI self-reported blocked: {response}");
@@ -294,7 +298,7 @@ async fn run_ai_task(
                 // Persist claude session UUID into ai_plan so the UI can offer resume.
                 if let Some(uuid) = session_id_for_prompt(&config, &prompt) {
                     let plan = serde_json::json!({ "claude_session_id": uuid }).to_string();
-                    let _ = store::update_task(
+                    if let Err(e) = store::update_task(
                         &config,
                         &task_id,
                         &crate::openhuman::projects::TaskPatch {
@@ -302,7 +306,9 @@ async fn run_ai_task(
                             ..crate::openhuman::projects::TaskPatch::default()
                         },
                         "ai",
-                    );
+                    ) {
+                        log::warn!("{LOG} task={task_id} failed to write ai_plan: {e}");
+                    }
                 }
                 if let Some(id) = find_bucket("block") {
                     let patch = TaskPatch {
