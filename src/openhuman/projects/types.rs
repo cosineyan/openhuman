@@ -225,6 +225,7 @@ mod tests {
             assignee: None,
             position: Some(1.5),
             done: Some(false),
+            ai_plan: None,
         };
         let json = serde_json::to_string(&original).unwrap();
         let restored: TaskPatch = serde_json::from_str(&json).unwrap();
