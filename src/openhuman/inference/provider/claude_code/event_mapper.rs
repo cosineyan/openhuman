@@ -271,6 +271,8 @@ impl EventMapper {
                 id: call_id,
                 name,
                 arguments,
+                // Claude Code CLI events carry no OpenAI-compat extra_content.
+                extra_content: None,
             });
         }
         // CcBuiltin blocks are silently dropped — CC handles them internally.

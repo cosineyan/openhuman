@@ -13,6 +13,7 @@ import { Provider } from 'react-redux';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { SidebarSlotOutlet, SidebarSlotProvider } from '../../components/layout/shell/SidebarSlot';
 import { threadApi } from '../../services/api/threadApi';
 import { chatSend } from '../../services/chatService';
 import { CoreRpcError } from '../../services/coreRpcClient';
@@ -22,6 +23,7 @@ import chatRuntimeReducer, {
   setTaskBoardForThread,
   setToolTimelineForThread,
 } from '../../store/chatRuntimeSlice';
+import layoutReducer from '../../store/layoutSlice';
 import socketReducer from '../../store/socketSlice';
 import themeReducer from '../../store/themeSlice';
 import threadReducer, { setSelectedThread } from '../../store/threadSlice';
@@ -126,6 +128,11 @@ vi.mock('../../services/api/openrouterFreeModels', () => ({
 
 vi.mock('../../hooks/useUsageState', () => ({ useUsageState: mockUseUsageState }));
 
+// The new-window hero pulls useUser/useCoreState; stub it so the page renders
+// without a CoreStateProvider (these tests assert the sidebar/composer, not the
+// empty-state hero).
+vi.mock('../../components/chat/ChatNewWindowHero', () => ({ default: () => null }));
+
 vi.mock('../../store/socketSelectors', () => ({
   selectSocketStatus: (state: { socket?: { byUser?: Record<string, { status: string }> } }) =>
     state.socket?.byUser?.__pending__?.status ?? 'disconnected',
@@ -170,6 +177,7 @@ function buildStore(preload: Record<string, unknown> = {}) {
   return configureStore({
     reducer: combineReducers({
       thread: threadReducer,
+      layout: layoutReducer,
       socket: socketReducer,
       chatRuntime: chatRuntimeReducer,
       agentProfiles: agentProfileReducer,
@@ -200,7 +208,12 @@ async function renderConversations(preload: Record<string, unknown> = {}) {
   render(
     <Provider store={store}>
       <MemoryRouter initialEntries={['/conversations']}>
-        <Conversations />
+        {/* The thread sidebar is projected into the root sidebar slot, so the
+            page needs a provider + outlet for that portal to mount in tests. */}
+        <SidebarSlotProvider>
+          <SidebarSlotOutlet />
+          <Conversations />
+        </SidebarSlotProvider>
       </MemoryRouter>
     </Provider>
   );
@@ -208,20 +221,16 @@ async function renderConversations(preload: Record<string, unknown> = {}) {
   return store;
 }
 
-/** Click the sidebar toggle so the thread list becomes visible. */
+/** The thread sidebar is always projected now (no toggle); just flush effects. */
 async function openSidebar() {
-  const toggleBtn = screen.getByTitle('Show sidebar');
-  await act(async () => {
-    fireEvent.click(toggleBtn);
-  });
+  await act(async () => {});
 }
 
 // Default empty state
 const emptyThreadState = {
   threads: [],
   selectedThreadId: null,
-  threadSidebarVisible: false,
-  activeThreadId: null,
+  activeThreadIds: {},
   welcomeThreadId: null,
   messagesByThreadId: {},
   messages: [],
@@ -315,50 +324,30 @@ describe('Conversations — smoke render (#1123 welcome-lock removal)', () => {
     });
   });
 
-  // Covers line 906: const effectiveShowSidebar = threadSidebarVisible;
-  // Covers line 941: <div className="flex-1 overflow-y-auto"> (always rendered in page mode)
-  it('renders the Threads sidebar header in page mode', async () => {
+  // Covers the page-mode sidebar (TwoPanelLayout, id `chat`) once opened. The
+  // General/Subconscious/Tasks filter chips were removed; the thread search is
+  // the stable top-of-sidebar control.
+  it('renders the sidebar thread search in page mode', async () => {
+    await act(async () => {
+      await renderConversations({ thread: emptyThreadState });
+    });
+
+    await openSidebar();
+
+    expect(screen.getByTestId('chat-thread-search-input')).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'General' })).not.toBeInTheDocument();
+  });
+
+  // Covers the empty branch — with the filter chips gone the list always shows
+  // the generic empty message when no (General-bucket) threads exist.
+  it('shows the empty message when there are no threads', async () => {
     await act(async () => {
       await renderConversations({ thread: emptyThreadState });
     });
 
     // Sidebar is hidden by default — open it first.
     await openSidebar();
-
-    // The "Threads" header is always rendered in page mode (sidebar guard removed)
-    expect(screen.getByText('Threads')).toBeInTheDocument();
-  });
-
-  it('restores and updates the persisted thread sidebar visibility', async () => {
-    let renderedStore: ReturnType<typeof buildStore> | undefined;
-    await act(async () => {
-      renderedStore = await renderConversations({
-        thread: { ...emptyThreadState, threadSidebarVisible: true },
-      });
-    });
-
-    expect(screen.getByText('Threads')).toBeInTheDocument();
-
-    await act(async () => {
-      fireEvent.click(screen.getByTitle('Hide sidebar'));
-    });
-
-    await waitFor(() => {
-      expect(screen.queryByText('Threads')).not.toBeInTheDocument();
-    });
-    expect(renderedStore?.getState().thread.threadSidebarVisible).toBe(false);
-  });
-
-  // Covers line 941 empty branch
-  it('shows the General empty message when the default bucket has no threads', async () => {
-    await act(async () => {
-      await renderConversations({ thread: emptyThreadState });
-    });
-
-    // Sidebar is hidden by default — open it first.
-    await openSidebar();
-    expect(screen.getByRole('tab', { name: 'General' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('No "General" threads')).toBeInTheDocument();
+    expect(screen.getByText('No threads yet')).toBeInTheDocument();
   });
 
   // Covers lines 1002-1004, 1007, 1011-1012, 1014: thread list items rendered unconditionally
@@ -544,31 +533,11 @@ describe('Conversations — smoke render (#1123 welcome-lock removal)', () => {
     });
   });
 
-  // Covers lines 1455-1483: quota pill loading state
-  it('renders "Loading…" quota pill when isLoadingBudget=true', async () => {
-    mockUseUsageState.mockReturnValue({
-      teamUsage: null,
-      currentPlan: null,
-      currentTier: 'FREE' as const,
-      isFreeTier: true,
-      usagePct: 0.0,
-      isNearLimit: false,
-      isAtLimit: false,
-      isBudgetExhausted: false,
-      shouldShowBudgetCompletedMessage: false,
-      isLoading: true,
-      refresh: vi.fn(),
-    });
+  // CycleUsagePill moved into ChatComposer toolbar (#3611) — quota-pill
+  // loading test removed; the "Loading…" text no longer renders here.
 
-    await act(async () => {
-      await renderConversations({ thread: emptyThreadState });
-    });
-
-    expect(screen.getByText('Loading…')).toBeInTheDocument();
-  });
-
-  // Covers lines 1417-1439: budget banner + lines 1455-1516: LimitPill + tooltip
-  it('renders budget-limit banner and limit pills when teamUsage is present', async () => {
+  // Covers budget banner: budget-exhausted banner + OpenRouter CTA
+  it('renders budget-limit banner when teamUsage is present', async () => {
     // cycleBudgetUsd: 0 → renders "Your included budget is complete" branch
     const teamUsage = { cycleBudgetUsd: 0, remainingUsd: 0, cycleSpentUsd: 0, cycleEndsAt: null };
 
@@ -590,12 +559,8 @@ describe('Conversations — smoke render (#1123 welcome-lock removal)', () => {
       await renderConversations({ thread: emptyThreadState });
     });
 
-    // Budget-exceeded banner (lines 1417-1439) — cycleBudgetUsd=0 gives "included budget" message
     expect(screen.getByText(/Your included budget is complete/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Use OpenRouter free models/i })).toBeInTheDocument();
-
-    // LimitPill renders with the cycle label
-    expect(screen.getByText('Cycle')).toBeInTheDocument();
   });
 
   // Covers line 247: if (cancelled) return — the non-cancelled path through loadThreads callback
@@ -616,25 +581,8 @@ describe('Conversations — smoke render (#1123 welcome-lock removal)', () => {
     });
   });
 
-  // Covers line 919: onClick={() => void handleCreateNewThread()} — sidebar "New thread" button
-  // Covers line 1061: onClick={() => void handleCreateNewThread()} — header "+ New" button
-  it('clicking "New thread" sidebar button calls handleCreateNewThread', async () => {
-    await act(async () => {
-      await renderConversations({ thread: emptyThreadState });
-    });
-
-    // Sidebar is hidden by default — open it first.
-    await openSidebar();
-
-    // The sidebar "New thread" button has title="New thread"
-    const newThreadBtn = screen.getByTitle('New thread');
-    await act(async () => {
-      fireEvent.click(newThreadBtn);
-    });
-
-    // createNewThread was called — verifies line 919 callback executed
-    expect(threadApi.createNewThread).toHaveBeenCalled();
-  });
+  // Sidebar "New thread" button was removed in the composer flattening refactor.
+  // The "+ New" header button (tested below) is the remaining create-thread entry point.
 
   it('clicking "+ New" header button calls handleCreateNewThread', async () => {
     // Need a selected thread so the header renders
@@ -913,8 +861,8 @@ describe('Conversations — smoke render (#1123 welcome-lock removal)', () => {
     let resolveSend: (() => void) | undefined;
     vi.mocked(chatSend).mockImplementationOnce(
       () =>
-        new Promise<void>(resolve => {
-          resolveSend = resolve;
+        new Promise<string | undefined>(resolve => {
+          resolveSend = () => resolve(undefined);
         })
     );
     const { textarea, thread } = await renderSelectedConversation();
@@ -1391,11 +1339,10 @@ describe('Conversations — smoke render (#1123 welcome-lock removal)', () => {
     });
   });
 
-  // Batch-5: Conversation category tabs keep stable labels and mapping (pr#1646).
-  //
-  // The tab set is fixed so categories do not disappear when the thread list
-  // is empty, and the active-filter state remains unambiguous.
-  it('renders the fixed chat bucket tabs with stable labels', async () => {
+  // The General/Subconscious/Tasks filter chips were removed — the thread list
+  // is now fixed to the General bucket with no in-sidebar bucket switcher.
+  // Subconscious reflections and task/worker threads have dedicated surfaces.
+  it('does not render the removed bucket filter tabs', async () => {
     await act(async () => {
       await renderConversations({ thread: emptyThreadState });
     });
@@ -1403,60 +1350,9 @@ describe('Conversations — smoke render (#1123 welcome-lock removal)', () => {
     // Sidebar is hidden by default — open it first.
     await openSidebar();
 
-    // Bucket tabs must be present regardless of thread count.
-    expect(screen.getByRole('tab', { name: 'General' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Subconscious' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Tasks' })).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: 'All' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: 'Briefing' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: 'Notification' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: 'Workers' })).not.toBeInTheDocument();
-    expect(screen.getByRole('tablist')).toHaveClass('flex-wrap');
-  });
-
-  it('starts with the "General" tab selected', async () => {
-    await act(async () => {
-      await renderConversations({ thread: emptyThreadState });
-    });
-
-    // Sidebar is hidden by default — open it first.
-    await openSidebar();
-
-    expect(screen.getByRole('tab', { name: 'General' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: 'Subconscious' })).toHaveAttribute(
-      'aria-selected',
-      'false'
-    );
-  });
-
-  it('shows category-specific empty message when a label tab is selected and no threads match', async () => {
-    await act(async () => {
-      await renderConversations({ thread: emptyThreadState });
-    });
-
-    // Sidebar is hidden by default — open it first.
-    await openSidebar();
-
-    fireEvent.click(screen.getByRole('tab', { name: 'General' }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/"General" threads/i)).toBeInTheDocument();
-    });
-  });
-
-  it('shows a category-specific empty message when the Tasks tab is selected', async () => {
-    await act(async () => {
-      await renderConversations({ thread: emptyThreadState });
-    });
-
-    // Sidebar is hidden by default — open it first.
-    await openSidebar();
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Tasks' }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/"Tasks" threads/i)).toBeInTheDocument();
-    });
+    expect(screen.queryByRole('tab', { name: 'General' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Subconscious' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Tasks' })).not.toBeInTheDocument();
   });
 });
 
@@ -1593,68 +1489,23 @@ describe('Conversations — worker thread back-to-parent navigation (#1624)', ()
     expect(screen.getByText(/Your included budget is complete/i)).toBeInTheDocument();
   });
 
-  // Covers line 1910: cycleEndsAt truthy branch inside cycle-pill tooltip
-  it('renders reset time in cycle-pill tooltip when cycleEndsAt is set', async () => {
-    const teamUsage = {
-      cycleBudgetUsd: 10,
-      remainingUsd: 5,
-      cycleSpentUsd: 5,
-      cycleEndsAt: '2026-06-01T00:00:00.000Z',
-    };
-
-    mockUseUsageState.mockReturnValue({
-      teamUsage,
-      currentPlan: null,
-      currentTier: 'PRO' as const,
-      isFreeTier: false,
-      usagePct: 0.5,
-      isNearLimit: false,
-      isAtLimit: false,
-      isBudgetExhausted: false,
-      shouldShowBudgetCompletedMessage: false,
-      isLoading: false,
-      refresh: vi.fn(),
-    });
-
-    await act(async () => {
-      await renderConversations({ thread: emptyThreadState });
-    });
-
-    // Tooltip is hidden via CSS but present in DOM; cycleEndsAt truthy → reset span renders
-    expect(screen.getByText('Cycle')).toBeInTheDocument();
-    // The tooltip resets span contains "resets" text (covers line 1910 conditional)
-    const resetSpans = document.querySelectorAll('[class*="text-stone-400"]');
-    expect(resetSpans.length).toBeGreaterThan(0);
-  });
-
-  // Covers lines 1903-1904: loading animation span when isLoading=true, teamUsage=null
-  it('renders loading pulse span in cycle-pill area when isLoading=true', async () => {
-    mockUseUsageState.mockReturnValue({
-      teamUsage: null,
-      currentPlan: null,
-      currentTier: 'FREE' as const,
-      isFreeTier: true,
-      usagePct: 0,
-      isNearLimit: false,
-      isAtLimit: false,
-      isBudgetExhausted: false,
-      shouldShowBudgetCompletedMessage: false,
-      isLoading: true,
-      refresh: vi.fn(),
-    });
-
-    await act(async () => {
-      await renderConversations({ thread: emptyThreadState });
-    });
-
-    // Loading span with animate-pulse is present when teamUsage=null and loading
-    expect(screen.getByText('Loading…')).toBeInTheDocument();
-  });
+  // CycleUsagePill (cycle-pill tooltip, loading pulse) moved into ChatComposer
+  // toolbar (#3611) — those tests removed; the pill no longer renders here.
 });
 
-describe('Conversations — thread title editing', () => {
+// #3717 (Bug 2) — A single logical assistant turn can be persisted as multiple
+// agent ThreadMessages. The "Agentic task insights" panel used to be anchored
+// inside the per-message map, immediately before the LAST agent message, which
+// dropped it BETWEEN the earlier agent content and the final message — splitting
+// one response into two disconnected chunks. The panel (and the "View full agent
+// process" button) are now hoisted out of the map so they render exactly once,
+// AFTER the complete response, regardless of how many agent messages the turn
+// produced.
+describe('Conversations — agent task insights panel anchoring (#3717 Bug 2)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetThreads.mockResolvedValue({ threads: [], count: 0 });
+    mockGetThreadMessages.mockResolvedValue({ messages: [], count: 0 });
     mockUseUsageState.mockReturnValue({
       teamUsage: null,
       currentPlan: null,
@@ -1668,120 +1519,104 @@ describe('Conversations — thread title editing', () => {
       isLoading: false,
       refresh: vi.fn(),
     });
-    mockGetThreadMessages.mockResolvedValue({ messages: [], count: 0 });
   });
 
-  it('shows pencil icon on hover and enters edit mode on click', async () => {
-    const thread = makeThread({ id: 'edit-title-thread', title: 'Original Title' });
+  it('renders the insights panel exactly once, after the last agent message of a multi-message turn', async () => {
+    const thread = makeThread({ id: 'multi-agent-thread', title: 'Multi-message turn' });
+    // One logical assistant turn persisted as TWO agent ThreadMessages.
+    const messages: ThreadMessage[] = [
+      {
+        id: 'm-user',
+        sender: 'user',
+        type: 'text',
+        content: 'Plan and then summarize.',
+        extraMetadata: {},
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'm-agent-1',
+        sender: 'agent',
+        type: 'text',
+        content: 'First part of the answer.',
+        extraMetadata: {},
+        createdAt: '2026-01-01T00:01:00.000Z',
+      },
+      {
+        id: 'm-agent-2',
+        sender: 'agent',
+        type: 'text',
+        content: 'Second part of the answer.',
+        extraMetadata: {},
+        createdAt: '2026-01-01T00:02:00.000Z',
+      },
+    ];
     mockGetThreads.mockResolvedValue({ threads: [thread], count: 1 });
+    mockGetThreadMessages.mockResolvedValue({ messages, count: messages.length });
 
+    let store: ReturnType<typeof buildStore> | undefined;
     await act(async () => {
-      await renderConversations({
-        thread: selectedThreadState(thread),
+      store = await renderConversations({
+        thread: {
+          ...selectedThreadState(thread),
+          messagesByThreadId: { [thread.id]: messages },
+          messages,
+        },
         socket: socketState('connected'),
       });
     });
 
-    expect(screen.getByText('Original Title')).toBeInTheDocument();
-
-    const editBtn = screen.getByRole('button', { name: 'Edit thread title' });
-    expect(editBtn).toBeInTheDocument();
-
+    // Seed the tool timeline after mount settles (mount-time turn-state
+    // hydration would otherwise clobber a preloaded timeline). Include a
+    // running subagent row so the panel exposes its "view full processing"
+    // affordance (drives the onViewSubagent callback below).
+    await screen.findByText('Second part of the answer.');
     await act(async () => {
-      fireEvent.mouseDown(editBtn);
+      store!.dispatch(
+        setToolTimelineForThread({
+          threadId: thread.id,
+          entries: [
+            { id: 'tl-1', name: 'web_fetch', round: 1, status: 'success' },
+            {
+              id: 'sa-1',
+              name: 'subagent:researcher',
+              round: 1,
+              status: 'running',
+              subagent: { taskId: 'task-1', agentId: 'researcher', toolCalls: [] },
+            },
+          ],
+        })
+      );
     });
 
-    const input = screen.getByRole('textbox', { name: 'Edit thread title' });
-    expect(input).toBeInTheDocument();
-    expect(input).toHaveValue('Original Title');
-  });
+    // Panel renders once — not once per agent message.
+    const panels = await screen.findAllByTestId('agent-task-insights');
+    expect(panels).toHaveLength(1);
+    const panel = panels[0];
 
-  it('commits edited title on Enter and dispatches updateThreadTitle', async () => {
-    const thread = makeThread({ id: 'commit-title-thread', title: 'Old Title' });
-    mockGetThreads.mockResolvedValue({ threads: [thread], count: 1 });
-    (threadApi.updateTitle as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ...thread,
-      title: 'New Title',
-    });
+    // The "View full agent process" button is hoisted alongside it — also once.
+    expect(screen.getAllByTestId('view-process-source')).toHaveLength(1);
 
+    // DOM order: the panel must follow the LAST agent message's content, never
+    // sit between the two agent bubbles.
+    const lastAgentText = screen.getByText('Second part of the answer.');
+    const firstAgentText = screen.getByText('First part of the answer.');
+    expect(lastAgentText.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    expect(firstAgentText.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+
+    // Exercise the hoisted button: opens the "Agent Process Source" panel.
     await act(async () => {
-      await renderConversations({
-        thread: selectedThreadState(thread),
-        socket: socketState('connected'),
-      });
+      fireEvent.click(screen.getByTestId('view-process-source'));
     });
 
-    const editBtn = screen.getByRole('button', { name: 'Edit thread title' });
+    // Exercise onViewSubagent: clicking the subagent row's "view full
+    // processing" affordance opens the subagent drawer for that task.
     await act(async () => {
-      fireEvent.mouseDown(editBtn);
+      fireEvent.click(screen.getByTestId('subagent-view-processing'));
     });
-
-    const input = screen.getByRole('textbox', { name: 'Edit thread title' });
-    await act(async () => {
-      fireEvent.change(input, { target: { value: 'New Title' } });
-    });
-    await act(async () => {
-      fireEvent.keyDown(input, { key: 'Enter' });
-    });
-
-    await waitFor(() => {
-      expect(threadApi.updateTitle).toHaveBeenCalledWith('commit-title-thread', 'New Title');
-    });
-  });
-
-  it('cancels editing on Escape without dispatching', async () => {
-    const thread = makeThread({ id: 'cancel-title-thread', title: 'Keep Me' });
-    mockGetThreads.mockResolvedValue({ threads: [thread], count: 1 });
-
-    await act(async () => {
-      await renderConversations({
-        thread: selectedThreadState(thread),
-        socket: socketState('connected'),
-      });
-    });
-
-    const editBtn = screen.getByRole('button', { name: 'Edit thread title' });
-    await act(async () => {
-      fireEvent.click(editBtn);
-    });
-
-    const input = screen.getByLabelText('Edit thread title');
-    await act(async () => {
-      fireEvent.change(input, { target: { value: 'Changed' } });
-    });
-    await act(async () => {
-      fireEvent.keyDown(input, { key: 'Escape' });
-    });
-
-    expect(screen.getByText('Keep Me')).toBeInTheDocument();
-    expect(threadApi.updateTitle).not.toHaveBeenCalled();
-  });
-
-  it('does not dispatch when title is empty after trim', async () => {
-    const thread = makeThread({ id: 'empty-title-thread', title: 'Has Title' });
-    mockGetThreads.mockResolvedValue({ threads: [thread], count: 1 });
-
-    await act(async () => {
-      await renderConversations({
-        thread: selectedThreadState(thread),
-        socket: socketState('connected'),
-      });
-    });
-
-    const editBtn = screen.getByRole('button', { name: 'Edit thread title' });
-    await act(async () => {
-      fireEvent.click(editBtn);
-    });
-
-    const input = screen.getByLabelText('Edit thread title');
-    await act(async () => {
-      fireEvent.change(input, { target: { value: '   ' } });
-    });
-    await act(async () => {
-      fireEvent.keyDown(input, { key: 'Enter' });
-    });
-
-    expect(threadApi.updateTitle).not.toHaveBeenCalled();
   });
 });
 

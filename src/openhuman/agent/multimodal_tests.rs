@@ -827,3 +827,194 @@ async fn prepare_messages_under_untrusted_channel_config_passes_plain_text_throu
     assert!(!prepared.contains_images);
     assert_eq!(prepared.messages.len(), 1);
 }
+
+// ── Ingress attachment processing: file extraction + image sidecar ───────────
+
+#[tokio::test]
+async fn inline_file_attachments_replaces_marker_with_extracted_text() {
+    // base64("hello world") = aGVsbG8gd29ybGQ=
+    let msg = "summarize [FILE:data:text/plain;base64,aGVsbG8gd29ybGQ=]";
+    let out = inline_file_attachments(msg, &MultimodalFileConfig::default()).await;
+    assert!(
+        out.contains("[FILE-EXTRACTED"),
+        "extracted block present: {out}"
+    );
+    assert!(out.contains("hello world"), "extracted text inlined: {out}");
+    assert!(
+        !out.contains("[FILE:data:"),
+        "raw data-uri marker must be gone: {out}"
+    );
+    assert!(out.contains("summarize"), "user text preserved: {out}");
+}
+
+#[tokio::test]
+async fn inline_file_attachments_noop_without_marker() {
+    let msg = "just a normal message";
+    let out = inline_file_attachments(msg, &MultimodalFileConfig::default()).await;
+    assert_eq!(out, msg);
+}
+
+const TINY_PNG_DATA_URI: &str = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+#[tokio::test]
+async fn stash_image_attachments_replaces_marker_with_placeholder() {
+    let msg = format!("whats this [IMAGE:{TINY_PNG_DATA_URI}]");
+    let out = stash_image_attachments(&msg, &MultimodalConfig::default()).await;
+    assert!(out.contains("[Image:"), "placeholder present: {out}");
+    assert!(out.contains("#att:"), "stash ref present: {out}");
+    assert!(
+        !out.contains("[IMAGE:data:"),
+        "raw image marker must be gone: {out}"
+    );
+    assert!(
+        !out.contains("base64"),
+        "no base64 left in persisted form: {out}"
+    );
+    assert!(out.contains("whats this"), "user text preserved: {out}");
+}
+
+#[tokio::test]
+async fn image_placeholder_rehydrates_to_disk_path_for_provider() {
+    // Ingress: stash the image to disk and leave a placeholder.
+    let msg = format!("describe [IMAGE:{TINY_PNG_DATA_URI}]");
+    let placeholdered = stash_image_attachments(&msg, &MultimodalConfig::default()).await;
+    let messages = vec![ChatMessage::user(placeholdered)];
+    assert!(has_image_placeholders(&messages), "placeholder detected");
+
+    // Dispatch (vision model): rehydrate to an inline [IMAGE:<path>] marker that
+    // points at the on-disk attachment. The index is rebuilt from disk on every
+    // call (no in-memory state), so this resolves even after a process restart.
+    let rehydrated = rehydrate_image_placeholders(&messages);
+    assert_eq!(rehydrated.len(), 1);
+    let content = rehydrated[0].content.clone();
+    assert!(
+        content.contains("[IMAGE:"),
+        "rehydrated inline marker: {content}"
+    );
+    assert!(
+        !content.contains("#att:"),
+        "placeholder consumed: {content}"
+    );
+
+    // The marker points at a real file on disk.
+    let start = content.find("[IMAGE:").unwrap() + "[IMAGE:".len();
+    let end = content[start..].find(']').unwrap() + start;
+    let path = &content[start..end];
+    assert!(path.ends_with(".png"), "disk path carries ext: {path}");
+    assert!(
+        std::path::Path::new(path).is_file(),
+        "attachment persisted to disk: {path}"
+    );
+
+    // Round-trip: the provider prep step re-reads the file back into a data URI,
+    // so the model still receives inline image bytes.
+    let prepared = prepare_messages_for_provider(
+        &rehydrated,
+        &MultimodalConfig::default(),
+        &MultimodalFileConfig::default(),
+    )
+    .await
+    .unwrap();
+    assert!(
+        prepared.messages[0]
+            .content
+            .contains("[IMAGE:data:image/png"),
+        "provider sees re-encoded data URI: {}",
+        prepared.messages[0].content
+    );
+}
+
+#[test]
+fn rehydrate_missing_stash_id_keeps_placeholder_text() {
+    // A placeholder whose id is absent from the stash (e.g. after a restart) is
+    // left verbatim rather than dropped — the model still sees a text mention.
+    let messages = vec![ChatMessage::user(
+        "see [Image: image #att:deadbeefdeadbeef]".to_string(),
+    )];
+    let out = rehydrate_image_placeholders(&messages);
+    assert!(out[0]
+        .content
+        .contains("[Image: image #att:deadbeefdeadbeef]"));
+    assert!(!out[0].content.contains("[IMAGE:data:"));
+}
+
+#[tokio::test]
+async fn inline_file_attachments_caps_at_max_files() {
+    // base64("a")=YQ==, base64("b")=Yg==
+    let msg = "[FILE:data:text/plain;base64,YQ==] [FILE:data:text/plain;base64,Yg==]";
+    let cfg = MultimodalFileConfig {
+        max_files: 1,
+        ..MultimodalFileConfig::default()
+    };
+    let out = inline_file_attachments(msg, &cfg).await;
+    // First file is extracted; the second is over the cap → placeholder, unread.
+    assert!(
+        out.contains("[FILE-EXTRACTED"),
+        "first file extracted: {out}"
+    );
+    assert!(out.contains("over file limit"), "second file capped: {out}");
+}
+
+#[tokio::test]
+async fn stash_image_attachments_caps_at_max_images() {
+    let msg = format!("[IMAGE:{TINY_PNG_DATA_URI}]\n[IMAGE:{TINY_PNG_DATA_URI}]");
+    let cfg = MultimodalConfig {
+        max_images: 1,
+        ..MultimodalConfig::default()
+    };
+    let out = stash_image_attachments(&msg, &cfg).await;
+    assert!(out.contains("#att:"), "first image stashed: {out}");
+    assert!(
+        out.contains("over image limit"),
+        "second image capped: {out}"
+    );
+}
+
+#[test]
+fn extract_image_placeholders_pulls_att_tokens_in_order() {
+    // Forwards a user's stashed image(s) into a delegated vision sub-agent.
+    let text = "look at these [Image: image #att:aaa111] and [Image: image #att:bbb222] please";
+    let got = extract_image_placeholders_in_text(text);
+    assert_eq!(
+        got,
+        vec![
+            "[Image: image #att:aaa111]".to_string(),
+            "[Image: image #att:bbb222]".to_string()
+        ]
+    );
+    // A bare placeholder with no stash ref is ignored; plain text yields none.
+    assert!(extract_image_placeholders_in_text("[Image: (could not be processed)]").is_empty());
+    assert!(extract_image_placeholders_in_text("no images here").is_empty());
+}
+
+#[test]
+fn ext_from_mime_maps_known_image_types() {
+    assert_eq!(ext_from_mime("image/png"), Some("png"));
+    assert_eq!(ext_from_mime("image/jpeg"), Some("jpg"));
+    assert_eq!(ext_from_mime("image/webp"), Some("webp"));
+    assert_eq!(ext_from_mime("image/gif"), Some("gif"));
+    assert_eq!(ext_from_mime("image/bmp"), Some("bmp"));
+    assert_eq!(ext_from_mime("application/pdf"), None);
+}
+
+#[tokio::test]
+async fn sweep_keeps_fresh_attachments() {
+    // A freshly-written attachment (age < TTL) survives the startup sweep, and
+    // the disk index resolves it — the core of restart-survival.
+    let msg = format!("[IMAGE:{TINY_PNG_DATA_URI}]");
+    let placeholdered = stash_image_attachments(&msg, &MultimodalConfig::default()).await;
+    let id = placeholdered
+        .split("#att:")
+        .nth(1)
+        .and_then(|s| s.split(']').next())
+        .map(|s| s.trim().to_string())
+        .expect("placeholder carries an id");
+
+    sweep_stale_attachments().await;
+
+    let index = build_attachment_index();
+    assert!(
+        index.contains_key(&id),
+        "fresh attachment {id} retained after sweep"
+    );
+}

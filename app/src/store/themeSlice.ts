@@ -28,13 +28,22 @@ interface ThemeState {
   tabBarLabels: TabBarLabels;
   fontSize: FontSize;
   agentMessageViewMode: AgentMessageViewMode;
+  /**
+   * Runtime Developer Mode (default OFF).
+   * When true, all developer and diagnostic surfaces become visible.
+   * Combines with the build-time `IS_DEV` flag — either one enables the gate.
+   * Gating is UI-only: the Rust SecurityPolicy / autonomy tier enforcement
+   * is authoritative and is never relaxed by this toggle.
+   */
+  developerMode: boolean;
 }
 
 const initialState: ThemeState = {
   mode: 'system',
   tabBarLabels: 'hover',
   fontSize: 'medium',
-  agentMessageViewMode: 'bubbles',
+  agentMessageViewMode: 'text',
+  developerMode: false,
 };
 
 const themeSlice = createSlice({
@@ -53,12 +62,27 @@ const themeSlice = createSlice({
     setAgentMessageViewMode(state, action: PayloadAction<AgentMessageViewMode>) {
       state.agentMessageViewMode = action.payload;
     },
+    setDeveloperMode(state, action: PayloadAction<boolean>) {
+      state.developerMode = action.payload;
+    },
   },
 });
 
-export const { setThemeMode, setTabBarLabels, setFontSize, setAgentMessageViewMode } =
-  themeSlice.actions;
+export const {
+  setThemeMode,
+  setTabBarLabels,
+  setFontSize,
+  setAgentMessageViewMode,
+  setDeveloperMode,
+} = themeSlice.actions;
 export default themeSlice.reducer;
+
+/**
+ * Selector for the persisted `developerMode` preference.
+ * Use {@link useDeveloperMode} in components — it combines this with `IS_DEV`.
+ */
+export const selectDeveloperMode = (state: { theme: ThemeState }): boolean =>
+  state.theme.developerMode;
 
 /**
  * Resolves a `ThemeMode` to the concrete `light` or `dark` value that should

@@ -11,7 +11,6 @@ const MOCK_ADMIN_BASE = `http://127.0.0.1:${process.env.E2E_MOCK_PORT || '18473'
 const USER_ID = 'pw-user-journey-full-task';
 const PROMPT = 'Fetch the contents of example.com for me';
 const CANARY_FINAL = 'canary-journey-fetch-j1k2l3';
-const MEMORY_TRIGGER_RESPONSE = { content: 'No relevant memory context.' };
 
 async function resetMock(): Promise<void> {
   await fetch(`${MOCK_ADMIN_BASE}/__admin/reset`, {
@@ -116,7 +115,6 @@ test.describe('User journey - full research task', () => {
     await setMockBehavior(
       'llmForcedResponses',
       JSON.stringify([
-        MEMORY_TRIGGER_RESPONSE,
         {
           content: '',
           toolCalls: [
@@ -139,14 +137,21 @@ test.describe('User journey - full research task', () => {
     await sendMessage(page, PROMPT);
     await expect(page.getByText(CANARY_FINAL).first()).toBeVisible({ timeout: 45_000 });
 
+    // Navigate away and back to confirm the thread (and its messages) persist.
+    // Home folded into the unified chat surface, so /home now redirects to
+    // /chat — the landing hash settles on /chat.
     await page.goto('/#/home');
     await waitForAppReady(page);
     await expect
       .poll(async () => page.evaluate(() => window.location.hash), { timeout: 10_000 })
-      .toContain('/home');
+      .toContain('/chat');
 
+    // The chat-as-home surface lands on its "new window" hero rather than
+    // re-opening the last thread, so re-select the thread from the sidebar to
+    // confirm its messages persisted across navigation.
     await page.goto('/#/chat');
     await waitForAppReady(page);
+    await page.getByTestId(`thread-row-${threadId}`).click({ force: true });
     await expect(page.getByText(CANARY_FINAL).first()).toBeVisible({ timeout: 15_000 });
   });
 });

@@ -1,9 +1,9 @@
 use serde_json::json;
 use std::collections::HashSet;
 
-use crate::openhuman::agent::profiles::{AgentProfile, DEFAULT_PROFILE_ID};
 use crate::openhuman::agent::Agent;
 use crate::openhuman::config::Config;
+use crate::openhuman::profiles::{AgentProfile, DEFAULT_PROFILE_ID};
 
 use super::types::SessionCacheFingerprint;
 
@@ -39,9 +39,6 @@ pub(crate) fn provider_role_for_model_override(model_override: Option<&str>) -> 
         Some("hint:coding") | Some("coding-v1") => "coding",
         Some("hint:summarization") | Some("summarization-v1") => "summarization",
         Some("hint:reasoning") => "reasoning",
-        // pro-reasoning routes to its own always-managed role (never the BYOK
-        // chat provider) — keep in sync with `factory::provider_for_role`.
-        Some("hint:pro-reasoning") | Some("pro-reasoning-v1") => "pro-reasoning",
         _ => "chat",
     }
 }
@@ -107,6 +104,7 @@ pub(super) fn build_session_agent(
         target_agent_id,
         reflection_chunks,
         composed_suffix,
+        Some(profile),
     );
 
     agent_result
@@ -187,6 +185,7 @@ pub(super) fn build_session_fingerprint(
     temperature: Option<f64>,
     target_agent_id: String,
     provider_role: &str,
+    profile: &AgentProfile,
 ) -> SessionCacheFingerprint {
     SessionCacheFingerprint {
         model_override,
@@ -198,5 +197,8 @@ pub(super) fn build_session_fingerprint(
         target_agent_id,
         autonomy_signature: autonomy_signature(config),
         model_registry_signature: model_registry_signature(config),
+        // Any change to the resolved profile (id, allowlists, soul, …) changes
+        // this string and forces a session-agent rebuild — see the field doc.
+        profile_signature: crate::openhuman::profiles::profile_signature(profile),
     }
 }

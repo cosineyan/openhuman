@@ -69,13 +69,6 @@ pub const PRICING_TABLE: &[ModelPricing] = &[
         cached_input_per_mtok_usd: 1.50,
         output_per_mtok_usd: 75.00,
     },
-    // Pro-reasoning chat tier — pricing copied from reasoning-v1.
-    ModelPricing {
-        model: "pro-reasoning-v1",
-        input_per_mtok_usd: 15.00,
-        cached_input_per_mtok_usd: 1.50,
-        output_per_mtok_usd: 75.00,
-    },
     // Chat tier — Kimi K2.6 Turbo on Fireworks (backend PR #760).
     // Low TTFT, 128k context, `supportsThinking: false`. Rates track
     // Fireworks' published Kimi turbo pricing at time of writing.
@@ -102,6 +95,14 @@ pub const PRICING_TABLE: &[ModelPricing] = &[
     // Coding tier — Sonnet-class.
     ModelPricing {
         model: "coding-v1",
+        input_per_mtok_usd: 3.00,
+        cached_input_per_mtok_usd: 0.30,
+        output_per_mtok_usd: 15.00,
+    },
+    // Vision tier — multimodal Sonnet-class. Estimate only; the backend's
+    // echoed `charged_amount_usd` is authoritative when present.
+    ModelPricing {
+        model: "vision-v1",
         input_per_mtok_usd: 3.00,
         cached_input_per_mtok_usd: 0.30,
         output_per_mtok_usd: 15.00,
@@ -223,6 +224,15 @@ mod tests {
     fn lookup_pricing_matches_canonical_tiers() {
         assert_eq!(lookup_pricing("reasoning-v1").input_per_mtok_usd, 15.0);
         assert_eq!(lookup_pricing("agentic-v1").output_per_mtok_usd, 15.0);
+    }
+
+    #[test]
+    fn lookup_pricing_has_a_vision_row() {
+        // The vision tier must price exactly (not via the fallback) so budget
+        // gating bites correctly. See PR adding the `vision-v1` tier.
+        let p = lookup_pricing("vision-v1");
+        assert_eq!(p.model, "vision-v1");
+        assert_eq!(p.output_per_mtok_usd, 15.0);
     }
 
     #[test]

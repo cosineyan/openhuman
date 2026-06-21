@@ -9,13 +9,16 @@ interface RouteCheck {
 
 const routes: RouteCheck[] = [
   { hash: '/chat', markers: ['Threads', 'Chat', 'Message', 'New'] },
-  { hash: '/skills', markers: ['Skills', 'Skill', 'Install', 'Browse'] },
-  { hash: '/home', markers: ['Ask your assistant anything', 'Your device is connected'] },
-  { hash: '/channels', markers: ['Channels', 'Connect', 'Telegram', 'Discord'] },
+  { hash: '/connections', markers: ['Composio', 'Channels', 'MCP Servers', 'Skills'] },
+  // Home folded into the unified chat surface — /home redirects to /chat.
+  { hash: '/home', markers: ['New Conversation'] },
+  { hash: '/channels', markers: ['Channels', 'Connections', 'Telegram', 'Discord'] },
   { hash: '/notifications', markers: ['Notifications', 'Alerts', 'No alerts yet'] },
   { hash: '/rewards', markers: ['Rewards', 'Referral', 'Credits', 'Invite'] },
   { hash: '/settings', markers: ['Settings', 'Account', 'Billing', 'Advanced'] },
-  { hash: '/home', markers: ['Ask your assistant anything', 'Your device is connected'] },
+  { hash: '/settings/notifications-hub', markers: ['Notifications'] },
+  // Home folded into the unified chat surface — /home redirects to /chat.
+  { hash: '/home', markers: ['New Conversation'] },
 ];
 
 async function rootTextLength(page: import('@playwright/test').Page): Promise<number> {
@@ -52,11 +55,13 @@ test.describe('Navigation Smoothness', () => {
     }
   });
 
-  test('final state is /home with correct content', async ({ page }) => {
+  test('final state is the chat surface with correct content', async ({ page }) => {
+    // Home folded into the unified chat surface: /home redirects to /chat and
+    // the chat "new window" empty state renders the former Home hero card.
     await page.goto('/#/home');
     await waitForAppReady(page);
-    await expect(page.getByRole('button', { name: /Ask your assistant anything/i })).toBeVisible();
-    await expect(page.getByText(/Your device is connected/i)).toBeVisible();
-    await expect.poll(async () => page.evaluate(() => window.location.hash)).toMatch(/^#\/home/);
+    await expect(page.locator('[data-walkthrough="home-card"]')).toBeVisible();
+    await expect(page.getByText('New Conversation')).toBeVisible();
+    await expect.poll(async () => page.evaluate(() => window.location.hash)).toMatch(/^#\/chat/);
   });
 });
