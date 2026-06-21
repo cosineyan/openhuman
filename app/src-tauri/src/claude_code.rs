@@ -25,8 +25,11 @@ fn open_terminal_with_command(cmd: &str) -> Result<String, String> {
 
     #[cfg(target_os = "macos")]
     {
+        // AppleScript `do script` wraps the command in double-quotes, so any
+        // literal `"` inside the command must be escaped as `\"`.
+        let escaped = cmd.replace('"', "\\\"");
         let script = format!(
-            "tell application \"Terminal\"\n    activate\n    do script \"{cmd}\"\nend tell"
+            "tell application \"Terminal\"\n    activate\n    do script \"{escaped}\"\nend tell"
         );
         Command::new("osascript")
             .args(["-e", &script])
