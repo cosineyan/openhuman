@@ -183,9 +183,10 @@ async fn run_ai_task(
     // its thread_id (via hint_thread_id on ChatRequest) so the on-disk
     // session store entry matches what we record here.
     let cc_session_uuid = crate::openhuman::inference::provider::claude_code::session_store::generate_uuid_v4();
-    let cc_workspace_dir = config.config_path.parent()
-        .map(|p| p.display().to_string())
-        .unwrap_or_default();
+    // claude CLI saves the session under the cwd it was launched with,
+    // which is action_dir (the user's project root). The resume card must
+    // cd there before running --resume, so store action_dir here.
+    let cc_workspace_dir = config.action_dir.display().to_string();
 
     // ── 3. Run AI ─────────────────────────────────────────────────────────
     let (outcome, fwd) = tokio::select! {
