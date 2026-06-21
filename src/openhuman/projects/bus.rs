@@ -484,95 +484,71 @@ async fn run_agent(
     prompt: &str,
     hint_thread_id: &str,
 ) -> (Result<String, String>, tokio::task::JoinHandle<()>) {
-    use crate::openhuman::agent::progress::AgentProgress;
+    use crate::openhuman::inference::provider::claude_code::{
+        workspace_dir_from_config, ClaudeCodeProvider,
+    };
+    use crate::openhuman::inference::provider::{ChatMessage, Provider};
+    use crate::openhuman::inference::provider::traits::ChatRequest;
 
-    log::debug!("{LOG} task={task_id} building agent");
-    let mut agent =
-        match crate::openhuman::agent::harness::session::Agent::from_config(config) {
-            Ok(a) => a,
-            Err(e) => {
-                return (
-                    Err(format!("failed to build agent: {e}")),
-                    tokio::spawn(async {}),
-                );
-            }
-        };
+    log::debug!("{LOG} task={task_id} building ClaudeCodeProvider directly");
 
-    // Pin the session UUID so ClaudeCodeProvider uses exactly this thread_id,
-    // allowing the caller to write it to ai_plan without hash-based lookup.
-    agent.set_hint_thread_id(hint_thread_id);
+    // Build the provider directly — bypass agent harness so the task is
+    // handled entirely by the claude CLI subprocess, not delegated through
+    // openhuman's tool/subagent machinery.
+    let workspace = workspace_dir_from_config(config);
+    let provider = match ClaudeCodeProvider::from_env(
+        // Extract model from chat_provider string ("claude-code:<model>")
+        config.chat_provider.as_deref()
+            .and_then(|p| p.strip_prefix("claude-code:"))
+            .unwrap_or("claude-sonnet-latest"),
+        workspace,
+        config.action_dir.clone(),
+    ) {
+        Ok(p) => p,
+        Err(e) => {
+            return (
+                Err(format!("failed to build ClaudeCodeProvider: {e}")),
+                tokio::spawn(async {}),
+            );
+        }
+    };
 
-    let run_id = uuid::Uuid::new_v4().to_string();
-    let run_name = format!("project-task-runner-{run_id}");
-    agent.set_agent_definition_name(&run_name);
-    // Disable memory agent recall: project tasks must fetch live data, not
-    // replay a cached answer from a prior conversation.
-    agent.set_trigger_memory_agent(
-        crate::openhuman::agent::harness::definition::TriggerMemoryAgent::Never,
-    );
-    agent.set_event_context(&format!("project-task-{task_id}-{run_id}"), "background");
+    // Set up a progress channel so the task log shows live lines.
+    let (stream_tx, mut stream_rx) =
+        tokio::sync::mpsc::channel::<crate::openhuman::inference::provider::ProviderDelta>(64);
 
-    // Attach a progress channel so we can forward granular events from
-    // openhuman's own engine (IterationStarted, ToolCallStarted, etc.).
-    let (progress_tx, mut progress_rx) =
-        tokio::sync::mpsc::channel::<AgentProgress>(64);
-    agent.set_on_progress(Some(progress_tx));
-
-    // Also attach a plain-string channel for providers that run an external
-    // subprocess (e.g. ClaudeAgentSdkProvider). These providers emit tool
-    // names as strings directly, bypassing the AgentProgress machinery.
-    let (sdk_progress_tx, mut sdk_progress_rx) =
-        tokio::sync::mpsc::channel::<String>(64);
-    agent.set_provider_progress_tx(sdk_progress_tx);
-
-    // Spawn a task that forwards AgentProgress events as task log lines.
     let task_id_fwd = task_id.to_string();
     let fwd = tokio::spawn(async move {
-        loop {
-            tokio::select! {
-                event = progress_rx.recv() => {
-                    let Some(event) = event else { break };
-                    let line = match &event {
-                        AgentProgress::TurnStarted => Some("AI turn started".to_string()),
-                        AgentProgress::IterationStarted { iteration, .. } => {
-                            Some(format!("Thinking (step {iteration})…"))
-                        }
-                        AgentProgress::ToolCallStarted { tool_name, .. } => {
-                            Some(format!("Using tool: {tool_name}"))
-                        }
-                        AgentProgress::ToolCallCompleted {
-                            tool_name,
-                            success,
-                            elapsed_ms,
-                            ..
-                        } => {
-                            if *success {
-                                Some(format!("✓ {tool_name} ({elapsed_ms}ms)"))
-                            } else {
-                                Some(format!("✗ {tool_name} failed ({elapsed_ms}ms)"))
-                            }
-                        }
-                        AgentProgress::TurnCompleted { iterations } => Some(format!(
-                            "Completed ({iterations} step{})",
-                            if *iterations == 1 { "" } else { "s" }
-                        )),
-                        // Ignore noisy / redundant variants
-                        _ => None,
-                    };
-                    if let Some(line) = line {
-                        emit_task_log(&task_id_fwd, &line, "log");
-                    }
-                }
-                line = sdk_progress_rx.recv() => {
-                    let Some(line) = line else { continue };
-                    emit_task_log(&task_id_fwd, &line, "log");
-                }
+        while let Some(delta) = stream_rx.recv().await {
+            use crate::openhuman::inference::provider::ProviderDelta;
+            let line = match delta {
+                ProviderDelta::TextDelta { delta } if !delta.trim().is_empty() => Some(delta),
+                _ => None,
+            };
+            if let Some(line) = line {
+                emit_task_log(&task_id_fwd, &line, "log");
             }
         }
     });
 
-    log::debug!("{LOG} task={task_id} running agent turn (agent_name={run_name})");
-    let result = agent.run_single(prompt).await.map_err(|e| e.to_string());
-    // Return result and handle — caller is responsible for joining the forwarder.
+    let messages = vec![ChatMessage::user(prompt)];
+    let request = ChatRequest {
+        messages: &messages,
+        tools: None,
+        stream: Some(&stream_tx),
+        max_tokens: None,
+        hint_thread_id: Some(hint_thread_id),
+    };
+
+    // Determine model from config
+    let model = config.chat_provider.as_deref()
+        .and_then(|p| p.strip_prefix("claude-code:"))
+        .unwrap_or("claude-sonnet-latest");
+
+    let result = provider.chat(request, model, 0.0).await
+        .map(|resp| resp.text.unwrap_or_default())
+        .map_err(|e| e.to_string());
+
+    drop(stream_tx); // close channel so forwarder task ends
     (result, fwd)
 }
