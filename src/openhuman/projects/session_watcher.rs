@@ -141,6 +141,22 @@ async fn watch_loop(task_id: String, reg: Arc<Mutex<HashMap<String, WatchEntry>>
 }
 
 async fn process_session(config: Arc<Config>, task_id: String, session_path: PathBuf) {
+    // Only process if the task is currently in a Blocked bucket.
+    // If the user already moved it themselves, skip silently.
+    match is_task_blocked(&config, &task_id) {
+        Ok(true) => {}
+        Ok(false) => {
+            log::debug!(
+                "[session_watcher] task={task_id} not in Blocked bucket, skipping session sync"
+            );
+            return;
+        }
+        Err(e) => {
+            log::warn!("[session_watcher] task={task_id} could not check bucket: {e}");
+            return;
+        }
+    }
+
     // Read and parse the session JSONL file.
     let content = match std::fs::read_to_string(&session_path) {
         Ok(c) => c,
@@ -259,6 +275,16 @@ async fn summarise_conversation(
     let summary = provider.chat_for_text(&prompt).await?;
     log::debug!("[session_watcher] task={task_id} summary={summary:?}");
     Ok(summary)
+}
+
+fn is_task_blocked(config: &Config, task_id: &str) -> anyhow::Result<bool> {
+    let task = store::get_task(config, task_id)?;
+    let buckets = store::list_buckets(config, &task.project_id)?;
+    let current_bucket = buckets.iter().find(|b| b.id == task.bucket_id);
+    let blocked = current_bucket
+        .map(|b| b.title.to_lowercase().contains("block"))
+        .unwrap_or(false);
+    Ok(blocked)
 }
 
 fn move_task_to_done(config: &Config, task_id: &str) -> anyhow::Result<bool> {
