@@ -126,7 +126,10 @@ pub fn claude_code_resume_session(
         output a line that starts with exactly 'DONE: ' followed by a one-sentence \
         summary of what was accomplished. This allows the task tracking system to \
         automatically mark the task as done.";
-    let prompt_arg = format!("--append-system-prompt \"{}\"", system_prompt.replace('"', "\\\""));
+    let prompt_arg = format!(
+        "--append-system-prompt \"{}\"",
+        system_prompt.replace('"', "\\\"")
+    );
     let cmd = match workspace_dir.as_deref().filter(|s| !s.is_empty()) {
         Some(dir) => format!("cd \"{dir}\" && claude --resume {session_id} {prompt_arg}"),
         None => format!("claude --resume {session_id} {prompt_arg}"),

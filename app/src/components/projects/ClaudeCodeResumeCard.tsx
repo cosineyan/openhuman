@@ -41,11 +41,7 @@ export function ClaudeCodeResumeCard({ sessionId, workspaceDir, taskId }: Props)
       if (workspaceDir) {
         void callCoreRpc({
           method: 'openhuman.projects_start_session_watch',
-          params: {
-            task_id: taskId,
-            session_id: sessionId,
-            workspace_dir: workspaceDir,
-          },
+          params: { task_id: taskId, session_id: sessionId, workspace_dir: workspaceDir },
         }).catch(() => {
           // Non-fatal — watcher registration failure doesn't affect the resume UX.
         });

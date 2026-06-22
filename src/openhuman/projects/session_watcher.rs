@@ -6,11 +6,11 @@
 //! the summary back to the task as a comment.  If the last assistant message
 //! contains "DONE:" the task is also moved to the Done bucket.
 
+use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, SystemTime};
-use serde_json::Value;
 
 use crate::openhuman::config::Config;
 use crate::openhuman::projects::store;
@@ -131,7 +131,9 @@ async fn watch_loop(task_id: String, reg: Arc<Mutex<HashMap<String, WatchEntry>>
         // Check if idle timeout has been reached.
         if let Some(since) = idle_since {
             if since.elapsed() >= IDLE_TIMEOUT {
-                log::info!("[session_watcher] task={task_id} idle timeout reached, processing session");
+                log::info!(
+                    "[session_watcher] task={task_id} idle timeout reached, processing session"
+                );
                 reg.lock().expect("registry lock").remove(&task_id);
                 process_session(config, task_id, path).await;
                 return;
@@ -291,10 +293,11 @@ fn move_task_to_done(config: &Config, task_id: &str) -> anyhow::Result<bool> {
     // Get the task to find its project_id.
     let task = store::get_task(config, task_id)?;
     let buckets = store::list_buckets(config, &task.project_id)?;
-    let done_bucket = buckets
-        .iter()
-        .find(|b| b.is_done_bucket)
-        .or_else(|| buckets.iter().find(|b| b.title.to_lowercase().contains("done")));
+    let done_bucket = buckets.iter().find(|b| b.is_done_bucket).or_else(|| {
+        buckets
+            .iter()
+            .find(|b| b.title.to_lowercase().contains("done"))
+    });
 
     match done_bucket {
         None => Ok(false),
@@ -315,12 +318,7 @@ fn move_task_to_done(config: &Config, task_id: &str) -> anyhow::Result<bool> {
 fn resolve_session_path(workspace_dir: &str, session_uuid: &str) -> Option<PathBuf> {
     let home = directories::UserDirs::new()?.home_dir().to_path_buf();
     // Sanitize: strip leading '/', replace '/' with '-'.
-    let sanitized = workspace_dir
-        .trim_start_matches('/')
-        .replace('/', "-");
-    let project_dir = home
-        .join(".claude")
-        .join("projects")
-        .join(&sanitized);
+    let sanitized = workspace_dir.trim_start_matches('/').replace('/', "-");
+    let project_dir = home.join(".claude").join("projects").join(&sanitized);
     Some(project_dir.join(format!("{session_uuid}.jsonl")))
 }
