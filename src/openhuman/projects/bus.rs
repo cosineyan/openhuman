@@ -483,11 +483,12 @@ fn build_prompt(title: &str, description: Option<&str>) -> String {
          IMPORTANT RULES:\n\
          1. You MUST use tools to complete the task — do NOT answer from memory \
          or prior context. Every task requires live action (fetching data, \
-         running a skill, calling a service, etc.).\n\
-         2. If the task requires a skill (e.g. checking leave quota, sending \
-         email, querying SAP), use the `run_skill` tool to invoke it.\n\
+         running a command, calling a service, etc.).\n\
+         2. Use any tools available to you: Bash commands, web search, locally \
+         installed plugins/skills, MCP servers, or any other tool in your \
+         toolset. Choose the best tool for the job.\n\
          3. If you cannot complete the task because a required tool, service, \
-         or resource is unavailable or unreachable (e.g. a browser extension \
+         or resource is unavailable or unreachable (e.g. a required integration \
          is not connected, credentials are missing, an external system is down), \
          start your response with exactly \"BLOCKED: \" followed by a short \
          explanation of what is missing and how to resolve it. \
