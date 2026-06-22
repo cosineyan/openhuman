@@ -30,6 +30,7 @@ pub fn all_controller_schemas() -> Vec<ControllerSchema> {
         schemas("delete_subtask"),
         schemas("cancel_ai_task"),
         schemas("list_running_ai_tasks"),
+        schemas("start_session_watch"),
     ]
 }
 
@@ -98,6 +99,10 @@ pub fn all_registered_controllers() -> Vec<RegisteredController> {
         RegisteredController {
             schema: schemas("list_running_ai_tasks"),
             handler: handle_list_running_ai_tasks,
+        },
+        RegisteredController {
+            schema: schemas("start_session_watch"),
+            handler: handle_start_session_watch,
         },
     ]
 }
@@ -386,6 +391,35 @@ pub fn schemas(function: &str) -> ControllerSchema {
                 required: true,
             }],
         },
+        "start_session_watch" => ControllerSchema {
+            namespace: "projects",
+            function: "start_session_watch",
+            description: "Register a background watcher for a claude Resume session. \
+                          After 10 minutes of inactivity the session conversation is \
+                          summarised and added as a task comment. If the conversation \
+                          contains 'DONE:' the task is moved to the Done bucket.",
+            inputs: vec![
+                task_id_input("Task to attach the session summary to."),
+                FieldSchema {
+                    name: "session_id",
+                    ty: TypeSchema::String,
+                    comment: "Claude session UUID (from ai_plan.claude_session_id).",
+                    required: true,
+                },
+                FieldSchema {
+                    name: "workspace_dir",
+                    ty: TypeSchema::String,
+                    comment: "The directory claude was launched from (cwd of the Resume session).",
+                    required: true,
+                },
+            ],
+            outputs: vec![FieldSchema {
+                name: "result",
+                ty: TypeSchema::Json,
+                comment: "{ registered: true }",
+                required: true,
+            }],
+        },
         _other => ControllerSchema {
             namespace: "projects",
             function: "unknown",
@@ -597,6 +631,30 @@ fn handle_list_running_ai_tasks(_params: Map<String, Value>) -> ControllerFuture
     Box::pin(async {
         tracing::debug!("[rpc][projects] list_running_ai_tasks entry");
         to_json(ops::list_running_ai_tasks())
+    })
+}
+
+fn handle_start_session_watch(params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let config = config_rpc::load_config_with_timeout().await?;
+        let task_id = get_str(&params, "task_id")?.to_string();
+        let session_id = get_str(&params, "session_id")?.to_string();
+        let workspace_dir = get_str(&params, "workspace_dir")?.to_string();
+        tracing::debug!(
+            task_id = %task_id,
+            session_id = %session_id,
+            "[rpc][projects] start_session_watch entry"
+        );
+        crate::openhuman::projects::session_watcher::register_session_watch(
+            std::sync::Arc::new(config),
+            task_id,
+            session_id,
+            workspace_dir,
+        );
+        to_json(crate::rpc::RpcOutcome {
+            value: serde_json::json!({ "registered": true }),
+            logs: vec![],
+        })
     })
 }
 

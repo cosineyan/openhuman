@@ -106,6 +106,10 @@ pub fn claude_code_login_launch() -> Result<String, String> {
 /// `~/.claude/projects/<sanitized-cwd>/`. The terminal is opened with
 /// `cd <workspace_dir> && claude --resume <uuid>` so the session is found.
 ///
+/// A system prompt is appended instructing claude to output `DONE: <summary>`
+/// when the task is complete, so the background session watcher can detect
+/// completion and update the task automatically.
+///
 /// Returns the terminal emulator name on success, or an error string.
 /// Fails fast with an error if `session_id` is not a valid UUID v4.
 #[tauri::command]
@@ -116,9 +120,16 @@ pub fn claude_code_resume_session(
     if !is_valid_uuid_v4(&session_id) {
         return Err(format!("invalid session id: {session_id}"));
     }
+    // Instruct claude to signal task completion so the background watcher can
+    // detect it and automatically update the task status.
+    let system_prompt = "When you have fully completed the task the user asked you to do, \
+        output a line that starts with exactly 'DONE: ' followed by a one-sentence \
+        summary of what was accomplished. This allows the task tracking system to \
+        automatically mark the task as done.";
+    let prompt_arg = format!("--append-system-prompt \"{}\"", system_prompt.replace('"', "\\\""));
     let cmd = match workspace_dir.as_deref().filter(|s| !s.is_empty()) {
-        Some(dir) => format!("cd \"{dir}\" && claude --resume {session_id}"),
-        None => format!("claude --resume {session_id}"),
+        Some(dir) => format!("cd \"{dir}\" && claude --resume {session_id} {prompt_arg}"),
+        None => format!("claude --resume {session_id} {prompt_arg}"),
     };
     open_terminal_with_command(&cmd)
 }

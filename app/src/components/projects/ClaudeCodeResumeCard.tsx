@@ -1,14 +1,16 @@
 import { useState } from 'react';
 
 import { useT } from '../../lib/i18n/I18nContext';
+import { callCoreRpc } from '../../services/coreRpcClient';
 import { openhumanClaudeCodeResumeSession } from '../../utils/tauriCommands/config';
 
 interface Props {
   sessionId: string;
   workspaceDir: string | null;
+  taskId: string;
 }
 
-export function ClaudeCodeResumeCard({ sessionId, workspaceDir }: Props) {
+export function ClaudeCodeResumeCard({ sessionId, workspaceDir, taskId }: Props) {
   const { t } = useT();
   const command = workspaceDir
     ? `cd "${workspaceDir}" && claude --resume ${sessionId}`
@@ -34,6 +36,20 @@ export function ClaudeCodeResumeCard({ sessionId, workspaceDir }: Props) {
       await openhumanClaudeCodeResumeSession(sessionId, workspaceDir ?? undefined);
       setOpenLabel(t('projects.resumeCard.opened'));
       setTimeout(() => setOpenLabel(null), 2000);
+      // Register background watcher so the session conversation is synced back
+      // to the task after the user finishes and closes the terminal.
+      if (workspaceDir) {
+        void callCoreRpc({
+          method: 'openhuman.projects_start_session_watch',
+          params: {
+            task_id: taskId,
+            session_id: sessionId,
+            workspace_dir: workspaceDir,
+          },
+        }).catch(() => {
+          // Non-fatal — watcher registration failure doesn't affect the resume UX.
+        });
+      }
     } catch (_err) {
       setOpenLabel(null);
       setOpenError(t('projects.resumeCard.copyError'));

@@ -787,10 +787,11 @@ export function TaskDetailDrawer({
                     )}
                   </button>
                 )}
-                {showResumeCard && claudeResumeInfo && (
+                {showResumeCard && claudeResumeInfo && task && (
                   <ClaudeCodeResumeCard
                     sessionId={claudeResumeInfo.sessionId}
                     workspaceDir={claudeResumeInfo.workspaceDir}
+                    taskId={task.id}
                   />
                 )}
                 {/* Tab bar — icon only with count, label as tooltip */}

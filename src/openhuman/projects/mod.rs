@@ -2,11 +2,13 @@ pub mod bus;
 mod ops;
 pub(crate) mod run_registry;
 mod schemas;
+pub mod session_watcher;
 pub(crate) mod store;
 pub mod tools;
 mod types;
 
 pub use bus::register_project_ai_runner;
+pub use session_watcher::register_session_watch;
 
 pub use ops::{
     add_attachment, add_comment, create_subtask, create_task, delete_attachment, delete_subtask,
