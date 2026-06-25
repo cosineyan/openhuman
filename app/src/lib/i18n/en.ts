@@ -6075,7 +6075,8 @@ const en: TranslationMap = {
   'sap.systems.refreshing': 'Refreshing…',
   'sap.systems.disconnect': 'Disconnect',
   'sap.systems.disconnecting': 'Disconnecting…',
-  'sap.systems.hint': 'Tokens are extracted from your open Outlook/Teams browser tabs. Ensure you are logged in before connecting.',
+  'sap.systems.hint':
+    'Tokens are extracted from your open Outlook/Teams browser tabs. Ensure you are logged in before connecting.',
 };
 
 export default en;

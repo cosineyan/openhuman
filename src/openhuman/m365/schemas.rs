@@ -56,7 +56,8 @@ pub fn schema(function: &str) -> ControllerSchema {
             outputs: vec![FieldSchema {
                 name: "status",
                 ty: TypeSchema::Json,
-                comment: "{ ok, graph: { valid, cached, expiresInMin }, rest: {...}, teams: {...} }",
+                comment:
+                    "{ ok, graph: { valid, cached, expiresInMin }, rest: {...}, teams: {...} }",
                 required: true,
             }],
         },
@@ -127,9 +128,7 @@ fn handle_token_status(_params: Map<String, Value>) -> ControllerFuture {
 fn handle_auth_login(_params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async {
         let config = config_rpc::load_config_with_timeout().await?;
-        let result = ops::auth_login(&config)
-            .await
-            .map_err(|e| e.to_string())?;
+        let result = ops::auth_login(&config).await.map_err(|e| e.to_string())?;
         to_json(RpcOutcome {
             value: result,
             logs: vec![],
@@ -153,9 +152,7 @@ fn handle_auth_refresh(_params: Map<String, Value>) -> ControllerFuture {
 fn handle_auth_logout(_params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async {
         let config = config_rpc::load_config_with_timeout().await?;
-        ops::auth_logout(&config)
-            .await
-            .map_err(|e| e.to_string())?;
+        ops::auth_logout(&config).await.map_err(|e| e.to_string())?;
         to_json(RpcOutcome {
             value: serde_json::json!({ "ok": true }),
             logs: vec![],

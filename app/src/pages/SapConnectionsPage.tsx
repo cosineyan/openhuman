@@ -193,11 +193,13 @@ function SystemsTab() {
           </div>
         ) : (
           <div className="divide-y divide-stone-100 dark:divide-neutral-800">
-            {([
-              { key: 'graph', label: t('sap.systems.graph') },
-              { key: 'rest', label: t('sap.systems.rest') },
-              { key: 'teams', label: t('sap.systems.teams') },
-            ] as const).map(({ key, label }) => {
+            {(
+              [
+                { key: 'graph', label: t('sap.systems.graph') },
+                { key: 'rest', label: t('sap.systems.rest') },
+                { key: 'teams', label: t('sap.systems.teams') },
+              ] as const
+            ).map(({ key, label }) => {
               const entry = status?.[key];
               const valid = entry?.valid ?? false;
               const cached = entry?.cached ?? false;
@@ -233,13 +235,9 @@ function SystemsTab() {
         )}
       </div>
 
-      {error && (
-        <p className="text-xs text-red-600 dark:text-red-400 px-1">{error}</p>
-      )}
+      {error && <p className="text-xs text-red-600 dark:text-red-400 px-1">{error}</p>}
 
-      <p className="text-xs text-stone-400 dark:text-neutral-500 px-1">
-        {t('sap.systems.hint')}
-      </p>
+      <p className="text-xs text-stone-400 dark:text-neutral-500 px-1">{t('sap.systems.hint')}</p>
     </div>
   );
 }

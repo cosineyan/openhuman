@@ -96,8 +96,9 @@ pub fn token_file_path(config: &Config) -> PathBuf {
 // ---------------------------------------------------------------------------
 
 async fn run_m365_cli(args: &[&str], config: &Config) -> Result<Value> {
-    let script = resolve_m365_cli_script()
-        .context("m365_cli.py not found. Check bundled resources or set M365_CLI_SCRIPT env var.")?;
+    let script = resolve_m365_cli_script().context(
+        "m365_cli.py not found. Check bundled resources or set M365_CLI_SCRIPT env var.",
+    )?;
 
     let token_file = token_file_path(config);
     if let Some(parent) = token_file.parent() {
@@ -117,11 +118,7 @@ async fn run_m365_cli(args: &[&str], config: &Config) -> Result<Value> {
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     if !output.status.success() && stdout.trim().is_empty() {
-        anyhow::bail!(
-            "m365-cli exited {}: {}",
-            output.status,
-            stderr.trim()
-        );
+        anyhow::bail!("m365-cli exited {}: {}", output.status, stderr.trim());
     }
 
     // Parse the last non-empty line as JSON (m365-cli --json prints one object)
@@ -131,8 +128,7 @@ async fn run_m365_cli(args: &[&str], config: &Config) -> Result<Value> {
         .find(|l| l.trim_start().starts_with('{'))
         .unwrap_or(stdout.trim());
 
-    serde_json::from_str(json_line)
-        .with_context(|| format!("parse m365-cli JSON: {json_line}"))
+    serde_json::from_str(json_line).with_context(|| format!("parse m365-cli JSON: {json_line}"))
 }
 
 // ---------------------------------------------------------------------------

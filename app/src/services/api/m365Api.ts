@@ -56,8 +56,5 @@ export async function m365AuthRefresh(): Promise<M365TokenStatus> {
 }
 
 export async function m365AuthLogout(): Promise<void> {
-  await callCoreRpc({
-    method: 'openhuman.m365_auth_logout',
-    params: {},
-  });
+  await callCoreRpc({ method: 'openhuman.m365_auth_logout', params: {} });
 }
