@@ -19,8 +19,9 @@ use crate::openhuman::config::Config;
 ///
 /// Resolution order (stops at first hit):
 /// 1. `M365_CLI_SCRIPT` env var override (testing / power users)
-/// 2. Walk up from the running executable — covers both bundled layout and
-///    the dev layout where the exe is deep inside target/debug/bundle/...
+/// 2. Walk up from the running executable — covers:
+///    - Production macOS .app: Contents/MacOS/exe → Contents/Resources/m365/cli/
+///    - Dev build: deep inside target/debug/bundle/ → walk up to repo root
 pub fn resolve_m365_cli_script() -> Option<PathBuf> {
     // 1. Env override
     if let Ok(path) = std::env::var("M365_CLI_SCRIPT") {
@@ -30,18 +31,20 @@ pub fn resolve_m365_cli_script() -> Option<PathBuf> {
         }
     }
 
-    // 2. Walk up from exe — works for both bundled release and dev mode.
-    //    Dev exe:     .../app/src-tauri/target/debug/bundle/macos/OpenHuman.app/Contents/MacOS/OpenHuman
-    //    After ~7 pops we reach the repo root, then join src/openhuman/m365/cli/m365_cli.py.
-    //    Release exe: .../MacOS/OpenHuman; Tauri copies resources next to it.
+    // 2. Walk up from exe
     if let Ok(exe) = std::env::current_exe() {
         let mut cur = exe.clone();
         for _ in 0..12 {
-            // Bundled release: resources land next to the binary or in a sibling dir.
             for candidate in [
+                // Production macOS: Contents/Resources/m365-cli/ (Tauri copies resources here)
+                cur.join("Resources").join("m365-cli").join("m365_cli.py"),
+                // Legacy / fallback resource layouts
+                cur.join("Resources").join("m365").join("cli").join("m365_cli.py"),
+                cur.join("Resources").join("m365_cli.py"),
+                // Direct sibling (some Tauri layouts)
                 cur.join("m365_cli.py"),
                 cur.join("openhuman").join("m365").join("cli").join("m365_cli.py"),
-                // Dev repo layout
+                // Dev repo layout (walk up reaches repo root)
                 cur.join("src").join("openhuman").join("m365").join("cli").join("m365_cli.py"),
             ] {
                 if candidate.is_file() {
