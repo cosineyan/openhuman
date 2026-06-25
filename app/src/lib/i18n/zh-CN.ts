@@ -5505,6 +5505,21 @@ const messages: TranslationMap = {
   'sap.tabs.skills.label': 'Skills',
   'sap.tabs.skills.emptyTitle': '未安装 SAP Skills',
   'sap.tabs.skills.emptyDesc': '安装 skills 以允许 AI 代表您执行 SAP 操作。',
+  // Systems tab — M365
+  'sap.systems.m365.title': 'Microsoft 365',
+  'sap.systems.graph': 'Graph API（联系人、文件、聊天）',
+  'sap.systems.rest': 'Outlook REST（邮件、日历）',
+  'sap.systems.teams': 'Teams（会议、记录）',
+  'sap.systems.valid': '有效',
+  'sap.systems.expired': '已过期',
+  'sap.systems.notCached': '未连接',
+  'sap.systems.connect': '连接',
+  'sap.systems.connecting': '连接中…',
+  'sap.systems.refresh': '刷新',
+  'sap.systems.refreshing': '刷新中…',
+  'sap.systems.disconnect': '断开',
+  'sap.systems.disconnecting': '断开中…',
+  'sap.systems.hint': 'Token 从已打开的 Outlook/Teams 浏览器标签页中提取，连接前请确保已登录。',
 };
 
 export default messages;

@@ -46,7 +46,8 @@
     ],
     "resources": [
       "../../src/openhuman/agent/prompts",
-      "recipes/**/*"
+      "recipes/**/*",
+      "../../src/openhuman/m365/cli/**/*"
     ],
     "linux": {
       "deb": {

@@ -6061,6 +6061,21 @@ const en: TranslationMap = {
   'sap.tabs.skills.label': 'Skills',
   'sap.tabs.skills.emptyTitle': 'No SAP skills installed',
   'sap.tabs.skills.emptyDesc': 'Install skills to let the AI perform SAP actions on your behalf.',
+  // Systems tab — M365
+  'sap.systems.m365.title': 'Microsoft 365',
+  'sap.systems.graph': 'Graph API (contacts, files, chats)',
+  'sap.systems.rest': 'Outlook REST (mail, calendar)',
+  'sap.systems.teams': 'Teams (meetings, transcripts)',
+  'sap.systems.valid': 'Valid',
+  'sap.systems.expired': 'Expired',
+  'sap.systems.notCached': 'Not connected',
+  'sap.systems.connect': 'Connect',
+  'sap.systems.connecting': 'Connecting…',
+  'sap.systems.refresh': 'Refresh',
+  'sap.systems.refreshing': 'Refreshing…',
+  'sap.systems.disconnect': 'Disconnect',
+  'sap.systems.disconnecting': 'Disconnecting…',
+  'sap.systems.hint': 'Tokens are extracted from your open Outlook/Teams browser tabs. Ensure you are logged in before connecting.',
 };
 
 export default en;

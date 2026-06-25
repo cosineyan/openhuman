@@ -118,6 +118,8 @@ fn build_registered_controllers() -> Vec<RegisteredController> {
     controllers.extend(crate::openhuman::cron::all_cron_registered_controllers());
     // Kanban project board (tasks, buckets)
     controllers.extend(crate::openhuman::projects::all_projects_registered_controllers());
+    // M365 token management (graph/rest/teams via bundled m365-cli)
+    controllers.extend(crate::openhuman::m365::all_m365_registered_controllers());
     // Proactive task ingestion from external tools (github/notion/linear/clickup)
     controllers.extend(crate::openhuman::task_sources::all_task_sources_registered_controllers());
     controllers.extend(crate::openhuman::dashboard::all_dashboard_registered_controllers());
@@ -350,6 +352,8 @@ fn build_declared_controller_schemas() -> Vec<ControllerSchema> {
     schemas.extend(crate::openhuman::cron::all_cron_controller_schemas());
     // Kanban project board (tasks, buckets)
     schemas.extend(crate::openhuman::projects::all_projects_controller_schemas());
+    // M365 token management (graph/rest/teams via bundled m365-cli)
+    schemas.extend(crate::openhuman::m365::all_m365_controller_schemas());
     schemas.extend(crate::openhuman::task_sources::all_task_sources_controller_schemas());
     schemas.extend(crate::openhuman::dashboard::all_dashboard_controller_schemas());
     schemas.extend(crate::openhuman::mcp_registry::all_mcp_registry_controller_schemas());
