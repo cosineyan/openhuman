@@ -152,7 +152,9 @@ def find_outlook_session():
 
 
 def open_outlook_tab():
-    resp = mcp_browser_cmd({'command': 'new-tab', 'url': 'https://outlook.office.com/mail/'})
+    # Open People page — it triggers a Graph API call, which populates the
+    # graph token in addition to the rest token that the mail page provides.
+    resp = mcp_browser_cmd({'command': 'new-tab', 'url': 'https://outlook.office.com/owa/?path=/people'})
     if not resp.get('ok') or not resp.get('data'):
         raise RuntimeError('Failed to open Outlook tab')
     return resp['data']['sessionId']
@@ -338,19 +340,25 @@ def extract_tokens_from_chrome():
     try:
         auto_opened_sid = open_outlook_tab()
         deadline = time.time() + 90
-        time.sleep(5)
+        time.sleep(8)  # People page needs a bit longer to load Graph API
         while time.time() < deadline:
             data = extract_from_session(auto_opened_sid)
             rest_entry = (data or {}).get('rest') or {}
-            if rest_entry.get('token') and rest_entry.get('expiresOn', 0) > int(time.time()):
+            graph_entry = (data or {}).get('graph') or {}
+            now = int(time.time())
+            rest_ok = rest_entry.get('token') and rest_entry.get('expiresOn', 0) > now
+            graph_ok = graph_entry.get('token') and graph_entry.get('expiresOn', 0) > now
+            if rest_ok and graph_ok:
+                # Both tokens available — save and close immediately.
                 tokens = load_tokens()
-                if data.get('graph') and data.get('graph', {}).get('token'):
-                    tokens['graph'] = {**data['graph'], 'sessionId': None}
-                if data.get('rest') and data.get('rest', {}).get('token'):
-                    tokens['rest'] = {**data['rest'], 'sessionId': None}
+                tokens['rest'] = {**rest_entry, 'sessionId': None}
+                tokens['graph'] = {**graph_entry, 'sessionId': None}
                 save_tokens(tokens)
                 close_tab(auto_opened_sid)
                 return tokens
+            if rest_ok and time.time() > deadline - 10:
+                # Running out of time — accept rest-only (graph may not appear).
+                break
             time.sleep(3)
 
         # Timed out — read whatever we have before closing.
