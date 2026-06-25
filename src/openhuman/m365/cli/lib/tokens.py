@@ -299,29 +299,26 @@ def _navigate_and_wait(sid, url, wait_sec=15):
 
 
 def extract_tokens_from_chrome():
+    # Try to extract from an existing Outlook tab first.
     sid = find_outlook_session()
     if sid:
         try:
             data = extract_from_session(sid)
-            if data and (data.get('graph') or data.get('rest')):
-                # If tokens are expired, try navigating the tab to refresh them.
-                if not _tokens_are_valid(data):
-                    data = _navigate_and_wait(sid, 'https://outlook.office.com/mail/')
-                # Only save and return if we now have valid tokens.
-                if data and _tokens_are_valid(data):
-                    tokens = load_tokens()
-                    if data.get('graph', {}).get('token'):
-                        tokens['graph'] = {**data['graph'], 'sessionId': sid}
-                    if data.get('rest', {}).get('token'):
-                        tokens['rest'] = {**data['rest'], 'sessionId': sid}
-                    save_tokens(tokens)
-                    return tokens
-                # Tokens still expired after navigate — fall through to open a new tab.
+            if data and _tokens_are_valid(data):
+                tokens = load_tokens()
+                if data.get('graph', {}).get('token'):
+                    tokens['graph'] = {**data['graph'], 'sessionId': sid}
+                if data.get('rest', {}).get('token'):
+                    tokens['rest'] = {**data['rest'], 'sessionId': sid}
+                save_tokens(tokens)
+                return tokens
         except Exception:
             pass
+        # Existing tab has expired tokens — open a fresh tab instead of
+        # trying to navigate the old one (which may not accept exec commands).
 
-    # No Outlook tab found, or existing tab couldn't yield valid tokens:
-    # open a fresh tab and wait for the user to log in.
+    # Open a new Outlook tab and wait for valid tokens (up to 90 seconds).
+    # This handles both: no tab found, and tab with expired/stuck tokens.
 
     sid = open_outlook_tab()
     time.sleep(15)
@@ -331,9 +328,9 @@ def extract_tokens_from_chrome():
         raise RuntimeError('Token extraction returned empty result')
 
     tokens = load_tokens()
-    if data.get('graph', {}).get('token'):
+    if data.get('graph') and data.get('graph', {}).get('token'):
         tokens['graph'] = {**data['graph'], 'sessionId': None}
-    if data.get('rest', {}).get('token'):
+    if data.get('rest') and data.get('rest', {}).get('token'):
         tokens['rest'] = {**data['rest'], 'sessionId': None}
     save_tokens(tokens)
     close_tab(sid)
