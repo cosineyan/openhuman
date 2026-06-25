@@ -12,11 +12,13 @@ import { SidebarContent } from '../components/layout/shell/SidebarSlot';
 import TwoPaneNav from '../components/layout/TwoPaneNav';
 import { useT } from '../lib/i18n/I18nContext';
 import {
+  getMcpChromeStatus,
   getM365TokenStatus,
   m365AuthLogin,
   m365AuthLogout,
   m365AuthRefresh,
   type M365TokenStatus,
+  type MpcChromeStatus,
 } from '../services/api/m365Api';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -79,6 +81,7 @@ function EmptyState({ title, description }: { title: string; description: string
 
 function SystemsTab() {
   const { t } = useT();
+  const [chromeStatus, setChromeStatus] = useState<MpcChromeStatus | null>(null);
   const [status, setStatus] = useState<M365TokenStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<'login' | 'refresh' | 'logout' | null>(null);
@@ -86,8 +89,12 @@ function SystemsTab() {
 
   const load = useCallback(async () => {
     try {
-      const s = await getM365TokenStatus();
-      setStatus(s);
+      const [chrome, tokens] = await Promise.all([
+        getMcpChromeStatus(),
+        getM365TokenStatus(),
+      ]);
+      setChromeStatus(chrome);
+      setStatus(tokens);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -146,6 +153,49 @@ function SystemsTab() {
 
   return (
     <div className="space-y-4">
+      {/* mcp-chrome extension status */}
+      <div className="rounded-xl border border-stone-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-2">
+            <svg className="h-4 w-4 shrink-0 text-stone-500" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M14 6l-1-2H5v17h2v-7h5l1 2h7V6h-6zm4 8h-4l-1-2H7V6h5l1 2h5v6z" />
+            </svg>
+            <span className="text-xs font-semibold text-stone-700 dark:text-neutral-200">
+              {t('sap.systems.mcpChrome.title')}
+            </span>
+          </div>
+          {chromeStatus ? (
+            chromeStatus.ok ? (
+              <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                {t('sap.systems.mcpChrome.connected')} :{chromeStatus.port}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                {t('sap.systems.mcpChrome.notFound')}
+              </span>
+            )
+          ) : (
+            <span className="text-xs text-stone-400 dark:text-neutral-500">{t('common.loading')}</span>
+          )}
+        </div>
+        {chromeStatus && !chromeStatus.ok && (
+          <div className="px-4 pb-3 border-t border-stone-100 dark:border-neutral-800">
+            <p className="text-xs text-stone-500 dark:text-neutral-400 mt-2">
+              {t('sap.systems.mcpChrome.hint')}
+            </p>
+            <a
+              href="https://chromewebstore.google.com/detail/mcp-chrome/igncpeomfkelgijlakkcblpjhcmlhflo"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-block mt-2 text-xs text-primary-500 hover:text-primary-600 hover:underline">
+              {t('sap.systems.mcpChrome.installLink')} →
+            </a>
+          </div>
+        )}
+      </div>
+
       {/* Microsoft 365 section */}
       <div className="rounded-xl border border-stone-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-stone-100 dark:border-neutral-800">

@@ -31,6 +31,20 @@ interface RpcEnvelope<T> {
 // API helpers
 // ---------------------------------------------------------------------------
 
+export interface MpcChromeStatus {
+  ok: boolean;
+  port: number;
+  error?: string;
+}
+
+export async function getMcpChromeStatus(): Promise<MpcChromeStatus> {
+  const res = await callCoreRpc<RpcEnvelope<MpcChromeStatus>>({
+    method: 'openhuman.m365_mcp_chrome_status',
+    params: {},
+  });
+  return res.result;
+}
+
 export async function getM365TokenStatus(): Promise<M365TokenStatus> {
   const res = await callCoreRpc<RpcEnvelope<M365TokenStatus>>({
     method: 'openhuman.m365_token_status',

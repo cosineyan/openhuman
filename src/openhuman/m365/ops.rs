@@ -140,6 +140,40 @@ pub async fn token_status(config: &Config) -> Result<Value> {
     run_m365_cli(&["auth", "status", "--json"], config).await
 }
 
+/// Check whether the mcp-chrome browser extension is reachable on port 12306.
+/// Returns `{ ok: bool, port: number, error?: string }`.
+pub async fn mcp_chrome_status() -> Value {
+    let port = std::env::var("MCP_CHROME_PORT")
+        .or_else(|_| std::env::var("CHROME_MCP_PORT"))
+        .unwrap_or_else(|_| "12306".to_string());
+    let url = format!("http://127.0.0.1:{port}/browser");
+    let body = r#"{"command":"sessions"}"#;
+
+    let result = tokio::process::Command::new("python3")
+        .arg("-c")
+        .arg(format!(
+            "import urllib.request, json; \
+             req=urllib.request.Request('{url}',data=b'{body}',headers={{'Content-Type':'application/json'}},method='POST'); \
+             r=urllib.request.urlopen(req,timeout=3); \
+             print(r.read().decode())"
+        ))
+        .output()
+        .await;
+
+    match result {
+        Ok(out) if out.status.success() => {
+            serde_json::json!({ "ok": true, "port": port.parse::<u16>().unwrap_or(12306) })
+        }
+        Ok(out) => {
+            let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+            serde_json::json!({ "ok": false, "port": port.parse::<u16>().unwrap_or(12306), "error": err })
+        }
+        Err(e) => {
+            serde_json::json!({ "ok": false, "port": port.parse::<u16>().unwrap_or(12306), "error": e.to_string() })
+        }
+    }
+}
+
 /// Extract tokens from Chrome (opens Outlook tab if needed).
 /// Returns updated token status.
 pub async fn auth_login(config: &Config) -> Result<Value> {

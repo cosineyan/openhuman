@@ -17,27 +17,17 @@ pub fn all_controller_schemas() -> Vec<ControllerSchema> {
         schema("auth_login"),
         schema("auth_refresh"),
         schema("auth_logout"),
+        schema("mcp_chrome_status"),
     ]
 }
 
 pub fn all_registered_controllers() -> Vec<RegisteredController> {
     vec![
-        RegisteredController {
-            schema: schema("token_status"),
-            handler: handle_token_status,
-        },
-        RegisteredController {
-            schema: schema("auth_login"),
-            handler: handle_auth_login,
-        },
-        RegisteredController {
-            schema: schema("auth_refresh"),
-            handler: handle_auth_refresh,
-        },
-        RegisteredController {
-            schema: schema("auth_logout"),
-            handler: handle_auth_logout,
-        },
+        RegisteredController { schema: schema("token_status"), handler: handle_token_status },
+        RegisteredController { schema: schema("auth_login"), handler: handle_auth_login },
+        RegisteredController { schema: schema("auth_refresh"), handler: handle_auth_refresh },
+        RegisteredController { schema: schema("auth_logout"), handler: handle_auth_logout },
+        RegisteredController { schema: schema("mcp_chrome_status"), handler: handle_mcp_chrome_status },
     ]
 }
 
@@ -95,6 +85,19 @@ pub fn schema(function: &str) -> ControllerSchema {
                 name: "result",
                 ty: TypeSchema::Json,
                 comment: "{ ok: true }",
+                required: true,
+            }],
+        },
+        "mcp_chrome_status" => ControllerSchema {
+            namespace: "m365",
+            function: "mcp_chrome_status",
+            description: "Check whether the mcp-chrome browser extension is reachable on port 12306. \
+                          Returns { ok, port, error? }.",
+            inputs: vec![],
+            outputs: vec![FieldSchema {
+                name: "result",
+                ty: TypeSchema::Json,
+                comment: "{ ok: bool, port: number, error?: string }",
                 required: true,
             }],
         },
@@ -157,6 +160,13 @@ fn handle_auth_logout(_params: Map<String, Value>) -> ControllerFuture {
             value: serde_json::json!({ "ok": true }),
             logs: vec![],
         })
+    })
+}
+
+fn handle_mcp_chrome_status(_params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async {
+        let result = ops::mcp_chrome_status().await;
+        to_json(RpcOutcome { value: result, logs: vec![] })
     })
 }
 

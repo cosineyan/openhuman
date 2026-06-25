@@ -5520,6 +5520,12 @@ const messages: TranslationMap = {
   'sap.systems.disconnect': '断开',
   'sap.systems.disconnecting': '断开中…',
   'sap.systems.hint': 'Token 从已打开的 Outlook/Teams 浏览器标签页中提取，连接前请确保已登录。',
+  'sap.systems.mcpChrome.title': 'mcp-chrome 扩展',
+  'sap.systems.mcpChrome.connected': '已连接，端口',
+  'sap.systems.mcpChrome.notFound': '未检测到',
+  'sap.systems.mcpChrome.hint':
+    '需要安装 mcp-chrome Chrome 扩展才能从 Outlook/Teams 提取 Token，以及与其他基于 Web 的 SAP 系统交互。请安装扩展并确保 Chrome 正在运行。',
+  'sap.systems.mcpChrome.installLink': '从 Chrome 网上应用店安装 mcp-chrome',
 };
 
 export default messages;
