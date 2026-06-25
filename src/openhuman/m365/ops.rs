@@ -42,12 +42,22 @@ pub fn resolve_m365_cli_script() -> Option<PathBuf> {
                 // Some Tauri versions preserve directory structure:
                 // → Contents/Resources/cli/m365_cli.py or Resources/m365/cli/m365_cli.py
                 cur.join("Resources").join("cli").join("m365_cli.py"),
-                cur.join("Resources").join("m365").join("cli").join("m365_cli.py"),
+                cur.join("Resources")
+                    .join("m365")
+                    .join("cli")
+                    .join("m365_cli.py"),
                 // Direct sibling (some Tauri layouts)
                 cur.join("m365_cli.py"),
-                cur.join("openhuman").join("m365").join("cli").join("m365_cli.py"),
+                cur.join("openhuman")
+                    .join("m365")
+                    .join("cli")
+                    .join("m365_cli.py"),
                 // Dev repo layout (walk up reaches repo root)
-                cur.join("src").join("openhuman").join("m365").join("cli").join("m365_cli.py"),
+                cur.join("src")
+                    .join("openhuman")
+                    .join("m365")
+                    .join("cli")
+                    .join("m365_cli.py"),
             ] {
                 if candidate.is_file() {
                     return Some(candidate);
