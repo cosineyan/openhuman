@@ -33,31 +33,19 @@ export interface MpcChromeStatus {
 }
 
 export async function getMcpChromeStatus(): Promise<MpcChromeStatus> {
-  return callCoreRpc<MpcChromeStatus>({
-    method: 'openhuman.m365_mcp_chrome_status',
-    params: {},
-  });
+  return callCoreRpc<MpcChromeStatus>({ method: 'openhuman.m365_mcp_chrome_status', params: {} });
 }
 
 export async function getM365TokenStatus(): Promise<M365TokenStatus> {
-  return callCoreRpc<M365TokenStatus>({
-    method: 'openhuman.m365_token_status',
-    params: {},
-  });
+  return callCoreRpc<M365TokenStatus>({ method: 'openhuman.m365_token_status', params: {} });
 }
 
 export async function m365AuthLogin(): Promise<M365TokenStatus> {
-  return callCoreRpc<M365TokenStatus>({
-    method: 'openhuman.m365_auth_login',
-    params: {},
-  });
+  return callCoreRpc<M365TokenStatus>({ method: 'openhuman.m365_auth_login', params: {} });
 }
 
 export async function m365AuthRefresh(): Promise<M365TokenStatus> {
-  return callCoreRpc<M365TokenStatus>({
-    method: 'openhuman.m365_auth_refresh',
-    params: {},
-  });
+  return callCoreRpc<M365TokenStatus>({ method: 'openhuman.m365_auth_refresh', params: {} });
 }
 
 export async function m365AuthLogout(): Promise<void> {
