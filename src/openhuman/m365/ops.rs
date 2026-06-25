@@ -78,6 +78,19 @@ async fn run_m365_cli(args: &[&str], config: &Config) -> Result<Value> {
             .with_context(|| format!("create m365 token dir: {}", parent.display()))?;
     }
 
+    // Ensure click is installed — install silently on first use if missing.
+    let check = tokio::process::Command::new("python3")
+        .args(["-c", "import click"])
+        .output()
+        .await;
+    if check.map(|o| !o.status.success()).unwrap_or(true) {
+        log::info!("[m365] click not found, installing via pip…");
+        let _ = tokio::process::Command::new("python3")
+            .args(["-m", "pip", "install", "click", "-q", "--user"])
+            .output()
+            .await;
+    }
+
     let output = tokio::process::Command::new("python3")
         .arg(&script)
         .args(args)
@@ -93,14 +106,9 @@ async fn run_m365_cli(args: &[&str], config: &Config) -> Result<Value> {
         anyhow::bail!("m365-cli exited {}: {}", output.status, stderr.trim());
     }
 
-    // Parse the last non-empty line as JSON (m365-cli --json prints one object)
-    let json_line = stdout
-        .lines()
-        .rev()
-        .find(|l| l.trim_start().starts_with('{'))
-        .unwrap_or(stdout.trim());
-
-    serde_json::from_str(json_line).with_context(|| format!("parse m365-cli JSON: {json_line}"))
+    // m365-cli outputs pretty-printed JSON — parse the full stdout.
+    let json_str = stdout.trim();
+    serde_json::from_str(json_str).with_context(|| format!("parse m365-cli JSON: {json_str}"))
 }
 
 // ---------------------------------------------------------------------------

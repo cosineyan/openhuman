@@ -22,11 +22,6 @@ export interface M365TokenStatus {
   teams: M365TokenEntry;
 }
 
-interface RpcEnvelope<T> {
-  result: T;
-  logs: string[];
-}
-
 // ---------------------------------------------------------------------------
 // API helpers
 // ---------------------------------------------------------------------------
@@ -38,35 +33,31 @@ export interface MpcChromeStatus {
 }
 
 export async function getMcpChromeStatus(): Promise<MpcChromeStatus> {
-  const res = await callCoreRpc<RpcEnvelope<MpcChromeStatus>>({
+  return callCoreRpc<MpcChromeStatus>({
     method: 'openhuman.m365_mcp_chrome_status',
     params: {},
   });
-  return res.result;
 }
 
 export async function getM365TokenStatus(): Promise<M365TokenStatus> {
-  const res = await callCoreRpc<RpcEnvelope<M365TokenStatus>>({
+  return callCoreRpc<M365TokenStatus>({
     method: 'openhuman.m365_token_status',
     params: {},
   });
-  return res.result;
 }
 
 export async function m365AuthLogin(): Promise<M365TokenStatus> {
-  const res = await callCoreRpc<RpcEnvelope<M365TokenStatus>>({
+  return callCoreRpc<M365TokenStatus>({
     method: 'openhuman.m365_auth_login',
     params: {},
   });
-  return res.result;
 }
 
 export async function m365AuthRefresh(): Promise<M365TokenStatus> {
-  const res = await callCoreRpc<RpcEnvelope<M365TokenStatus>>({
+  return callCoreRpc<M365TokenStatus>({
     method: 'openhuman.m365_auth_refresh',
     params: {},
   });
-  return res.result;
 }
 
 export async function m365AuthLogout(): Promise<void> {
