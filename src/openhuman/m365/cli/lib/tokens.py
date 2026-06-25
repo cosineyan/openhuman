@@ -209,9 +209,9 @@ def open_and_wait_for_token(token_type, max_wait_sec=90):
     time.sleep(3)
     while time.time() < deadline:
         data = extract_from_session(sid)
-        if data and data.get(token_type, {}).get('token'):
-            if data[token_type].get('expiresOn', 0) > int(time.time()):
-                return sid, data
+        entry = (data or {}).get(token_type) or {}
+        if entry.get('token') and entry.get('expiresOn', 0) > int(time.time()):
+            return sid, data
         time.sleep(2)
     data = extract_from_session(sid)
     return sid, data
@@ -368,26 +368,28 @@ def ensure_token(token_type, force=False):
             sessions = mcp_browser_cmd({'command': 'sessions'})
             if sessions.get('ok') and any(s['id'] == sid for s in sessions.get('sessions', [])):
                 refreshed = refresh_from_session(sid)
-                if refreshed and is_token_usable(refreshed.get(token_type)):
-                    return refreshed[token_type]['token']
+                if refreshed and is_token_usable((refreshed or {}).get(token_type) or {}):
+                    return ((refreshed or {}).get(token_type) or {})['token']
         except Exception:
             pass
 
     extracted = extract_tokens_from_chrome()
-    if is_token_usable(extracted.get(token_type)):
-        return extracted[token_type]['token']
+    extracted_entry = (extracted or {}).get(token_type) or {}
+    if is_token_usable(extracted_entry):
+        return extracted_entry['token']
 
     new_sid, fresh_data = open_and_wait_for_token(token_type)
     if fresh_data:
         t = load_tokens()
-        if fresh_data.get('graph', {}).get('token'):
+        if fresh_data.get('graph') and fresh_data.get('graph', {}).get('token'):
             t['graph'] = {**fresh_data['graph'], 'sessionId': None}
-        if fresh_data.get('rest', {}).get('token'):
+        if fresh_data.get('rest') and fresh_data.get('rest', {}).get('token'):
             t['rest'] = {**fresh_data['rest'], 'sessionId': None}
         save_tokens(t)
         close_tab(new_sid)
-        if is_token_usable(t.get(token_type)):
-            return t[token_type]['token']
+        t_entry = (t or {}).get(token_type) or {}
+        if is_token_usable(t_entry):
+            return t_entry['token']
     else:
         close_tab(new_sid)
 

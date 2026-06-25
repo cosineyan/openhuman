@@ -84,23 +84,28 @@ def auth_login(ctx, as_json):
 @click.pass_context
 def auth_refresh(ctx, as_json):
     """Force re-extract tokens (even if not expired)."""
-    import time as _time
     try:
-        _marker('auth refresh START')
-        t0 = _time.time()
-        ensure_token('graph', force=True)
-        t1 = _time.time()
-        _marker(f'auth refresh graph done ({int((t1-t0)*1000)}ms)')
+        # graph token may not be available if Outlook page hasn't loaded Graph API yet;
+        # treat it as non-fatal and proceed with rest + teams.
+        try:
+            ensure_token('graph', force=True)
+        except Exception:
+            pass
         ensure_token('rest', force=True)
-        t2 = _time.time()
-        _marker(f'auth refresh rest done ({int((t2-t1)*1000)}ms) total={int((t2-t0)*1000)}ms')
         try:
             ensure_token('teams', force=True)
-        except Exception as e:
-            _marker(f'auth refresh teams WARN: {e}')
-        t3 = _time.time()
-        _marker(f'auth refresh teams done ({int((t3-t2)*1000)}ms) total={int((t3-t0)*1000)}ms')
+        except Exception:
+            pass
         status = token_status()
+        rest_ok = status.get('rest', {}).get('valid', False)
+        if not rest_ok:
+            msg = ('Could not obtain valid tokens. '
+                   'Please ensure you are logged into Outlook Web in Chrome, then try again.')
+            if as_json:
+                ctx.obj['out']({'ok': False, 'error': msg, **status})
+            else:
+                ctx.obj['die'](msg)
+            return
         if as_json:
             ctx.obj['out']({'ok': True, **status})
         else:
@@ -109,7 +114,6 @@ def auth_refresh(ctx, as_json):
             ctx.obj['text'](f"REST:  {fmt_status(status['rest'])}")
             ctx.obj['text'](f"Teams: {fmt_status(status['teams'])}")
     except Exception as e:
-        _marker(f'auth refresh FAIL: {e}')
         ctx.obj['die'](str(e))
 
 
