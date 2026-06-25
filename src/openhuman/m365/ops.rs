@@ -180,6 +180,16 @@ pub async fn auth_refresh(config: &Config) -> Result<Value> {
 
 /// Clear cached tokens.
 pub async fn auth_logout(config: &Config) -> Result<()> {
-    run_m365_cli(&["auth", "logout"], config).await?;
+    let script = resolve_m365_cli_script().context(
+        "m365_cli.py not found. Check bundled resources or set M365_CLI_SCRIPT env var.",
+    )?;
+    let token_file = token_file_path(config);
+    tokio::process::Command::new("python3")
+        .arg(&script)
+        .args(["auth", "logout"])
+        .env("M365_TOKEN_FILE", token_file.to_string_lossy().as_ref())
+        .output()
+        .await
+        .context("spawn python3 for m365-cli auth logout")?;
     Ok(())
 }
