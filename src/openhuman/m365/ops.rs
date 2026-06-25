@@ -19,8 +19,8 @@ use crate::openhuman::config::Config;
 ///
 /// Resolution order (stops at first hit):
 /// 1. `M365_CLI_SCRIPT` env var override (testing / power users)
-/// 2. Adjacent to the running executable (bundled release)
-/// 3. Walk up from CWD to find the repo `src/openhuman/m365/cli/` (dev)
+/// 2. Walk up from the running executable — covers both bundled layout and
+///    the dev layout where the exe is deep inside target/debug/bundle/...
 pub fn resolve_m365_cli_script() -> Option<PathBuf> {
     // 1. Env override
     if let Ok(path) = std::env::var("M365_CLI_SCRIPT") {
@@ -30,55 +30,27 @@ pub fn resolve_m365_cli_script() -> Option<PathBuf> {
         }
     }
 
-    // 2. Next to the running binary (bundled)
+    // 2. Walk up from exe — works for both bundled release and dev mode.
+    //    Dev exe:     .../app/src-tauri/target/debug/bundle/macos/OpenHuman.app/Contents/MacOS/OpenHuman
+    //    After ~7 pops we reach the repo root, then join src/openhuman/m365/cli/m365_cli.py.
+    //    Release exe: .../MacOS/OpenHuman; Tauri copies resources next to it.
     if let Ok(exe) = std::env::current_exe() {
-        for dir in [
-            exe.parent().map(|p| p.to_path_buf()),
-            exe.parent()
-                .and_then(|p| p.parent())
-                .map(|p| p.to_path_buf()),
-        ]
-        .into_iter()
-        .flatten()
-        {
-            let candidate = dir
-                .join("openhuman")
-                .join("m365")
-                .join("cli")
-                .join("m365_cli.py");
-            if candidate.is_file() {
-                return Some(candidate);
+        let mut cur = exe.clone();
+        for _ in 0..12 {
+            // Bundled release: resources land next to the binary or in a sibling dir.
+            for candidate in [
+                cur.join("m365_cli.py"),
+                cur.join("openhuman").join("m365").join("cli").join("m365_cli.py"),
+                // Dev repo layout
+                cur.join("src").join("openhuman").join("m365").join("cli").join("m365_cli.py"),
+            ] {
+                if candidate.is_file() {
+                    return Some(candidate);
+                }
             }
-            // Tauri flattens resources: try direct sibling
-            let candidate2 = dir.join("m365_cli.py");
-            if candidate2.is_file() {
-                return Some(candidate2);
-            }
-        }
-    }
-
-    // 3. Walk up from CWD to find repo root (dev mode)
-    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    for up in 0..=8 {
-        let mut base = cwd.clone();
-        let mut ok = true;
-        for _ in 0..up {
-            if !base.pop() {
-                ok = false;
+            if !cur.pop() {
                 break;
             }
-        }
-        if !ok {
-            continue;
-        }
-        let candidate = base
-            .join("src")
-            .join("openhuman")
-            .join("m365")
-            .join("cli")
-            .join("m365_cli.py");
-        if candidate.is_file() {
-            return Some(candidate);
         }
     }
 
