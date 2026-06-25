@@ -5972,7 +5972,8 @@ const messages: TranslationMap = {
   'sap.systems.mcpChrome.title': 'mcp-chrome Extension',
   'sap.systems.mcpChrome.connected': 'Connected on port',
   'sap.systems.mcpChrome.notFound': 'Not detected',
-  'sap.systems.mcpChrome.hint': 'The mcp-chrome Chrome extension is required to extract tokens from Outlook/Teams and to interact with other web-based SAP systems.',
+  'sap.systems.mcpChrome.hint':
+    'The mcp-chrome Chrome extension is required to extract tokens from Outlook/Teams and to interact with other web-based SAP systems.',
   'sap.systems.mcpChrome.installLink': 'Install mcp-chrome from Chrome Web Store',
 };
 

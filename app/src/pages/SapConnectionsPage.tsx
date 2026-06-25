@@ -12,8 +12,8 @@ import { SidebarContent } from '../components/layout/shell/SidebarSlot';
 import TwoPaneNav from '../components/layout/TwoPaneNav';
 import { useT } from '../lib/i18n/I18nContext';
 import {
-  getMcpChromeStatus,
   getM365TokenStatus,
+  getMcpChromeStatus,
   m365AuthLogin,
   m365AuthLogout,
   m365AuthRefresh,
@@ -89,10 +89,7 @@ function SystemsTab() {
 
   const load = useCallback(async () => {
     try {
-      const [chrome, tokens] = await Promise.all([
-        getMcpChromeStatus(),
-        getM365TokenStatus(),
-      ]);
+      const [chrome, tokens] = await Promise.all([getMcpChromeStatus(), getM365TokenStatus()]);
       setChromeStatus(chrome);
       setStatus(tokens);
       setError(null);
@@ -157,8 +154,17 @@ function SystemsTab() {
       <div className="rounded-xl border border-stone-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
-            <svg className="h-4 w-4 shrink-0 text-stone-500" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M14 6l-1-2H5v17h2v-7h5l1 2h7V6h-6zm4 8h-4l-1-2H7V6h5l1 2h5v6z" />
+            <svg
+              className="h-4 w-4 shrink-0 text-stone-500"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.8}
+              viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M14 6l-1-2H5v17h2v-7h5l1 2h7V6h-6zm4 8h-4l-1-2H7V6h5l1 2h5v6z"
+              />
             </svg>
             <span className="text-xs font-semibold text-stone-700 dark:text-neutral-200">
               {t('sap.systems.mcpChrome.title')}
@@ -177,7 +183,9 @@ function SystemsTab() {
               </span>
             )
           ) : (
-            <span className="text-xs text-stone-400 dark:text-neutral-500">{t('common.loading')}</span>
+            <span className="text-xs text-stone-400 dark:text-neutral-500">
+              {t('common.loading')}
+            </span>
           )}
         </div>
         {chromeStatus && !chromeStatus.ok && (
