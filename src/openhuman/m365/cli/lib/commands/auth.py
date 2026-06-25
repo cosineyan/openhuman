@@ -2,7 +2,7 @@ import os
 import sys
 import datetime as _datetime
 import click
-from ..tokens import ensure_token, set_token, clear_tokens, token_status, extract_tokens_from_chrome
+from ..tokens import ensure_token, ensure_teams_token, set_token, clear_tokens, token_status, extract_tokens_from_chrome
 
 _DEBUG_LOG = os.path.join(os.path.expanduser('~'), '.m365-cli', 'debug.log')
 
@@ -85,15 +85,12 @@ def auth_login(ctx, as_json):
 def auth_refresh(ctx, as_json):
     """Force re-extract tokens (even if not expired)."""
     try:
-        # graph token may not be available if Outlook page hasn't loaded Graph API yet;
-        # treat it as non-fatal and proceed with rest + teams.
+        # Single extraction call — opens a new tab if needed, closes it when done.
+        # graph token may be absent (only appears after Graph API calls); non-fatal.
+        extract_tokens_from_chrome()
+        # Also refresh teams token (uses teamsRefreshToken, no Chrome tab needed).
         try:
-            ensure_token('graph', force=True)
-        except Exception:
-            pass
-        ensure_token('rest', force=True)
-        try:
-            ensure_token('teams', force=True)
+            ensure_teams_token(force=True)
         except Exception:
             pass
         status = token_status()
