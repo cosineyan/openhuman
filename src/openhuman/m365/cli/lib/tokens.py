@@ -204,17 +204,24 @@ def extract_from_session(sid):
 
 
 def open_and_wait_for_token(token_type, max_wait_sec=90):
+    """Open a new Outlook tab, wait for a valid token, then close the tab."""
     sid = open_outlook_tab()
-    deadline = time.time() + max_wait_sec
-    time.sleep(3)
-    while time.time() < deadline:
+    try:
+        deadline = time.time() + max_wait_sec
+        time.sleep(3)
+        while time.time() < deadline:
+            data = extract_from_session(sid)
+            entry = (data or {}).get(token_type) or {}
+            if entry.get('token') and entry.get('expiresOn', 0) > int(time.time()):
+                close_tab(sid)
+                return sid, data
+            time.sleep(2)
         data = extract_from_session(sid)
-        entry = (data or {}).get(token_type) or {}
-        if entry.get('token') and entry.get('expiresOn', 0) > int(time.time()):
-            return sid, data
-        time.sleep(2)
-    data = extract_from_session(sid)
-    return sid, data
+        close_tab(sid)
+        return sid, data
+    except Exception:
+        close_tab(sid)
+        raise
 
 
 # --- Background refresh ---
@@ -299,42 +306,70 @@ def _navigate_and_wait(sid, url, wait_sec=15):
 
 
 def extract_tokens_from_chrome():
-    # Try to extract from an existing Outlook tab first.
-    sid = find_outlook_session()
-    if sid:
+    """
+    Extract M365 tokens from Chrome.
+
+    Strategy:
+    1. Check for an existing Outlook tab with valid tokens — reuse it (no new tab).
+    2. If existing tab has expired tokens — open a NEW tab, wait for tokens, then
+       close the new tab (keep the old one).
+    3. If no Outlook tab exists — open one, wait, then close it.
+    """
+    auto_opened_sid = None  # track any tab we opened so we can close it
+
+    # 1. Try existing tab first.
+    existing_sid = find_outlook_session()
+    if existing_sid:
         try:
-            data = extract_from_session(sid)
+            data = extract_from_session(existing_sid)
             if data and _tokens_are_valid(data):
                 tokens = load_tokens()
-                if data.get('graph', {}).get('token'):
-                    tokens['graph'] = {**data['graph'], 'sessionId': sid}
-                if data.get('rest', {}).get('token'):
-                    tokens['rest'] = {**data['rest'], 'sessionId': sid}
+                if data.get('graph') and data.get('graph', {}).get('token'):
+                    tokens['graph'] = {**data['graph'], 'sessionId': existing_sid}
+                if data.get('rest') and data.get('rest', {}).get('token'):
+                    tokens['rest'] = {**data['rest'], 'sessionId': existing_sid}
                 save_tokens(tokens)
                 return tokens
         except Exception:
             pass
-        # Existing tab has expired tokens — open a fresh tab instead of
-        # trying to navigate the old one (which may not accept exec commands).
+        # Existing tab has expired/stuck tokens — fall through to open a fresh tab.
 
-    # Open a new Outlook tab and wait for valid tokens (up to 90 seconds).
-    # This handles both: no tab found, and tab with expired/stuck tokens.
+    # 2 & 3. Open a new tab, wait briefly, then close it.
+    try:
+        auto_opened_sid = open_outlook_tab()
+        deadline = time.time() + 90
+        time.sleep(5)
+        while time.time() < deadline:
+            data = extract_from_session(auto_opened_sid)
+            rest_entry = (data or {}).get('rest') or {}
+            if rest_entry.get('token') and rest_entry.get('expiresOn', 0) > int(time.time()):
+                tokens = load_tokens()
+                if data.get('graph') and data.get('graph', {}).get('token'):
+                    tokens['graph'] = {**data['graph'], 'sessionId': None}
+                if data.get('rest') and data.get('rest', {}).get('token'):
+                    tokens['rest'] = {**data['rest'], 'sessionId': None}
+                save_tokens(tokens)
+                close_tab(auto_opened_sid)
+                return tokens
+            time.sleep(3)
 
-    sid = open_outlook_tab()
-    time.sleep(15)
-    data = extract_from_session(sid)
-    if not data or (not data.get('graph') and not data.get('rest')):
-        close_tab(sid)
-        raise RuntimeError('Token extraction returned empty result')
+        # Timed out — read whatever we have before closing.
+        data = extract_from_session(auto_opened_sid)
+        close_tab(auto_opened_sid)
+        if not data or (not data.get('graph') and not data.get('rest')):
+            raise RuntimeError('Token extraction returned empty result after 90s')
+        tokens = load_tokens()
+        if data.get('graph') and data.get('graph', {}).get('token'):
+            tokens['graph'] = {**data['graph'], 'sessionId': None}
+        if data.get('rest') and data.get('rest', {}).get('token'):
+            tokens['rest'] = {**data['rest'], 'sessionId': None}
+        save_tokens(tokens)
+        return tokens
 
-    tokens = load_tokens()
-    if data.get('graph') and data.get('graph', {}).get('token'):
-        tokens['graph'] = {**data['graph'], 'sessionId': None}
-    if data.get('rest') and data.get('rest', {}).get('token'):
-        tokens['rest'] = {**data['rest'], 'sessionId': None}
-    save_tokens(tokens)
-    close_tab(sid)
-    return tokens
+    except Exception:
+        if auto_opened_sid:
+            close_tab(auto_opened_sid)
+        raise
 
 
 def refresh_from_session(sid):
@@ -386,12 +421,11 @@ def ensure_token(token_type, force=False):
         if fresh_data.get('rest') and fresh_data.get('rest', {}).get('token'):
             t['rest'] = {**fresh_data['rest'], 'sessionId': None}
         save_tokens(t)
-        close_tab(new_sid)
         t_entry = (t or {}).get(token_type) or {}
         if is_token_usable(t_entry):
             return t_entry['token']
     else:
-        close_tab(new_sid)
+        pass  # tab already closed inside open_and_wait_for_token
 
     raise RuntimeError(f'Could not obtain a valid {token_type} token. Ensure you are logged into Outlook Web.')
 
