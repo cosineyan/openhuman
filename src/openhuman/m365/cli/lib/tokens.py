@@ -304,10 +304,11 @@ def extract_tokens_from_chrome():
         try:
             data = extract_from_session(sid)
             if data and (data.get('graph') or data.get('rest')):
-                # If tokens are expired, navigate the tab to refresh them.
+                # If tokens are expired, try navigating the tab to refresh them.
                 if not _tokens_are_valid(data):
                     data = _navigate_and_wait(sid, 'https://outlook.office.com/mail/')
-                if data:
+                # Only save and return if we now have valid tokens.
+                if data and _tokens_are_valid(data):
                     tokens = load_tokens()
                     if data.get('graph', {}).get('token'):
                         tokens['graph'] = {**data['graph'], 'sessionId': sid}
@@ -315,8 +316,12 @@ def extract_tokens_from_chrome():
                         tokens['rest'] = {**data['rest'], 'sessionId': sid}
                     save_tokens(tokens)
                     return tokens
+                # Tokens still expired after navigate — fall through to open a new tab.
         except Exception:
             pass
+
+    # No Outlook tab found, or existing tab couldn't yield valid tokens:
+    # open a fresh tab and wait for the user to log in.
 
     sid = open_outlook_tab()
     time.sleep(15)
