@@ -58,6 +58,17 @@ def auth_login(ctx, as_json):
     try:
         extract_tokens_from_chrome()
         status = token_status()
+        graph_ok = status.get('graph', {}).get('valid', False)
+        rest_ok = status.get('rest', {}).get('valid', False)
+        if not graph_ok and not rest_ok:
+            msg = ('Could not obtain valid tokens. '
+                   'Please ensure you are logged into Outlook Web (outlook.office.com) in Chrome, '
+                   'then try again.')
+            if as_json:
+                ctx.obj['out']({'ok': False, 'error': msg, **status})
+            else:
+                ctx.obj['die'](msg)
+            return
         if as_json:
             ctx.obj['out']({'ok': True, **status})
         else:

@@ -269,19 +269,52 @@ except: pass
 
 # --- Main token acquisition ---
 
+def _tokens_are_valid(data):
+    """Return True if at least graph or rest token is not expired."""
+    now = int(time.time())
+    for key in ('graph', 'rest'):
+        entry = data.get(key, {})
+        exp = entry.get('expiresOn')
+        if entry.get('token') and (exp is None or exp > now):
+            return True
+    return False
+
+
+def _navigate_and_wait(sid, url, wait_sec=15):
+    """Navigate a tab to url via JS exec and wait for fresh tokens."""
+    try:
+        # Use exec with chrome_navigate (the /browser endpoint doesn't support navigate directly)
+        mcp_browser_cmd({'command': 'exec', 'sessionId': sid,
+                         'code': f'chrome_navigate("{url}")', 'timeout': 5})
+    except Exception:
+        pass
+    deadline = time.time() + wait_sec
+    time.sleep(4)
+    while time.time() < deadline:
+        data = extract_from_session(sid)
+        if data and _tokens_are_valid(data):
+            return data
+        time.sleep(2)
+    return extract_from_session(sid)
+
+
 def extract_tokens_from_chrome():
     sid = find_outlook_session()
     if sid:
         try:
             data = extract_from_session(sid)
             if data and (data.get('graph') or data.get('rest')):
-                tokens = load_tokens()
-                if data.get('graph', {}).get('token'):
-                    tokens['graph'] = {**data['graph'], 'sessionId': sid}
-                if data.get('rest', {}).get('token'):
-                    tokens['rest'] = {**data['rest'], 'sessionId': sid}
-                save_tokens(tokens)
-                return tokens
+                # If tokens are expired, navigate the tab to refresh them.
+                if not _tokens_are_valid(data):
+                    data = _navigate_and_wait(sid, 'https://outlook.office.com/mail/')
+                if data:
+                    tokens = load_tokens()
+                    if data.get('graph', {}).get('token'):
+                        tokens['graph'] = {**data['graph'], 'sessionId': sid}
+                    if data.get('rest', {}).get('token'):
+                        tokens['rest'] = {**data['rest'], 'sessionId': sid}
+                    save_tokens(tokens)
+                    return tokens
         except Exception:
             pass
 

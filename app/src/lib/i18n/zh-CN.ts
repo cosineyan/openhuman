@@ -5519,7 +5519,7 @@ const messages: TranslationMap = {
   'sap.systems.refreshing': '刷新中…',
   'sap.systems.disconnect': '断开',
   'sap.systems.disconnecting': '断开中…',
-  'sap.systems.hint': 'Token 从已打开的 Outlook/Teams 浏览器标签页中提取，连接前请确保已登录。',
+  'sap.systems.hint': 'Token 从 Chrome 中已打开的 Outlook/Teams 标签页提取。点击连接前请确保已登录 Outlook Web。如果 Token 已过期，连接过程会自动刷新 Outlook 标签页。',
   'sap.systems.mcpChrome.title': 'mcp-chrome 扩展',
   'sap.systems.mcpChrome.connected': '已连接，端口',
   'sap.systems.mcpChrome.notFound': '未检测到',

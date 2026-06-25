@@ -6076,7 +6076,7 @@ const en: TranslationMap = {
   'sap.systems.disconnect': 'Disconnect',
   'sap.systems.disconnecting': 'Disconnecting…',
   'sap.systems.hint':
-    'Tokens are extracted from your open Outlook/Teams browser tabs. Ensure you are logged in before connecting.',
+    'Tokens are extracted from your open Outlook/Teams tabs. Make sure you are logged into Outlook Web in Chrome before clicking Connect. If tokens are expired, the login process will auto-refresh the Outlook tab.',
   'sap.systems.mcpChrome.title': 'mcp-chrome Extension',
   'sap.systems.mcpChrome.connected': 'Connected on port',
   'sap.systems.mcpChrome.notFound': 'Not detected',

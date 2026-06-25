@@ -108,7 +108,19 @@ async fn run_m365_cli(args: &[&str], config: &Config) -> Result<Value> {
 
     // m365-cli outputs pretty-printed JSON — parse the full stdout.
     let json_str = stdout.trim();
-    serde_json::from_str(json_str).with_context(|| format!("parse m365-cli JSON: {json_str}"))
+    let value: Value = serde_json::from_str(json_str)
+        .with_context(|| format!("parse m365-cli JSON: {json_str}"))?;
+
+    // Propagate ok: false as an error so the frontend can show the message.
+    if value.get("ok").and_then(Value::as_bool) == Some(false) {
+        let msg = value
+            .get("error")
+            .and_then(Value::as_str)
+            .unwrap_or("m365-cli returned ok: false");
+        anyhow::bail!("{msg}");
+    }
+
+    Ok(value)
 }
 
 // ---------------------------------------------------------------------------
