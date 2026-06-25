@@ -31,6 +31,7 @@ const messages: TranslationMap = {
   'nav.connections': 'الاتصالات',
   'nav.memory': 'الذكاء',
   'nav.projects': 'Projects',
+  'nav.sapConnections': 'SAP',
   'nav.alerts': 'التنبيهات',
   'nav.rewards': 'المكافآت',
   'nav.settings': 'الإعدادات',
@@ -5662,6 +5663,22 @@ const messages: TranslationMap = {
   'agentworld.jobs.applyModal.cancel': 'إلغاء',
   'agentworld.jobs.applyModal.submit': 'إرسال الطلب',
   'agentworld.jobs.applyModal.submitting': 'جارٍ التقديم…',
-};
 
+  // ── SAP Connections ───────────────────────────────────────────────────────
+  'sap.subtitle': 'SAP system integrations',
+  'sap.groups.setup': 'Setup',
+  'sap.groups.capabilities': 'Capabilities',
+  'sap.tabs.systems.label': 'Systems',
+  'sap.tabs.systems.emptyTitle': 'No SAP systems connected',
+  'sap.tabs.systems.emptyDesc': 'Add your SAP system endpoints (ECC, S/4HANA, BTP) to get started.',
+  'sap.tabs.credentials.label': 'Credentials',
+  'sap.tabs.credentials.emptyTitle': 'No credentials configured',
+  'sap.tabs.credentials.emptyDesc': 'Add login credentials for your SAP systems here.',
+  'sap.tabs.modules.label': 'Modules',
+  'sap.tabs.modules.emptyTitle': 'No modules configured',
+  'sap.tabs.modules.emptyDesc': 'Enable SAP modules (HR, FI, SD, MM, …) to unlock AI actions.',
+  'sap.tabs.skills.label': 'Skills',
+  'sap.tabs.skills.emptyTitle': 'No SAP skills installed',
+  'sap.tabs.skills.emptyDesc': 'Install skills to let the AI perform SAP actions on your behalf.',
+};
 export default messages;

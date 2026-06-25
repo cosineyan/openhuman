@@ -31,6 +31,7 @@ const messages: TranslationMap = {
   'nav.connections': '连接',
   'nav.memory': '记忆',
   'nav.projects': 'Projects',
+  'nav.sapConnections': 'SAP',
   'nav.alerts': '通知',
   'nav.rewards': '奖励',
   'nav.settings': '设置',
@@ -5487,6 +5488,23 @@ const messages: TranslationMap = {
   'agentworld.jobs.applyModal.cancel': '取消',
   'agentworld.jobs.applyModal.submit': '提交申请',
   'agentworld.jobs.applyModal.submitting': '申请中…',
+
+  // ── SAP Connections ───────────────────────────────────────────────────────
+  'sap.subtitle': 'SAP 系统集成',
+  'sap.groups.setup': '配置',
+  'sap.groups.capabilities': '功能',
+  'sap.tabs.systems.label': '系统',
+  'sap.tabs.systems.emptyTitle': '未连接 SAP 系统',
+  'sap.tabs.systems.emptyDesc': '添加 SAP 系统端点（ECC、S/4HANA、BTP）以开始使用。',
+  'sap.tabs.credentials.label': '凭证',
+  'sap.tabs.credentials.emptyTitle': '未配置凭证',
+  'sap.tabs.credentials.emptyDesc': '在此添加 SAP 系统的登录凭证。',
+  'sap.tabs.modules.label': '模块',
+  'sap.tabs.modules.emptyTitle': '未配置模块',
+  'sap.tabs.modules.emptyDesc': '启用 SAP 模块（HR、FI、SD、MM 等）以解锁 AI 操作。',
+  'sap.tabs.skills.label': 'Skills',
+  'sap.tabs.skills.emptyTitle': '未安装 SAP Skills',
+  'sap.tabs.skills.emptyDesc': '安装 skills 以允许 AI 代表您执行 SAP 操作。',
 };
 
 export default messages;

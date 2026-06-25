@@ -17,6 +17,7 @@ import Onboarding from './pages/onboarding/Onboarding';
 import { ProjectsPage } from './pages/ProjectsPage';
 import { PttOverlayPage } from './pages/PttOverlayPage';
 import Rewards from './pages/Rewards';
+import SapConnectionsPage from './pages/SapConnectionsPage';
 import Settings from './pages/Settings';
 import Skills from './pages/Skills';
 import WebCallbackPage from './pages/WebCallbackPage';
@@ -89,6 +90,15 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute requireAuth={true}>
             <ProjectsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/sap-connections"
+        element={
+          <ProtectedRoute requireAuth={true}>
+            <SapConnectionsPage />
           </ProtectedRoute>
         }
       />

@@ -136,6 +136,18 @@ export function NavIcon({ id, className = 'w-5 h-5' }: NavIconProps) {
           />
         </svg>
       );
+    case 'sap-connections':
+      return (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth={1.8} />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.8}
+            d="M8 15c0 1.105.895 2 2 2h4a2 2 0 000-4h-4a2 2 0 010-4h4c1.105 0 2 .895 2 2"
+          />
+        </svg>
+      );
     default:
       return null;
   }

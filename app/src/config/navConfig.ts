@@ -49,6 +49,12 @@ export const NAV_TABS: NavTab[] = [
     walkthroughAttr: 'tab-connections',
   },
   { id: 'projects', labelKey: 'nav.projects', path: '/projects', walkthroughAttr: 'tab-projects' },
+  {
+    id: 'sap-connections',
+    labelKey: 'nav.sapConnections',
+    path: '/sap-connections',
+    walkthroughAttr: 'tab-sap-connections',
+  },
   // Settings is reached via the gear icon in the sidebar header, so it no
   // longer has its own primary nav tab.
 ];

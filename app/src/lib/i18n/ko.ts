@@ -31,6 +31,7 @@ const messages: TranslationMap = {
   'nav.connections': '연결',
   'nav.memory': '인텔리전스',
   'nav.projects': 'Projects',
+  'nav.sapConnections': 'SAP',
   'nav.alerts': '알림',
   'nav.rewards': '보상',
   'nav.settings': '설정',
@@ -5724,6 +5725,22 @@ const messages: TranslationMap = {
   'agentworld.jobs.applyModal.cancel': '취소',
   'agentworld.jobs.applyModal.submit': '지원서 제출',
   'agentworld.jobs.applyModal.submitting': '지원 중…',
-};
 
+  // ── SAP Connections ───────────────────────────────────────────────────────
+  'sap.subtitle': 'SAP system integrations',
+  'sap.groups.setup': 'Setup',
+  'sap.groups.capabilities': 'Capabilities',
+  'sap.tabs.systems.label': 'Systems',
+  'sap.tabs.systems.emptyTitle': 'No SAP systems connected',
+  'sap.tabs.systems.emptyDesc': 'Add your SAP system endpoints (ECC, S/4HANA, BTP) to get started.',
+  'sap.tabs.credentials.label': 'Credentials',
+  'sap.tabs.credentials.emptyTitle': 'No credentials configured',
+  'sap.tabs.credentials.emptyDesc': 'Add login credentials for your SAP systems here.',
+  'sap.tabs.modules.label': 'Modules',
+  'sap.tabs.modules.emptyTitle': 'No modules configured',
+  'sap.tabs.modules.emptyDesc': 'Enable SAP modules (HR, FI, SD, MM, …) to unlock AI actions.',
+  'sap.tabs.skills.label': 'Skills',
+  'sap.tabs.skills.emptyTitle': 'No SAP skills installed',
+  'sap.tabs.skills.emptyDesc': 'Install skills to let the AI perform SAP actions on your behalf.',
+};
 export default messages;
