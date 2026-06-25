@@ -36,26 +36,18 @@ pub fn resolve_m365_cli_script() -> Option<PathBuf> {
         let mut cur = exe.clone();
         for _ in 0..12 {
             for candidate in [
-                // Production macOS: Contents/Resources/m365-cli/ (Tauri copies resources here)
-                cur.join("Resources").join("m365-cli").join("m365_cli.py"),
-                // Legacy / fallback resource layouts
-                cur.join("Resources")
-                    .join("m365")
-                    .join("cli")
-                    .join("m365_cli.py"),
+                // Production macOS: Tauri copies resources/**/* flattened into Contents/Resources/
+                // ../../src/openhuman/m365/cli/**/* → Contents/Resources/m365_cli.py
                 cur.join("Resources").join("m365_cli.py"),
+                // Some Tauri versions preserve directory structure:
+                // → Contents/Resources/cli/m365_cli.py or Resources/m365/cli/m365_cli.py
+                cur.join("Resources").join("cli").join("m365_cli.py"),
+                cur.join("Resources").join("m365").join("cli").join("m365_cli.py"),
                 // Direct sibling (some Tauri layouts)
                 cur.join("m365_cli.py"),
-                cur.join("openhuman")
-                    .join("m365")
-                    .join("cli")
-                    .join("m365_cli.py"),
+                cur.join("openhuman").join("m365").join("cli").join("m365_cli.py"),
                 // Dev repo layout (walk up reaches repo root)
-                cur.join("src")
-                    .join("openhuman")
-                    .join("m365")
-                    .join("cli")
-                    .join("m365_cli.py"),
+                cur.join("src").join("openhuman").join("m365").join("cli").join("m365_cli.py"),
             ] {
                 if candidate.is_file() {
                     return Some(candidate);
