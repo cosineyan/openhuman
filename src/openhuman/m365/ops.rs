@@ -128,8 +128,35 @@ async fn run_m365_cli(args: &[&str], config: &Config) -> Result<Value> {
 // ---------------------------------------------------------------------------
 
 /// Return token status for graph, rest, and teams.
+/// If the rest token is cached but expired and an Outlook tab is open in Chrome,
+/// automatically triggers a background refresh so the next poll shows valid tokens.
 pub async fn token_status(config: &Config) -> Result<Value> {
-    run_m365_cli(&["auth", "status", "--json"], config).await
+    let status = run_m365_cli(&["auth", "status", "--json"], config).await?;
+
+    // Auto-refresh: if rest is cached but expired, try a silent refresh in the
+    // background so the next 60-second UI poll picks up fresh tokens.
+    let rest_valid = status
+        .get("rest")
+        .and_then(|r| r.get("valid"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let rest_cached = status
+        .get("rest")
+        .and_then(|r| r.get("cached"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    if rest_cached && !rest_valid {
+        // Kick off a background refresh — doesn't block the status response.
+        let config_clone = config.clone();
+        tokio::spawn(async move {
+            if let Err(e) = auth_refresh(&config_clone).await {
+                log::debug!("[m365] background auto-refresh failed: {e}");
+            }
+        });
+    }
+
+    Ok(status)
 }
 
 /// Check whether the mcp-chrome browser extension is reachable on port 12306.
