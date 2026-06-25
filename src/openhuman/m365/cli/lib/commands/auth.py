@@ -57,6 +57,12 @@ def auth_login(ctx, as_json):
     """Extract tokens from Outlook Web (opens tab if needed)."""
     try:
         extract_tokens_from_chrome()
+        # Also try to get teams token (uses teamsRefreshToken if already cached,
+        # or opens a Teams tab if not).
+        try:
+            ensure_teams_token(force=True)
+        except Exception:
+            pass
         status = token_status()
         graph_ok = status.get('graph', {}).get('valid', False)
         rest_ok = status.get('rest', {}).get('valid', False)
