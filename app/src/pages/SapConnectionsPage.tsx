@@ -6,6 +6,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+
 import PanelPage from '../components/layout/PanelPage';
 import { SidebarContent } from '../components/layout/shell/SidebarSlot';
 import TwoPaneNav from '../components/layout/TwoPaneNav';
@@ -118,7 +119,13 @@ function OutlookLogoBadge() {
       <LogoBadge>
         <svg viewBox="0 0 24 24" fill="#0078D4" className="h-6 w-6 p-0.5">
           <rect x="2" y="6" width="20" height="12" rx="2" />
-          <path d="M2 8l10 6 10-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+          <path
+            d="M2 8l10 6 10-6"
+            stroke="white"
+            strokeWidth="1.5"
+            fill="none"
+            strokeLinecap="round"
+          />
         </svg>
       </LogoBadge>
     );
@@ -157,7 +164,10 @@ function TeamsLogoBadge() {
         <circle cx="14.5" cy="6.5" r="3" />
         <path d="M9 18c0-3.038 2.462-5.5 5.5-5.5S20 14.962 20 18H9z" />
         <circle cx="8" cy="8.5" r="2.2" />
-        <path d="M3.5 18c0-2.485 2.015-4.5 4.5-4.5H10a4.5 4.5 0 011.3.19A5.5 5.5 0 009 18H3.5z" opacity="0.7" />
+        <path
+          d="M3.5 18c0-2.485 2.015-4.5 4.5-4.5H10a4.5 4.5 0 011.3.19A5.5 5.5 0 009 18H3.5z"
+          opacity="0.7"
+        />
       </svg>
     </LogoBadge>
   );
@@ -170,9 +180,33 @@ function ChromeLogoBadge() {
       <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6 p-0.5">
         <circle cx="12" cy="12" r="4.5" fill="#4F46E5" />
         <circle cx="12" cy="12" r="9" stroke="#4F46E5" strokeWidth="1.8" />
-        <line x1="12" y1="3" x2="12" y2="7.5" stroke="#4F46E5" strokeWidth="1.8" strokeLinecap="round" />
-        <line x1="20.2" y1="16.5" x2="16.3" y2="14.2" stroke="#4F46E5" strokeWidth="1.8" strokeLinecap="round" />
-        <line x1="3.8" y1="16.5" x2="7.7" y2="14.2" stroke="#4F46E5" strokeWidth="1.8" strokeLinecap="round" />
+        <line
+          x1="12"
+          y1="3"
+          x2="12"
+          y2="7.5"
+          stroke="#4F46E5"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+        <line
+          x1="20.2"
+          y1="16.5"
+          x2="16.3"
+          y2="14.2"
+          stroke="#4F46E5"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+        <line
+          x1="3.8"
+          y1="16.5"
+          x2="7.7"
+          y2="14.2"
+          stroke="#4F46E5"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
       </svg>
     </LogoBadge>
   );
