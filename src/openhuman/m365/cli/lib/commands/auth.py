@@ -5,7 +5,8 @@ import click
 from ..tokens import (ensure_token, ensure_teams_token, ensure_graph_token,
                       set_token, clear_tokens, token_status, extract_tokens_from_chrome,
                       get_aha_token, set_aha_token, clear_aha_token,
-                      check_sso_session, ensure_spo_token, load_tokens, is_token_usable)
+                      check_jira_accessible, check_wiki_accessible,
+                      ensure_spo_token, load_tokens, is_token_usable)
 
 _DEBUG_LOG = os.path.join(os.path.expanduser('~'), '.m365-cli', 'debug.log')
 
@@ -46,11 +47,11 @@ def auth_status(ctx, as_json):
         # Aha! API token
         aha_tok = get_aha_token()
         status['aha'] = {'valid': bool(aha_tok), 'cached': bool(aha_tok)}
-        # Jira SSO (browser session on jira.tools.sap)
-        jira_ok = check_sso_session('jira.tools.sap')
+        # Jira SSO (via mcp-chrome fetch to REST API)
+        jira_ok = check_jira_accessible()
         status['jira'] = {'valid': jira_ok, 'cached': jira_ok}
-        # Confluence Wiki SSO (browser session on wiki.one.int.sap)
-        wiki_ok = check_sso_session('wiki.one.int.sap')
+        # Confluence Wiki SSO (via mcp-chrome fetch to REST API)
+        wiki_ok = check_wiki_accessible()
         status['wiki'] = {'valid': wiki_ok, 'cached': wiki_ok}
         # SharePoint SPO token
         tokens = load_tokens()

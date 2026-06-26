@@ -650,9 +650,50 @@ def clear_aha_token():
     save_tokens(tokens)
 
 
+def check_sso_accessible(url, success_check=None):
+    """Check whether mcp-chrome can fetch the given URL successfully.
+    Uses the /browser fetch command which carries Chrome's cookies automatically.
+    success_check: optional callable(response_text) -> bool for extra validation.
+    """
+    try:
+        resp = mcp_browser_cmd({'command': 'fetch', 'url': url}, timeout_ms=10000)
+        if not resp.get('ok'):
+            return False
+        body = resp.get('data') or resp.get('body') or ''
+        if isinstance(body, bytes):
+            body = body.decode('utf-8', errors='ignore')
+        if success_check:
+            return success_check(str(body))
+        return bool(body) and 'error' not in str(body).lower()[:100]
+    except Exception:
+        return False
+
+
+def check_domain_cookies(domain):
+    """Check whether Chrome has cookies for a given domain (SSO session indicator)."""
+    try:
+        resp = mcp_browser_cmd({'command': 'get-cookies', 'domain': domain}, timeout_ms=5000)
+        if not resp.get('ok'):
+            return False
+        cookie_str = resp.get('data') or ''
+        # Cookie string is non-empty if any cookies exist
+        return bool(cookie_str and cookie_str.strip())
+    except Exception:
+        return False
+
+
+def check_jira_accessible():
+    """Check whether SAP Jira is accessible — uses cookie presence as indicator."""
+    return check_domain_cookies('jira.tools.sap')
+
+
+def check_wiki_accessible():
+    """Check whether SAP Confluence Wiki is accessible — uses cookie presence."""
+    return check_domain_cookies('wiki.one.int.sap')
+
+
 def check_sso_session(domain):
-    """Check whether a Chrome session exists for the given domain.
-    Returns True if a tab is open on that domain, False otherwise."""
+    """Kept for backward compat — checks for an open Chrome tab on the domain."""
     try:
         resp = mcp_browser_cmd({'command': 'sessions'})
         if not resp.get('ok'):
