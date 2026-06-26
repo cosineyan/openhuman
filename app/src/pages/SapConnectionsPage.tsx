@@ -78,6 +78,35 @@ function EmptyState({ title, description }: { title: string; description: string
 // ─────────────────────────────────────────────────────────────────────────────
 // Tab panels
 // ─────────────────────────────────────────────────────────────────────────────
+// Tile status helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+type TileState = 'connected' | 'expired' | 'disconnected' | 'loading';
+
+function tileClasses(state: TileState) {
+  switch (state) {
+    case 'connected':
+      return 'border-sage-300 bg-sage-50/80 shadow-[0_0_0_1px_rgba(34,197,94,0.12)] dark:border-sage-500/30 dark:bg-sage-500/10';
+    case 'expired':
+      return 'border-amber-200 bg-amber-50/40 dark:border-amber-500/30 dark:bg-amber-500/10';
+    case 'disconnected':
+    default:
+      return 'border-stone-200 bg-white hover:bg-stone-50 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:bg-neutral-800/60';
+  }
+}
+
+function tileLabelClasses(state: TileState) {
+  switch (state) {
+    case 'connected':
+      return 'text-sage-600 dark:text-sage-300';
+    case 'expired':
+      return 'text-amber-600 dark:text-amber-300';
+    default:
+      return 'text-stone-400 dark:text-neutral-500';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function SystemsTab() {
   const { t } = useT();
@@ -148,154 +177,152 @@ function SystemsTab() {
 
   const isConnected = status?.graph?.valid || status?.rest?.valid || status?.teams?.valid;
 
+  const chromeState: TileState = !chromeStatus
+    ? 'loading'
+    : chromeStatus.ok
+      ? 'connected'
+      : 'disconnected';
+
+  const tokenState = (entry: { valid: boolean; cached: boolean } | undefined): TileState => {
+    if (!entry) return 'disconnected';
+    if (entry.valid) return 'connected';
+    if (entry.cached) return 'expired';
+    return 'disconnected';
+  };
+
+  const tiles = [
+    {
+      key: 'chrome',
+      label: t('sap.systems.mcpChrome.title'),
+      sublabel: chromeStatus?.ok ? `:${chromeStatus.port}` : null,
+      state: chromeState,
+      icon: (
+        <svg className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <circle cx="12" cy="12" r="3.5" />
+          <line x1="12" y1="2.5" x2="12" y2="8.5" />
+          <line x1="20.5" y1="16.5" x2="15.5" y2="13.5" />
+          <line x1="3.5" y1="16.5" x2="8.5" y2="13.5" />
+        </svg>
+      ),
+    },
+    {
+      key: 'rest',
+      label: t('sap.systems.rest'),
+      sublabel: status?.rest?.expiresInMin != null && status.rest.valid ? `${status.rest.expiresInMin}m` : null,
+      state: tokenState(status?.rest),
+      icon: (
+        <svg className="h-8 w-8" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M0 0h12v12H0zm12 12h12v12H12zM12 0h12v12H12zM0 12h12v12H0z" />
+        </svg>
+      ),
+    },
+    {
+      key: 'graph',
+      label: t('sap.systems.graph'),
+      sublabel: status?.graph?.expiresInMin != null && status.graph.valid ? `${status.graph.expiresInMin}m` : null,
+      state: tokenState(status?.graph),
+      icon: (
+        <svg className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          <circle cx="12" cy="12" r="9" />
+        </svg>
+      ),
+    },
+    {
+      key: 'teams',
+      label: t('sap.systems.teams'),
+      sublabel: status?.teams?.expiresInMin != null && status.teams.valid ? `${status.teams.expiresInMin}m` : null,
+      state: tokenState(status?.teams),
+      icon: (
+        <svg className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+        </svg>
+      ),
+    },
+  ] as const;
+
   return (
     <div className="space-y-4">
-      {/* mcp-chrome extension status */}
-      <div className="rounded-xl border border-stone-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2">
-            <svg
-              className="h-4 w-4 shrink-0 text-stone-500"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.8}
-              viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M14 6l-1-2H5v17h2v-7h5l1 2h7V6h-6zm4 8h-4l-1-2H7V6h5l1 2h5v6z"
+      {/* Icon grid */}
+      <div
+        className="grid gap-2 sm:gap-3"
+        style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(5.5rem, 1fr))', gridAutoRows: '7rem' }}>
+        {loading
+          ? tiles.map(tile => (
+              <div
+                key={tile.key}
+                className="rounded-2xl border border-stone-200 bg-stone-50 dark:border-neutral-800 dark:bg-neutral-900 animate-pulse"
               />
-            </svg>
-            <span className="text-xs font-semibold text-stone-700 dark:text-neutral-200">
-              {t('sap.systems.mcpChrome.title')}
-            </span>
-          </div>
-          {chromeStatus ? (
-            chromeStatus.ok ? (
-              <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                {t('sap.systems.mcpChrome.connected')} :{chromeStatus.port}
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                {t('sap.systems.mcpChrome.notFound')}
-              </span>
-            )
-          ) : (
-            <span className="text-xs text-stone-400 dark:text-neutral-500">
-              {t('common.loading')}
-            </span>
-          )}
-        </div>
-        {chromeStatus && !chromeStatus.ok && (
-          <div className="px-4 pb-3 border-t border-stone-100 dark:border-neutral-800">
-            <p className="text-xs text-stone-500 dark:text-neutral-400 mt-2">
-              {t('sap.systems.mcpChrome.hint')}
-            </p>
-            <a
-              href="https://chromewebstore.google.com/detail/mcp-chrome/igncpeomfkelgijlakkcblpjhcmlhflo"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-block mt-2 text-xs text-primary-500 hover:text-primary-600 hover:underline">
-              {t('sap.systems.mcpChrome.installLink')} →
-            </a>
-          </div>
-        )}
-      </div>
-
-      {/* Microsoft 365 section */}
-      <div className="rounded-xl border border-stone-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-stone-100 dark:border-neutral-800">
-          <div className="flex items-center gap-2">
-            <svg className="h-5 w-5 text-blue-500 shrink-0" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M11.5 2.75h-8A.75.75 0 002.75 3.5v8c0 .414.336.75.75.75h8a.75.75 0 00.75-.75v-8a.75.75 0 00-.75-.75zM20.5 2.75h-5a.75.75 0 00-.75.75v5c0 .414.336.75.75.75h5a.75.75 0 00.75-.75v-5a.75.75 0 00-.75-.75zM20.5 12.5h-5a.75.75 0 00-.75.75v8c0 .414.336.75.75.75h5a.75.75 0 00.75-.75v-8a.75.75 0 00-.75-.75zM11.5 14.5h-8a.75.75 0 00-.75.75v5c0 .414.336.75.75.75h8a.75.75 0 00.75-.75v-5a.75.75 0 00-.75-.75z" />
-            </svg>
-            <span className="text-sm font-semibold text-stone-800 dark:text-neutral-100">
-              {t('sap.systems.m365.title')}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            {isConnected ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => void handleRefresh()}
-                  disabled={!!busy}
-                  className="text-xs px-2.5 py-1 rounded-md border border-stone-200 dark:border-neutral-700 text-stone-600 dark:text-neutral-300 hover:bg-stone-50 dark:hover:bg-neutral-800 disabled:opacity-50 transition-colors">
-                  {busy === 'refresh' ? t('sap.systems.refreshing') : t('sap.systems.refresh')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleLogout()}
-                  disabled={!!busy}
-                  className="text-xs px-2.5 py-1 rounded-md border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-50 transition-colors">
-                  {busy === 'logout' ? t('sap.systems.disconnecting') : t('sap.systems.disconnect')}
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                onClick={() => void handleLogin()}
-                disabled={!!busy}
-                className="text-xs px-3 py-1.5 rounded-md bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-50 transition-colors font-medium">
-                {busy === 'login' ? t('sap.systems.connecting') : t('sap.systems.connect')}
-              </button>
-            )}
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="px-4 py-6 text-xs text-stone-400 dark:text-neutral-500 text-center">
-            {t('common.loading')}
-          </div>
-        ) : (
-          <div className="divide-y divide-stone-100 dark:divide-neutral-800">
-            {(
-              [
-                { key: 'graph', label: t('sap.systems.graph') },
-                { key: 'rest', label: t('sap.systems.rest') },
-                { key: 'teams', label: t('sap.systems.teams') },
-              ] as const
-            ).map(({ key, label }) => {
-              const entry = status?.[key];
-              const valid = entry?.valid ?? false;
-              const cached = entry?.cached ?? false;
-              const mins = entry?.expiresInMin;
-              return (
-                <div key={key} className="flex items-center justify-between px-4 py-2.5">
-                  <span className="text-xs text-stone-600 dark:text-neutral-300">{label}</span>
-                  <div className="flex items-center gap-2">
-                    {valid ? (
-                      <>
-                        <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-                          <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                          {t('sap.systems.valid')}
-                          {mins !== null && mins !== undefined && ` (${mins}m)`}
-                        </span>
-                      </>
-                    ) : cached ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                        {t('sap.systems.expired')}
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-xs text-stone-400 dark:text-neutral-500">
-                        <span className="h-1.5 w-1.5 rounded-full bg-stone-300 dark:bg-neutral-600" />
-                        {t('sap.systems.notCached')}
-                      </span>
-                    )}
-                  </div>
+            ))
+          : tiles.map(tile => (
+              <div
+                key={tile.key}
+                className={`relative flex flex-col items-center justify-center rounded-2xl border p-3 text-center transition-colors ${tileClasses(tile.state)}`}>
+                <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center text-stone-600 dark:text-neutral-300 [&_svg]:h-8 [&_svg]:w-8">
+                  {tile.icon}
                 </div>
-              );
-            })}
-          </div>
+                <span className="mt-1.5 line-clamp-1 w-full text-[10px] font-medium text-stone-600 dark:text-neutral-300 leading-tight">
+                  {tile.label}
+                </span>
+                <span className={`text-[9px] font-medium ${tileLabelClasses(tile.state)}`}>
+                  {tile.state === 'connected'
+                    ? tile.sublabel ?? t('sap.systems.valid')
+                    : tile.state === 'expired'
+                      ? t('sap.systems.expired')
+                      : t('sap.systems.notCached')}
+                </span>
+              </div>
+            ))}
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex items-center gap-2">
+        {isConnected ? (
+          <>
+            <button
+              type="button"
+              onClick={() => void handleRefresh()}
+              disabled={!!busy}
+              className="text-xs px-3 py-1.5 rounded-md border border-stone-200 dark:border-neutral-700 text-stone-600 dark:text-neutral-300 hover:bg-stone-50 dark:hover:bg-neutral-800 disabled:opacity-50 transition-colors font-medium">
+              {busy === 'refresh' ? t('sap.systems.refreshing') : t('sap.systems.refresh')}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleLogout()}
+              disabled={!!busy}
+              className="text-xs px-3 py-1.5 rounded-md border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-50 transition-colors font-medium">
+              {busy === 'logout' ? t('sap.systems.disconnecting') : t('sap.systems.disconnect')}
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void handleLogin()}
+            disabled={!!busy}
+            className="text-xs px-3 py-1.5 rounded-md bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-50 transition-colors font-medium">
+            {busy === 'login' ? t('sap.systems.connecting') : t('sap.systems.connect')}
+          </button>
         )}
       </div>
 
-      {error && <p className="text-xs text-red-600 dark:text-red-400 px-1">{error}</p>}
+      {/* mcp-chrome install hint */}
+      {chromeStatus && !chromeStatus.ok && (
+        <div className="rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5">
+          <p className="text-xs text-amber-700 dark:text-amber-300">{t('sap.systems.mcpChrome.hint')}</p>
+          <a
+            href="https://chromewebstore.google.com/detail/mcp-chrome/igncpeomfkelgijlakkcblpjhcmlhflo"
+            target="_blank"
+            rel="noreferrer"
+            className="mt-1 inline-block text-xs text-primary-500 hover:text-primary-600 hover:underline">
+            {t('sap.systems.mcpChrome.installLink')} →
+          </a>
+        </div>
+      )}
 
-      <p className="text-xs text-stone-400 dark:text-neutral-500 px-1">{t('sap.systems.hint')}</p>
+      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+
+      <p className="text-xs text-stone-400 dark:text-neutral-500">{t('sap.systems.hint')}</p>
     </div>
   );
 }
