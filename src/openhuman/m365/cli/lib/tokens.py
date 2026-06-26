@@ -594,6 +594,24 @@ def ensure_csa_token():
         raise
 
 
+def ensure_graph_token(force=False):
+    """Get a Graph API token by exchanging the Teams refresh token."""
+    tokens = load_tokens()
+    entry = tokens.get('graph')
+    if not force and is_token_usable(entry):
+        return entry['token']
+    try:
+        rt = ensure_teams_refresh_token()
+        return exchange_refresh_token(rt, 'https://graph.microsoft.com/.default', 'graph')
+    except Exception:
+        after = load_tokens()
+        if not after.get('teamsRefreshToken'):
+            dlog('ensure_graph_token retry after RT revocation — forcing re-auth')
+            rt = ensure_teams_refresh_token(force_reauth=True)
+            return exchange_refresh_token(rt, 'https://graph.microsoft.com/.default', 'graph')
+        raise
+
+
 def get_tenant_id(tokens):
     if tokens.get('teamsTenantId'):
         return tokens['teamsTenantId']

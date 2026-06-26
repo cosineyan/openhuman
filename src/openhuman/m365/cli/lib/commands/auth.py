@@ -2,7 +2,7 @@ import os
 import sys
 import datetime as _datetime
 import click
-from ..tokens import ensure_token, ensure_teams_token, set_token, clear_tokens, token_status, extract_tokens_from_chrome
+from ..tokens import ensure_token, ensure_teams_token, ensure_graph_token, set_token, clear_tokens, token_status, extract_tokens_from_chrome
 
 _DEBUG_LOG = os.path.join(os.path.expanduser('~'), '.m365-cli', 'debug.log')
 
@@ -57,8 +57,12 @@ def auth_login(ctx, as_json):
     """Extract tokens from Outlook Web (opens tab if needed)."""
     try:
         extract_tokens_from_chrome()
-        # Also try to get teams token (uses teamsRefreshToken if already cached,
-        # or opens a Teams tab if not).
+        # Get graph token via Teams refresh token (works even when Outlook page doesn't expose it).
+        try:
+            ensure_graph_token(force=True)
+        except Exception:
+            pass
+        # Also try to get teams token.
         try:
             ensure_teams_token(force=True)
         except Exception:
@@ -94,6 +98,11 @@ def auth_refresh(ctx, as_json):
         # Single extraction call — opens a new tab if needed, closes it when done.
         # graph token may be absent (only appears after Graph API calls); non-fatal.
         extract_tokens_from_chrome()
+        # Get graph token via Teams refresh token.
+        try:
+            ensure_graph_token(force=True)
+        except Exception:
+            pass
         # Also refresh teams token (uses teamsRefreshToken, no Chrome tab needed).
         try:
             ensure_teams_token(force=True)
