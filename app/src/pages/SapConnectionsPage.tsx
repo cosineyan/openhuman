@@ -6,7 +6,6 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-
 import PanelPage from '../components/layout/PanelPage';
 import { SidebarContent } from '../components/layout/shell/SidebarSlot';
 import TwoPaneNav from '../components/layout/TwoPaneNav';
@@ -81,8 +80,8 @@ function ConnectionTile({ name, statusLabel, status, icon, onClick }: Connection
       type="button"
       onClick={onClick}
       className={`group flex flex-col items-center gap-2 rounded-2xl border p-3 pb-3 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 ${tileBorder(status)}`}>
-      {/* Icon container: same as ChannelTile — h-12 w-12, inner SVG h-7 w-7 */}
-      <div className="relative flex h-12 w-12 flex-shrink-0 items-center justify-center [&_svg]:h-7 [&_svg]:w-7">
+      {/* Exact same icon container as ChannelTile in Skills.tsx */}
+      <div className="relative flex h-12 w-12 flex-shrink-0 items-center justify-center text-stone-700 dark:text-neutral-200 [&>span]:h-12 [&>span]:w-12 [&>span]:rounded-2xl [&_img]:max-h-10 [&_img]:max-w-10 [&_svg]:h-8 [&_svg]:w-8">
         {icon}
       </div>
       <div className="flex min-h-[2.5rem] w-full min-w-0 flex-col items-center justify-start gap-0.5">
@@ -98,92 +97,86 @@ function ConnectionTile({ name, statusLabel, status, icon, onClick }: Connection
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Service icons — large, branded, same visual weight as Connections logos
-// Each is a rounded square with brand color background + white icon inside,
-// matching the size that ChannelTile renders them (28px SVG in 48px container)
+// Service icon badges — same structure as ComposioLogoBadge in toolkitMeta.tsx:
+// span h-8 w-8 rounded-xl bg-white shadow-sm ring-1 ring-black/5
+// ChannelTile's [&>span]:h-12 [&>span]:w-12 auto-scales the span to 48px
 // ─────────────────────────────────────────────────────────────────────────────
 
-const ChromeIcon = () => (
-  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F3F0FF] shadow-sm ring-1 ring-black/5">
-    <svg viewBox="0 0 28 28" fill="none" className="h-7 w-7">
-      <circle cx="14" cy="14" r="5.5" fill="#4F46E5" />
-      <circle cx="14" cy="14" r="11" stroke="#4F46E5" strokeWidth="2" fill="none" />
-      <line
-        x1="14"
-        y1="3"
-        x2="14"
-        y2="8.5"
-        stroke="#4F46E5"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <line
-        x1="23.5"
-        y1="19.5"
-        x2="18.2"
-        y2="16.5"
-        stroke="#4F46E5"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <line
-        x1="4.5"
-        y1="19.5"
-        x2="9.8"
-        y2="16.5"
-        stroke="#4F46E5"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  </span>
-);
+function LogoBadge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl bg-white dark:bg-neutral-900 shadow-sm ring-1 ring-black/5">
+      {children}
+    </span>
+  );
+}
 
-const OutlookIcon = () => (
-  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E8F3FD] shadow-sm ring-1 ring-black/5">
-    <svg viewBox="0 0 28 28" fill="none" className="h-7 w-7">
-      {/* Envelope body */}
-      <rect x="3" y="7" width="22" height="14" rx="2" fill="#0078D4" />
-      {/* Envelope flap */}
-      <path
-        d="M3 9l11 7 11-7"
-        stroke="white"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
+// Outlook: uses logos.composio.dev (200 OK)
+function OutlookLogoBadge() {
+  const [failed, setFailed] = useState(false);
+  if (failed)
+    return (
+      <LogoBadge>
+        <svg viewBox="0 0 24 24" fill="#0078D4" className="h-6 w-6 p-0.5">
+          <rect x="2" y="6" width="20" height="12" rx="2" />
+          <path d="M2 8l10 6 10-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+        </svg>
+      </LogoBadge>
+    );
+  return (
+    <LogoBadge>
+      <img
+        src="https://logos.composio.dev/api/outlook"
+        alt="Outlook"
+        className="h-full w-full object-contain p-1"
+        loading="lazy"
+        onError={() => setFailed(true)}
       />
-    </svg>
-  </span>
-);
+    </LogoBadge>
+  );
+}
 
-const GraphIcon = () => (
-  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E8F3FD] shadow-sm ring-1 ring-black/5">
-    <svg viewBox="0 0 28 28" fill="none" className="h-7 w-7">
-      {/* Microsoft 4-square logo */}
-      <rect x="3" y="3" width="10" height="10" rx="1.5" fill="#0078D4" />
-      <rect x="15" y="3" width="10" height="10" rx="1.5" fill="#0078D4" opacity="0.75" />
-      <rect x="3" y="15" width="10" height="10" rx="1.5" fill="#0078D4" opacity="0.75" />
-      <rect x="15" y="15" width="10" height="10" rx="1.5" fill="#0078D4" opacity="0.5" />
-    </svg>
-  </span>
-);
+// Graph API: Microsoft 4-square logo
+function GraphLogoBadge() {
+  return (
+    <LogoBadge>
+      <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6 p-0.5">
+        <rect x="2" y="2" width="9" height="9" rx="1" fill="#0078D4" />
+        <rect x="13" y="2" width="9" height="9" rx="1" fill="#0078D4" opacity="0.75" />
+        <rect x="2" y="13" width="9" height="9" rx="1" fill="#0078D4" opacity="0.75" />
+        <rect x="13" y="13" width="9" height="9" rx="1" fill="#0078D4" opacity="0.45" />
+      </svg>
+    </LogoBadge>
+  );
+}
 
-const TeamsIcon = () => (
-  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EEF0FF] shadow-sm ring-1 ring-black/5">
-    <svg viewBox="0 0 28 28" fill="#5059C9" className="h-7 w-7">
-      {/* Larger person */}
-      <circle cx="16" cy="8" r="3.5" />
-      <path d="M10 20c0-3.314 2.686-6 6-6s6 2.686 6 6H10z" />
-      {/* Smaller person */}
-      <circle cx="9" cy="10" r="2.5" />
-      <path
-        d="M3.5 20c0-2.485 2.015-4.5 4.5-4.5h3a4.5 4.5 0 011.5.255A6 6 0 0010 20H3.5z"
-        opacity="0.7"
-      />
-    </svg>
-  </span>
-);
+// Teams: purple T + people
+function TeamsLogoBadge() {
+  return (
+    <LogoBadge>
+      <svg viewBox="0 0 24 24" fill="#5059C9" className="h-6 w-6 p-0.5">
+        <circle cx="14.5" cy="6.5" r="3" />
+        <path d="M9 18c0-3.038 2.462-5.5 5.5-5.5S20 14.962 20 18H9z" />
+        <circle cx="8" cy="8.5" r="2.2" />
+        <path d="M3.5 18c0-2.485 2.015-4.5 4.5-4.5H10a4.5 4.5 0 011.3.19A5.5 5.5 0 009 18H3.5z" opacity="0.7" />
+      </svg>
+    </LogoBadge>
+  );
+}
+
+// mcp-chrome: Chrome-inspired icon
+function ChromeLogoBadge() {
+  return (
+    <LogoBadge>
+      <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6 p-0.5">
+        <circle cx="12" cy="12" r="4.5" fill="#4F46E5" />
+        <circle cx="12" cy="12" r="9" stroke="#4F46E5" strokeWidth="1.8" />
+        <line x1="12" y1="3" x2="12" y2="7.5" stroke="#4F46E5" strokeWidth="1.8" strokeLinecap="round" />
+        <line x1="20.2" y1="16.5" x2="16.3" y2="14.2" stroke="#4F46E5" strokeWidth="1.8" strokeLinecap="round" />
+        <line x1="3.8" y1="16.5" x2="7.7" y2="14.2" stroke="#4F46E5" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    </LogoBadge>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Systems Tab
@@ -268,7 +261,7 @@ function SystemsTab() {
           ? 'connected'
           : 'disconnected') as TileStatus,
       sublabel: chromeStatus?.ok ? `:${chromeStatus.port}` : undefined,
-      icon: <ChromeIcon />,
+      icon: <ChromeLogoBadge />,
     },
     {
       key: 'rest',
@@ -278,7 +271,7 @@ function SystemsTab() {
         status?.rest?.expiresInMin != null && status.rest.valid
           ? `${status.rest.expiresInMin}m`
           : undefined,
-      icon: <OutlookIcon />,
+      icon: <OutlookLogoBadge />,
     },
     {
       key: 'graph',
@@ -288,7 +281,7 @@ function SystemsTab() {
         status?.graph?.expiresInMin != null && status.graph.valid
           ? `${status.graph.expiresInMin}m`
           : undefined,
-      icon: <GraphIcon />,
+      icon: <GraphLogoBadge />,
     },
     {
       key: 'teams',
@@ -298,7 +291,7 @@ function SystemsTab() {
         status?.teams?.expiresInMin != null && status.teams.valid
           ? `${status.teams.expiresInMin}m`
           : undefined,
-      icon: <TeamsIcon />,
+      icon: <TeamsLogoBadge />,
     },
   ] as const;
 
