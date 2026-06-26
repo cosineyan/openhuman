@@ -675,9 +675,10 @@ def check_domain_cookies(domain):
         resp = mcp_browser_cmd({'command': 'get-cookies', 'domain': domain}, timeout_ms=5000)
         if not resp.get('ok'):
             return False
-        cookie_str = resp.get('data') or ''
-        # Cookie string is non-empty if any cookies exist
-        return bool(cookie_str and cookie_str.strip())
+        # get-cookies response has 'cookieHeader' or 'data' or 'cookies' key
+        cookie_str = resp.get('cookieHeader') or resp.get('data') or ''
+        cookies_list = resp.get('cookies') or []
+        return bool(cookie_str and cookie_str.strip()) or bool(cookies_list)
     except Exception:
         return False
 

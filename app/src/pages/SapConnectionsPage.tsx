@@ -526,8 +526,12 @@ function SystemsTab() {
               }
               icon={tile.icon}
               onClick={
-                'openUrl' in tile && tile.openUrl && !tile.status.includes('connected')
-                  ? () => void m365OpenInChrome((tile as { openUrl: string }).openUrl)
+                'openUrl' in tile && (tile as { openUrl?: string }).openUrl
+                  ? () => {
+                      const url = (tile as { openUrl: string }).openUrl;
+                      console.log('[SAP] opening in chrome:', url);
+                      void m365OpenInChrome(url);
+                    }
                   : undefined
               }
             />
