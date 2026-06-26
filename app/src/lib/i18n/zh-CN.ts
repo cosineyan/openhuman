@@ -5532,6 +5532,7 @@ const messages: TranslationMap = {
   'sap.credentials.ahaPlaceholder': 'Aha! API Token',
   'sap.credentials.clear': '清除',
   'sap.credentials.ahaLink': '在此创建 Token：',
+  'sap.systems.clickToOpen': '点击在 Chrome 中打开',
 };
 
 export default messages;

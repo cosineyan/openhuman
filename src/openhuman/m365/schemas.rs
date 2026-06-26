@@ -21,43 +21,21 @@ pub fn all_controller_schemas() -> Vec<ControllerSchema> {
         schema("set_aha_token"),
         schema("clear_aha_token"),
         schema("refresh_sharepoint"),
+        schema("open_in_chrome"),
     ]
 }
 
 pub fn all_registered_controllers() -> Vec<RegisteredController> {
     vec![
-        RegisteredController {
-            schema: schema("token_status"),
-            handler: handle_token_status,
-        },
-        RegisteredController {
-            schema: schema("auth_login"),
-            handler: handle_auth_login,
-        },
-        RegisteredController {
-            schema: schema("auth_refresh"),
-            handler: handle_auth_refresh,
-        },
-        RegisteredController {
-            schema: schema("auth_logout"),
-            handler: handle_auth_logout,
-        },
-        RegisteredController {
-            schema: schema("mcp_chrome_status"),
-            handler: handle_mcp_chrome_status,
-        },
-        RegisteredController {
-            schema: schema("set_aha_token"),
-            handler: handle_set_aha_token,
-        },
-        RegisteredController {
-            schema: schema("clear_aha_token"),
-            handler: handle_clear_aha_token,
-        },
-        RegisteredController {
-            schema: schema("refresh_sharepoint"),
-            handler: handle_refresh_sharepoint,
-        },
+        RegisteredController { schema: schema("token_status"), handler: handle_token_status },
+        RegisteredController { schema: schema("auth_login"), handler: handle_auth_login },
+        RegisteredController { schema: schema("auth_refresh"), handler: handle_auth_refresh },
+        RegisteredController { schema: schema("auth_logout"), handler: handle_auth_logout },
+        RegisteredController { schema: schema("mcp_chrome_status"), handler: handle_mcp_chrome_status },
+        RegisteredController { schema: schema("set_aha_token"), handler: handle_set_aha_token },
+        RegisteredController { schema: schema("clear_aha_token"), handler: handle_clear_aha_token },
+        RegisteredController { schema: schema("refresh_sharepoint"), handler: handle_refresh_sharepoint },
+        RegisteredController { schema: schema("open_in_chrome"), handler: handle_open_in_chrome },
     ]
 }
 
@@ -170,6 +148,23 @@ pub fn schema(function: &str) -> ControllerSchema {
                 name: "result",
                 ty: TypeSchema::Json,
                 comment: "{ ok: true }",
+                required: true,
+            }],
+        },
+        "open_in_chrome" => ControllerSchema {
+            namespace: "m365",
+            function: "open_in_chrome",
+            description: "Open a URL in Chrome via mcp-chrome (for SSO login to Jira, Confluence, etc.).",
+            inputs: vec![FieldSchema {
+                name: "url",
+                ty: TypeSchema::String,
+                comment: "URL to open in Chrome.",
+                required: true,
+            }],
+            outputs: vec![FieldSchema {
+                name: "result",
+                ty: TypeSchema::Json,
+                comment: "{ ok: bool, data?: { sessionId } }",
                 required: true,
             }],
         },
@@ -286,6 +281,14 @@ fn handle_refresh_sharepoint(_params: Map<String, Value>) -> ControllerFuture {
             value: serde_json::json!({ "ok": true }),
             logs: vec![],
         })
+    })
+}
+
+fn handle_open_in_chrome(params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let url = params.get("url").and_then(Value::as_str).unwrap_or("").to_string();
+        let result = ops::open_in_chrome(&url).await.map_err(|e| e.to_string())?;
+        to_json(RpcOutcome { value: result, logs: vec![] })
     })
 }
 

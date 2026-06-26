@@ -250,3 +250,32 @@ pub async fn clear_aha_token(config: &Config) -> Result<Value> {
 pub async fn refresh_sharepoint(config: &Config) -> Result<Value> {
     run_m365_cli(&["auth", "refresh-sharepoint", "--json"], config).await
 }
+
+/// Open a URL in Chrome via mcp-chrome (to let user log in for SSO-based services).
+pub async fn open_in_chrome(url: &str) -> Result<Value> {
+    let port = std::env::var("MCP_CHROME_PORT")
+        .or_else(|_| std::env::var("CHROME_MCP_PORT"))
+        .unwrap_or_else(|_| "12306".to_string());
+    let body = serde_json::json!({ "command": "new-tab", "url": url });
+    let body_str = serde_json::to_string(&body).unwrap_or_default();
+    let browser_url = format!("http://127.0.0.1:{port}/browser");
+
+    let result = tokio::process::Command::new("python3")
+        .arg("-c")
+        .arg(format!(
+            "import urllib.request, json; \
+             req=urllib.request.Request('{browser_url}',data=b'{body_str}',headers={{'Content-Type':'application/json'}},method='POST'); \
+             r=urllib.request.urlopen(req,timeout=5); \
+             print(r.read().decode())"
+        ))
+        .output()
+        .await;
+
+    match result {
+        Ok(out) if out.status.success() => {
+            let s = String::from_utf8_lossy(&out.stdout);
+            Ok(serde_json::from_str(s.trim()).unwrap_or(serde_json::json!({ "ok": true })))
+        }
+        _ => anyhow::bail!("Could not open Chrome tab. Is mcp-chrome running on port {port}?"),
+    }
+}

@@ -18,6 +18,7 @@ import {
   m365AuthLogout,
   m365AuthRefresh,
   m365ClearAhaToken,
+  m365OpenInChrome,
   m365SetAhaToken,
   type M365TokenStatus,
   type MpcChromeStatus,
@@ -440,15 +441,17 @@ function SystemsTab() {
       key: 'jira',
       name: 'SAP Jira',
       status: tokenTileStatus(status?.jira),
-      sublabel: undefined,
+      sublabel: status?.jira?.valid ? undefined : t('sap.systems.clickToOpen'),
       icon: <JiraLogoBadge />,
+      openUrl: 'https://jira.tools.sap',
     },
     {
       key: 'wiki',
       name: 'Confluence',
       status: tokenTileStatus(status?.wiki),
-      sublabel: undefined,
+      sublabel: status?.wiki?.valid ? undefined : t('sap.systems.clickToOpen'),
       icon: <ConfluenceLogoBadge />,
+      openUrl: 'https://wiki.one.int.sap',
     },
     {
       key: 'aha',
@@ -515,11 +518,18 @@ function SystemsTab() {
               statusLabel={
                 tile.status === 'connected'
                   ? (tile.sublabel ?? t('sap.systems.valid'))
-                  : tile.status === 'expired'
-                    ? t('sap.systems.expired')
-                    : t('sap.systems.notCached')
+                  : 'openUrl' in tile && tile.openUrl
+                    ? t('sap.systems.clickToOpen')
+                    : tile.status === 'expired'
+                      ? t('sap.systems.expired')
+                      : t('sap.systems.notCached')
               }
               icon={tile.icon}
+              onClick={
+                'openUrl' in tile && tile.openUrl && !tile.status.includes('connected')
+                  ? () => void m365OpenInChrome((tile as { openUrl: string }).openUrl)
+                  : undefined
+              }
             />
           ))}
         </div>

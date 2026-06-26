@@ -6089,6 +6089,7 @@ const en: TranslationMap = {
   'sap.credentials.ahaPlaceholder': 'Aha! API token',
   'sap.credentials.clear': 'Clear',
   'sap.credentials.ahaLink': 'Create a token at',
+  'sap.systems.clickToOpen': 'Click to open',
 };
 
 export default en;

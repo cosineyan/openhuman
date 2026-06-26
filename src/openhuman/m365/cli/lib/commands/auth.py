@@ -134,6 +134,11 @@ def auth_refresh(ctx, as_json):
             ensure_teams_token(force=True)
         except Exception:
             pass
+        # Get SharePoint token via token exchange (needs Teams refresh token).
+        try:
+            ensure_spo_token('sap.sharepoint.com')
+        except Exception:
+            pass
         status = token_status()
         rest_ok = status.get('rest', {}).get('valid', False)
         if not rest_ok:
