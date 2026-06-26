@@ -152,9 +152,7 @@ def find_outlook_session():
 
 
 def open_outlook_tab():
-    # Open People page — it triggers a Graph API call, which populates the
-    # graph token in addition to the rest token that the mail page provides.
-    resp = mcp_browser_cmd({'command': 'new-tab', 'url': 'https://outlook.office.com/owa/?path=/people'})
+    resp = mcp_browser_cmd({'command': 'new-tab', 'url': 'https://outlook.office.com/mail/'})
     if not resp.get('ok') or not resp.get('data'):
         raise RuntimeError('Failed to open Outlook tab')
     return resp['data']['sessionId']
