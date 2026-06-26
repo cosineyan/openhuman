@@ -108,9 +108,33 @@ const ChromeIcon = () => (
     <svg viewBox="0 0 28 28" fill="none" className="h-7 w-7">
       <circle cx="14" cy="14" r="5.5" fill="#4F46E5" />
       <circle cx="14" cy="14" r="11" stroke="#4F46E5" strokeWidth="2" fill="none" />
-      <line x1="14" y1="3" x2="14" y2="8.5" stroke="#4F46E5" strokeWidth="2" strokeLinecap="round" />
-      <line x1="23.5" y1="19.5" x2="18.2" y2="16.5" stroke="#4F46E5" strokeWidth="2" strokeLinecap="round" />
-      <line x1="4.5" y1="19.5" x2="9.8" y2="16.5" stroke="#4F46E5" strokeWidth="2" strokeLinecap="round" />
+      <line
+        x1="14"
+        y1="3"
+        x2="14"
+        y2="8.5"
+        stroke="#4F46E5"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <line
+        x1="23.5"
+        y1="19.5"
+        x2="18.2"
+        y2="16.5"
+        stroke="#4F46E5"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <line
+        x1="4.5"
+        y1="19.5"
+        x2="9.8"
+        y2="16.5"
+        stroke="#4F46E5"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
     </svg>
   </span>
 );
@@ -121,7 +145,14 @@ const OutlookIcon = () => (
       {/* Envelope body */}
       <rect x="3" y="7" width="22" height="14" rx="2" fill="#0078D4" />
       {/* Envelope flap */}
-      <path d="M3 9l11 7 11-7" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <path
+        d="M3 9l11 7 11-7"
+        stroke="white"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
     </svg>
   </span>
 );
@@ -146,7 +177,10 @@ const TeamsIcon = () => (
       <path d="M10 20c0-3.314 2.686-6 6-6s6 2.686 6 6H10z" />
       {/* Smaller person */}
       <circle cx="9" cy="10" r="2.5" />
-      <path d="M3.5 20c0-2.485 2.015-4.5 4.5-4.5h3a4.5 4.5 0 011.5.255A6 6 0 0010 20H3.5z" opacity="0.7" />
+      <path
+        d="M3.5 20c0-2.485 2.015-4.5 4.5-4.5h3a4.5 4.5 0 011.5.255A6 6 0 0010 20H3.5z"
+        opacity="0.7"
+      />
     </svg>
   </span>
 );
