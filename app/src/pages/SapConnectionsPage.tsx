@@ -80,7 +80,7 @@ function ConnectionTile({ name, statusLabel, status, icon, onClick }: Connection
     <button
       type="button"
       onClick={onClick}
-      className={`group flex flex-col items-center gap-2 rounded-2xl border p-3 pb-3 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 ${tileBorder(status)}`}>
+      className={`group relative flex h-full w-full flex-col justify-center items-center rounded-2xl border p-3 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 ${tileBorder(status)}`}>
       {/* Exact same icon container as ChannelTile in Skills.tsx */}
       <div className="relative flex h-12 w-12 flex-shrink-0 items-center justify-center text-stone-700 dark:text-neutral-200 [&>span]:h-12 [&>span]:w-12 [&>span]:rounded-2xl [&_img]:max-h-10 [&_img]:max-w-10 [&_svg]:h-8 [&_svg]:w-8">
         {icon}
@@ -355,22 +355,28 @@ function SystemsTab() {
         </p>
       </div>
 
-      {/* Icon grid — exact same layout as channels tab */}
+      {/* Icon grid — same layout + row height as Composio grid in Skills.tsx */}
       {loading ? (
         <div
           className="grid gap-2 sm:gap-3"
-          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(5.5rem, 1fr))' }}>
+          style={{
+            gridTemplateColumns: 'repeat(auto-fill, minmax(5.5rem, 1fr))',
+            gridAutoRows: '6.5rem',
+          }}>
           {[0, 1, 2, 3].map(i => (
             <div
               key={i}
-              className="h-[7rem] rounded-2xl border border-stone-100 dark:border-neutral-800 bg-stone-50 dark:bg-neutral-800/50 animate-pulse"
+              className="rounded-2xl border border-stone-100 dark:border-neutral-800 bg-stone-50 dark:bg-neutral-800/50 animate-pulse"
             />
           ))}
         </div>
       ) : (
         <div
           className="grid gap-2 sm:gap-3"
-          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(5.5rem, 1fr))' }}>
+          style={{
+            gridTemplateColumns: 'repeat(auto-fill, minmax(5.5rem, 1fr))',
+            gridAutoRows: '6.5rem',
+          }}>
           {tiles.map(tile => (
             <ConnectionTile
               key={tile.key}
