@@ -248,7 +248,10 @@ function JiraLogoBadge() {
       <LogoBadge>
         <svg viewBox="0 0 24 24" fill="#0052CC" className="h-6 w-6 p-0.5">
           <path d="M11.571 11.513H0a5.218 5.218 0 005.232 5.215l2.345.001v2.27A5.215 5.215 0 0012.79 24V12.518a1.005 1.005 0 00-1.22-.005z" />
-          <path d="M6.015 6.018H17.586a5.218 5.218 0 00-5.232-5.215l-2.345-.001V.532A5.215 5.215 0 004.796 0v11.495a1.005 1.005 0 001.22.005z" opacity="0.7" />
+          <path
+            d="M6.015 6.018H17.586a5.218 5.218 0 00-5.232-5.215l-2.345-.001V.532A5.215 5.215 0 004.796 0v11.495a1.005 1.005 0 001.22.005z"
+            opacity="0.7"
+          />
           <path d="M11.571 6.018l-5.556 5.495 5.556 5.515 5.554-5.515-5.554-5.495z" opacity="0.4" />
         </svg>
       </LogoBadge>
@@ -274,7 +277,10 @@ function ConfluenceLogoBadge() {
       <LogoBadge>
         <svg viewBox="0 0 24 24" fill="#0052CC" className="h-6 w-6 p-0.5">
           <path d="M.87 18.4c-.26.42-.56.97-.77 1.33a.77.77 0 001.06 1.06l8.2-4.78a.77.77 0 000-1.33L1.1 9.91a.77.77 0 00-1.06 1.06c.21.36.51.91.77 1.33L4.45 18z" />
-          <path d="M23.13 5.6c.26-.42.56-.97.77-1.33a.77.77 0 00-1.06-1.06l-8.2 4.78a.77.77 0 000 1.33l8.2 4.78a.77.77 0 001.06-1.06c-.21-.36-.51-.91-.77-1.33L19.55 6z" opacity="0.7" />
+          <path
+            d="M23.13 5.6c.26-.42.56-.97.77-1.33a.77.77 0 00-1.06-1.06l-8.2 4.78a.77.77 0 000 1.33l8.2 4.78a.77.77 0 001.06-1.06c-.21-.36-.51-.91-.77-1.33L19.55 6z"
+            opacity="0.7"
+          />
         </svg>
       </LogoBadge>
     );
@@ -661,7 +667,10 @@ function CredentialsTab() {
       {ahaError && <p className="mt-2 text-[11px] text-red-600 dark:text-red-400">{ahaError}</p>}
       <p className="mt-2 text-[10px] text-stone-400 dark:text-neutral-500">
         {t('sap.credentials.ahaLink')}{' '}
-        <a href="https://sap.aha.io/settings/api_keys" target="_blank" rel="noreferrer"
+        <a
+          href="https://sap.aha.io/settings/api_keys"
+          target="_blank"
+          rel="noreferrer"
           className="text-primary-500 hover:underline">
           sap.aha.io/settings/api_keys
         </a>

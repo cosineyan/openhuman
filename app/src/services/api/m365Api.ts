@@ -74,9 +74,5 @@ export async function m365ClearAhaToken(): Promise<void> {
 }
 
 export async function m365RefreshSharePoint(): Promise<void> {
-  await callCoreRpc({
-    method: 'openhuman.m365_refresh_sharepoint',
-    params: {},
-    timeoutMs: 30_000,
-  });
+  await callCoreRpc({ method: 'openhuman.m365_refresh_sharepoint', params: {}, timeoutMs: 30_000 });
 }
