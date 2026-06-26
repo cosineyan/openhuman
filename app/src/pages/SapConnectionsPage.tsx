@@ -198,7 +198,11 @@ function SystemsTab() {
     {
       key: 'chrome',
       name: 'mcp-chrome',
-      status: (!chromeStatus ? 'disconnected' : chromeStatus.ok ? 'connected' : 'disconnected') as TileStatus,
+      status: (!chromeStatus
+        ? 'disconnected'
+        : chromeStatus.ok
+          ? 'connected'
+          : 'disconnected') as TileStatus,
       sublabel: chromeStatus?.ok ? `:${chromeStatus.port}` : undefined,
       icon: (
         <IconBadge bg="bg-[#EEF2FF]" fg="text-[#4F46E5]" label="mcp-chrome">
@@ -207,7 +211,14 @@ function SystemsTab() {
             <circle cx="9" cy="9" r="4" fill="currentColor" />
             <circle cx="9" cy="9" r="7.5" stroke="currentColor" strokeWidth="1.5" fill="none" />
             <line x1="9" y1="1.5" x2="9" y2="6" stroke="currentColor" strokeWidth="1.5" />
-            <line x1="15.9" y1="12.75" x2="11.6" y2="10.5" stroke="currentColor" strokeWidth="1.5" />
+            <line
+              x1="15.9"
+              y1="12.75"
+              x2="11.6"
+              y2="10.5"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            />
             <line x1="2.1" y1="12.75" x2="6.4" y2="10.5" stroke="currentColor" strokeWidth="1.5" />
           </svg>
         </IconBadge>
@@ -217,7 +228,10 @@ function SystemsTab() {
       key: 'rest',
       name: 'Outlook',
       status: tokenTileStatus(status?.rest),
-      sublabel: status?.rest?.expiresInMin != null && status.rest.valid ? `${status.rest.expiresInMin}m` : undefined,
+      sublabel:
+        status?.rest?.expiresInMin != null && status.rest.valid
+          ? `${status.rest.expiresInMin}m`
+          : undefined,
       icon: (
         <IconBadge bg="bg-[#EBF5FB]" fg="text-[#0078D4]" label="Outlook">
           {/* Outlook envelope icon */}
@@ -231,7 +245,10 @@ function SystemsTab() {
       key: 'graph',
       name: 'Graph API',
       status: tokenTileStatus(status?.graph),
-      sublabel: status?.graph?.expiresInMin != null && status.graph.valid ? `${status.graph.expiresInMin}m` : undefined,
+      sublabel:
+        status?.graph?.expiresInMin != null && status.graph.valid
+          ? `${status.graph.expiresInMin}m`
+          : undefined,
       icon: (
         <IconBadge bg="bg-[#F0F7FF]" fg="text-[#0078D4]" label="Graph API">
           {/* Microsoft M logo */}
@@ -248,7 +265,10 @@ function SystemsTab() {
       key: 'teams',
       name: 'Teams',
       status: tokenTileStatus(status?.teams),
-      sublabel: status?.teams?.expiresInMin != null && status.teams.valid ? `${status.teams.expiresInMin}m` : undefined,
+      sublabel:
+        status?.teams?.expiresInMin != null && status.teams.valid
+          ? `${status.teams.expiresInMin}m`
+          : undefined,
       icon: (
         <IconBadge bg="bg-[#EEF2FF]" fg="text-[#5059C9]" label="Teams">
           {/* Teams person + T icon */}
@@ -269,8 +289,17 @@ function SystemsTab() {
       <div className="px-1 pb-3 pt-1">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-stone-900 dark:text-neutral-100">
           <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-stone-100 dark:bg-neutral-800">
-            <svg className="h-3.5 w-3.5 text-stone-500 dark:text-neutral-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8.288 15.038a5.25 5.25 0 017.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0M1.924 8.674c5.565-5.565 14.587-5.565 20.152 0M12.53 18.22l-.53.53-.53-.53a.75.75 0 011.06 0z" />
+            <svg
+              className="h-3.5 w-3.5 text-stone-500 dark:text-neutral-400"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M8.288 15.038a5.25 5.25 0 017.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0M1.924 8.674c5.565-5.565 14.587-5.565 20.152 0M12.53 18.22l-.53.53-.53-.53a.75.75 0 011.06 0z"
+              />
             </svg>
           </span>
           {t('sap.systems.m365.title')}
@@ -286,7 +315,10 @@ function SystemsTab() {
           className="grid gap-2 sm:gap-3"
           style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(5.5rem, 1fr))' }}>
           {[0, 1, 2, 3].map(i => (
-            <div key={i} className="h-[7rem] rounded-2xl border border-stone-100 dark:border-neutral-800 bg-stone-50 dark:bg-neutral-800/50 animate-pulse" />
+            <div
+              key={i}
+              className="h-[7rem] rounded-2xl border border-stone-100 dark:border-neutral-800 bg-stone-50 dark:bg-neutral-800/50 animate-pulse"
+            />
           ))}
         </div>
       ) : (
@@ -314,7 +346,9 @@ function SystemsTab() {
       {/* mcp-chrome install hint */}
       {!loading && chromeStatus && !chromeStatus.ok && (
         <div className="mt-3 rounded-xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5">
-          <p className="text-[11px] text-amber-700 dark:text-amber-300">{t('sap.systems.mcpChrome.hint')}</p>
+          <p className="text-[11px] text-amber-700 dark:text-amber-300">
+            {t('sap.systems.mcpChrome.hint')}
+          </p>
           <a
             href="https://chromewebstore.google.com/detail/mcp-chrome/igncpeomfkelgijlakkcblpjhcmlhflo"
             target="_blank"
@@ -367,8 +401,17 @@ function EmptyState({ title, description }: { title: string; description: string
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
       <div className="rounded-full bg-stone-100 p-4 dark:bg-neutral-800">
-        <svg className="h-8 w-8 text-stone-400 dark:text-neutral-500" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 16.875h3.375m0 0h3.375m-3.375 0V13.5m0 3.375v3.375M6 10.5h2.25a2.25 2.25 0 002.25-2.25V6a2.25 2.25 0 00-2.25-2.25H6A2.25 2.25 0 003.75 6v2.25A2.25 2.25 0 006 10.5zm0 9.75h2.25A2.25 2.25 0 0010.5 18v-2.25a2.25 2.25 0 00-2.25-2.25H6a2.25 2.25 0 00-2.25 2.25V18A2.25 2.25 0 006 20.25zm9.75-9.75H18a2.25 2.25 0 002.25-2.25V6A2.25 2.25 0 0018 3.75h-2.25A2.25 2.25 0 0013.5 6v2.25a2.25 2.25 0 002.25 2.25z" />
+        <svg
+          className="h-8 w-8 text-stone-400 dark:text-neutral-500"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.5}
+          viewBox="0 0 24 24">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M13.5 16.875h3.375m0 0h3.375m-3.375 0V13.5m0 3.375v3.375M6 10.5h2.25a2.25 2.25 0 002.25-2.25V6a2.25 2.25 0 00-2.25-2.25H6A2.25 2.25 0 003.75 6v2.25A2.25 2.25 0 006 10.5zm0 9.75h2.25A2.25 2.25 0 0010.5 18v-2.25a2.25 2.25 0 00-2.25-2.25H6a2.25 2.25 0 00-2.25 2.25V18A2.25 2.25 0 006 20.25zm9.75-9.75H18a2.25 2.25 0 002.25-2.25V6A2.25 2.25 0 0018 3.75h-2.25A2.25 2.25 0 0013.5 6v2.25a2.25 2.25 0 002.25 2.25z"
+          />
         </svg>
       </div>
       <div>
@@ -381,17 +424,32 @@ function EmptyState({ title, description }: { title: string; description: string
 
 function CredentialsTab() {
   const { t } = useT();
-  return <EmptyState title={t('sap.tabs.credentials.emptyTitle')} description={t('sap.tabs.credentials.emptyDesc')} />;
+  return (
+    <EmptyState
+      title={t('sap.tabs.credentials.emptyTitle')}
+      description={t('sap.tabs.credentials.emptyDesc')}
+    />
+  );
 }
 
 function ModulesTab() {
   const { t } = useT();
-  return <EmptyState title={t('sap.tabs.modules.emptyTitle')} description={t('sap.tabs.modules.emptyDesc')} />;
+  return (
+    <EmptyState
+      title={t('sap.tabs.modules.emptyTitle')}
+      description={t('sap.tabs.modules.emptyDesc')}
+    />
+  );
 }
 
 function SkillsTab() {
   const { t } = useT();
-  return <EmptyState title={t('sap.tabs.skills.emptyTitle')} description={t('sap.tabs.skills.emptyDesc')} />;
+  return (
+    <EmptyState
+      title={t('sap.tabs.skills.emptyTitle')}
+      description={t('sap.tabs.skills.emptyDesc')}
+    />
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -400,7 +458,12 @@ function SkillsTab() {
 
 function navIcon(d: string) {
   return (
-    <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+    <svg
+      className="h-4 w-4 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" d={d} />
     </svg>
   );
@@ -417,7 +480,8 @@ export default function SapConnectionsPage() {
 
   const activeTab = useMemo<SapTab>(() => {
     const raw = new URLSearchParams(location.search).get('tab');
-    if (raw === 'systems' || raw === 'credentials' || raw === 'modules' || raw === 'skills') return raw;
+    if (raw === 'systems' || raw === 'credentials' || raw === 'modules' || raw === 'skills')
+      return raw;
     return DEFAULT_TAB;
   }, [location.search]);
 
@@ -435,23 +499,51 @@ export default function SapConnectionsPage() {
             onSelect={value => handleTabChange(value as SapTab)}
             header={
               <div className="px-1 pb-2 pt-1">
-                <h2 className="text-sm font-semibold text-stone-800 dark:text-neutral-100">{t('nav.sapConnections')}</h2>
-                <p className="mt-0.5 text-xs text-stone-500 dark:text-neutral-400">{t('sap.subtitle')}</p>
+                <h2 className="text-sm font-semibold text-stone-800 dark:text-neutral-100">
+                  {t('nav.sapConnections')}
+                </h2>
+                <p className="mt-0.5 text-xs text-stone-500 dark:text-neutral-400">
+                  {t('sap.subtitle')}
+                </p>
               </div>
             }
             groups={[
               {
                 label: t('sap.groups.setup'),
                 items: [
-                  { value: 'systems', label: t('sap.tabs.systems.label'), icon: navIcon('M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01') },
-                  { value: 'credentials', label: t('sap.tabs.credentials.label'), icon: navIcon('M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z') },
+                  {
+                    value: 'systems',
+                    label: t('sap.tabs.systems.label'),
+                    icon: navIcon(
+                      'M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01'
+                    ),
+                  },
+                  {
+                    value: 'credentials',
+                    label: t('sap.tabs.credentials.label'),
+                    icon: navIcon(
+                      'M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z'
+                    ),
+                  },
                 ],
               },
               {
                 label: t('sap.groups.capabilities'),
                 items: [
-                  { value: 'modules', label: t('sap.tabs.modules.label'), icon: navIcon('M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z') },
-                  { value: 'skills', label: t('sap.tabs.skills.label'), icon: navIcon('M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664zM21 12a9 9 0 11-18 0 9 9 0 0118 0z') },
+                  {
+                    value: 'modules',
+                    label: t('sap.tabs.modules.label'),
+                    icon: navIcon(
+                      'M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z'
+                    ),
+                  },
+                  {
+                    value: 'skills',
+                    label: t('sap.tabs.skills.label'),
+                    icon: navIcon(
+                      'M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664zM21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+                    ),
+                  },
                 ],
               },
             ]}
