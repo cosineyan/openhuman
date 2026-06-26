@@ -41,11 +41,19 @@ export async function getM365TokenStatus(): Promise<M365TokenStatus> {
 }
 
 export async function m365AuthLogin(): Promise<M365TokenStatus> {
-  return callCoreRpc<M365TokenStatus>({ method: 'openhuman.m365_auth_login', params: {} });
+  return callCoreRpc<M365TokenStatus>({
+    method: 'openhuman.m365_auth_login',
+    params: {},
+    timeoutMs: 120_000,
+  });
 }
 
 export async function m365AuthRefresh(): Promise<M365TokenStatus> {
-  return callCoreRpc<M365TokenStatus>({ method: 'openhuman.m365_auth_refresh', params: {} });
+  return callCoreRpc<M365TokenStatus>({
+    method: 'openhuman.m365_auth_refresh',
+    params: {},
+    timeoutMs: 120_000,
+  });
 }
 
 export async function m365AuthLogout(): Promise<void> {

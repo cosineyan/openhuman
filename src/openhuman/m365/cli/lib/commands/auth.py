@@ -95,15 +95,19 @@ def auth_login(ctx, as_json):
 def auth_refresh(ctx, as_json):
     """Force re-extract tokens (even if not expired)."""
     try:
-        # Single extraction call — opens a new tab if needed, closes it when done.
-        # graph token may be absent (only appears after Graph API calls); non-fatal.
-        extract_tokens_from_chrome()
-        # Get graph token via Teams refresh token.
+        # If rest token is already cached and usable, skip Chrome extraction
+        # and just exchange for fresh graph/teams tokens (much faster).
+        from ..tokens import load_tokens, is_token_usable
+        cached = load_tokens()
+        rest_usable = is_token_usable(cached.get('rest'))
+        if not rest_usable:
+            # Need to open Chrome tab to get rest token.
+            extract_tokens_from_chrome()
+        # Get graph and teams via token exchange (no Chrome tab needed).
         try:
             ensure_graph_token(force=True)
         except Exception:
             pass
-        # Also refresh teams token (uses teamsRefreshToken, no Chrome tab needed).
         try:
             ensure_teams_token(force=True)
         except Exception:
