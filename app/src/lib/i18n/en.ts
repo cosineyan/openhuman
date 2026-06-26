@@ -6083,6 +6083,11 @@ const en: TranslationMap = {
   'sap.systems.mcpChrome.hint':
     'The mcp-chrome Chrome extension is required to extract tokens from Outlook/Teams and to interact with other web-based SAP systems. Install it and make sure Chrome is running.',
   'sap.systems.mcpChrome.installLink': 'Install mcp-chrome from Chrome Web Store',
+  // SAP Credentials tab
+  'sap.credentials.ahaDesc': 'Enter your Aha! personal API token to enable AI access to sap.aha.io roadmap data.',
+  'sap.credentials.ahaPlaceholder': 'Aha! API token',
+  'sap.credentials.clear': 'Clear',
+  'sap.credentials.ahaLink': 'Create a token at',
 };
 
 export default en;

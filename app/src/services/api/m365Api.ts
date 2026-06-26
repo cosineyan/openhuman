@@ -20,6 +20,11 @@ export interface M365TokenStatus {
   graph: M365TokenEntry;
   rest: M365TokenEntry;
   teams: M365TokenEntry;
+  // SAP additional services
+  aha?: M365TokenEntry;
+  jira?: M365TokenEntry;
+  wiki?: M365TokenEntry;
+  sharepoint?: M365TokenEntry;
 }
 
 // ---------------------------------------------------------------------------
@@ -58,4 +63,20 @@ export async function m365AuthRefresh(): Promise<M365TokenStatus> {
 
 export async function m365AuthLogout(): Promise<void> {
   await callCoreRpc({ method: 'openhuman.m365_auth_logout', params: {} });
+}
+
+export async function m365SetAhaToken(token: string): Promise<void> {
+  await callCoreRpc({ method: 'openhuman.m365_set_aha_token', params: { token } });
+}
+
+export async function m365ClearAhaToken(): Promise<void> {
+  await callCoreRpc({ method: 'openhuman.m365_clear_aha_token', params: {} });
+}
+
+export async function m365RefreshSharePoint(): Promise<void> {
+  await callCoreRpc({
+    method: 'openhuman.m365_refresh_sharepoint',
+    params: {},
+    timeoutMs: 30_000,
+  });
 }

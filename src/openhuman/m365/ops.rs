@@ -235,3 +235,18 @@ pub async fn auth_logout(config: &Config) -> Result<()> {
         .context("spawn python3 for m365-cli auth logout")?;
     Ok(())
 }
+
+/// Save an Aha! API token.
+pub async fn set_aha_token(token: &str, config: &Config) -> Result<Value> {
+    run_m365_cli(&["auth", "set-aha-token", token, "--json"], config).await
+}
+
+/// Remove the stored Aha! API token.
+pub async fn clear_aha_token(config: &Config) -> Result<Value> {
+    run_m365_cli(&["auth", "clear-aha-token", "--json"], config).await
+}
+
+/// Re-exchange Teams refresh token for a fresh SharePoint token.
+pub async fn refresh_sharepoint(config: &Config) -> Result<Value> {
+    run_m365_cli(&["auth", "refresh-sharepoint", "--json"], config).await
+}

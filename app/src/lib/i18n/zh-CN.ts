@@ -5527,6 +5527,10 @@ const messages: TranslationMap = {
   'sap.systems.mcpChrome.hint':
     '需要安装 mcp-chrome Chrome 扩展才能从 Outlook/Teams 提取 Token，以及与其他基于 Web 的 SAP 系统交互。请安装扩展并确保 Chrome 正在运行。',
   'sap.systems.mcpChrome.installLink': '从 Chrome 网上应用店安装 mcp-chrome',
+  'sap.credentials.ahaDesc': '输入您的 Aha! 个人 API Token，以便 AI 访问 sap.aha.io 产品路线图数据。',
+  'sap.credentials.ahaPlaceholder': 'Aha! API Token',
+  'sap.credentials.clear': '清除',
+  'sap.credentials.ahaLink': '在此创建 Token：',
 };
 
 export default messages;

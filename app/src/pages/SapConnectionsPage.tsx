@@ -17,6 +17,8 @@ import {
   m365AuthLogin,
   m365AuthLogout,
   m365AuthRefresh,
+  m365ClearAhaToken,
+  m365SetAhaToken,
   type M365TokenStatus,
   type MpcChromeStatus,
 } from '../services/api/m365Api';
@@ -212,6 +214,97 @@ function ChromeLogoBadge() {
   );
 }
 
+// Aha!
+function AhaLogoBadge() {
+  const [failed, setFailed] = useState(false);
+  if (failed)
+    return (
+      <LogoBadge>
+        <svg viewBox="0 0 24 24" fill="#CC3366" className="h-6 w-6 p-0.5">
+          <path d="M12 2L2 19h20L12 2zm0 4l7 13H5l7-13z" />
+          <rect x="11" y="12" width="2" height="4" />
+          <circle cx="12" cy="17.5" r="1" />
+        </svg>
+      </LogoBadge>
+    );
+  return (
+    <LogoBadge>
+      <img
+        src="https://logos.composio.dev/api/aha"
+        alt="Aha!"
+        className="h-full w-full object-contain p-1"
+        loading="lazy"
+        onError={() => setFailed(true)}
+      />
+    </LogoBadge>
+  );
+}
+
+// Jira
+function JiraLogoBadge() {
+  const [failed, setFailed] = useState(false);
+  if (failed)
+    return (
+      <LogoBadge>
+        <svg viewBox="0 0 24 24" fill="#0052CC" className="h-6 w-6 p-0.5">
+          <path d="M11.571 11.513H0a5.218 5.218 0 005.232 5.215l2.345.001v2.27A5.215 5.215 0 0012.79 24V12.518a1.005 1.005 0 00-1.22-.005z" />
+          <path d="M6.015 6.018H17.586a5.218 5.218 0 00-5.232-5.215l-2.345-.001V.532A5.215 5.215 0 004.796 0v11.495a1.005 1.005 0 001.22.005z" opacity="0.7" />
+          <path d="M11.571 6.018l-5.556 5.495 5.556 5.515 5.554-5.515-5.554-5.495z" opacity="0.4" />
+        </svg>
+      </LogoBadge>
+    );
+  return (
+    <LogoBadge>
+      <img
+        src="https://logos.composio.dev/api/jira"
+        alt="Jira"
+        className="h-full w-full object-contain p-1"
+        loading="lazy"
+        onError={() => setFailed(true)}
+      />
+    </LogoBadge>
+  );
+}
+
+// Confluence
+function ConfluenceLogoBadge() {
+  const [failed, setFailed] = useState(false);
+  if (failed)
+    return (
+      <LogoBadge>
+        <svg viewBox="0 0 24 24" fill="#0052CC" className="h-6 w-6 p-0.5">
+          <path d="M.87 18.4c-.26.42-.56.97-.77 1.33a.77.77 0 001.06 1.06l8.2-4.78a.77.77 0 000-1.33L1.1 9.91a.77.77 0 00-1.06 1.06c.21.36.51.91.77 1.33L4.45 18z" />
+          <path d="M23.13 5.6c.26-.42.56-.97.77-1.33a.77.77 0 00-1.06-1.06l-8.2 4.78a.77.77 0 000 1.33l8.2 4.78a.77.77 0 001.06-1.06c-.21-.36-.51-.91-.77-1.33L19.55 6z" opacity="0.7" />
+        </svg>
+      </LogoBadge>
+    );
+  return (
+    <LogoBadge>
+      <img
+        src="https://logos.composio.dev/api/confluence"
+        alt="Confluence"
+        className="h-full w-full object-contain p-1"
+        loading="lazy"
+        onError={() => setFailed(true)}
+      />
+    </LogoBadge>
+  );
+}
+
+// SharePoint
+function SharePointLogoBadge() {
+  return (
+    <LogoBadge>
+      <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6 p-0.5">
+        <circle cx="9" cy="9" r="6" fill="#038387" />
+        <circle cx="15" cy="9" r="4.5" fill="#1A9BA1" />
+        <circle cx="15" cy="15" r="5" fill="#37C6D0" />
+        <circle cx="9" cy="17" r="4" fill="#B3E0F2" />
+      </svg>
+    </LogoBadge>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Systems Tab
 // ─────────────────────────────────────────────────────────────────────────────
@@ -326,6 +419,37 @@ function SystemsTab() {
           ? `${status.teams.expiresInMin}m`
           : undefined,
       icon: <TeamsLogoBadge />,
+    },
+    {
+      key: 'sharepoint',
+      name: 'SharePoint',
+      status: tokenTileStatus(status?.sharepoint),
+      sublabel:
+        status?.sharepoint?.expiresInMin != null && status.sharepoint.valid
+          ? `${status.sharepoint.expiresInMin}m`
+          : undefined,
+      icon: <SharePointLogoBadge />,
+    },
+    {
+      key: 'jira',
+      name: 'SAP Jira',
+      status: tokenTileStatus(status?.jira),
+      sublabel: undefined,
+      icon: <JiraLogoBadge />,
+    },
+    {
+      key: 'wiki',
+      name: 'Confluence',
+      status: tokenTileStatus(status?.wiki),
+      sublabel: undefined,
+      icon: <ConfluenceLogoBadge />,
+    },
+    {
+      key: 'aha',
+      name: 'Aha!',
+      status: tokenTileStatus(status?.aha),
+      sublabel: undefined,
+      icon: <AhaLogoBadge />,
     },
   ] as const;
 
@@ -476,11 +600,73 @@ function EmptyState({ title, description }: { title: string; description: string
 
 function CredentialsTab() {
   const { t } = useT();
+  const [ahaToken, setAhaToken] = useState('');
+  const [ahaSaving, setAhaSaving] = useState(false);
+  const [ahaError, setAhaError] = useState<string | null>(null);
+  const [ahaSaved, setAhaSaved] = useState(false);
+
+  const handleSaveAha = async () => {
+    if (!ahaToken.trim()) return;
+    setAhaSaving(true);
+    setAhaError(null);
+    try {
+      await m365SetAhaToken(ahaToken.trim());
+      setAhaSaved(true);
+      setTimeout(() => setAhaSaved(false), 2000);
+      setAhaToken('');
+    } catch (e) {
+      setAhaError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAhaSaving(false);
+    }
+  };
+
+  const handleClearAha = async () => {
+    try {
+      await m365ClearAhaToken();
+    } catch {
+      // silent
+    }
+  };
+
   return (
-    <EmptyState
-      title={t('sap.tabs.credentials.emptyTitle')}
-      description={t('sap.tabs.credentials.emptyDesc')}
-    />
+    <div className="rounded-2xl border border-stone-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 shadow-soft">
+      <h3 className="text-sm font-semibold text-stone-900 dark:text-neutral-100 mb-1">Aha!</h3>
+      <p className="text-[11px] text-stone-500 dark:text-neutral-400 mb-3">
+        {t('sap.credentials.ahaDesc')}
+      </p>
+      <div className="flex gap-2">
+        <input
+          type="password"
+          value={ahaToken}
+          onChange={e => setAhaToken(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && void handleSaveAha()}
+          placeholder={t('sap.credentials.ahaPlaceholder')}
+          className="flex-1 rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-1.5 text-xs text-stone-800 dark:text-neutral-100 placeholder-stone-400 dark:placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+        />
+        <button
+          type="button"
+          onClick={() => void handleSaveAha()}
+          disabled={ahaSaving || !ahaToken.trim()}
+          className="rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-600 disabled:opacity-50 transition-colors">
+          {ahaSaved ? '✓' : ahaSaving ? t('common.loading') : t('common.save')}
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleClearAha()}
+          className="rounded-lg border border-stone-200 dark:border-neutral-700 px-3 py-1.5 text-xs text-stone-500 dark:text-neutral-400 hover:bg-stone-50 dark:hover:bg-neutral-800 transition-colors">
+          {t('sap.credentials.clear')}
+        </button>
+      </div>
+      {ahaError && <p className="mt-2 text-[11px] text-red-600 dark:text-red-400">{ahaError}</p>}
+      <p className="mt-2 text-[10px] text-stone-400 dark:text-neutral-500">
+        {t('sap.credentials.ahaLink')}{' '}
+        <a href="https://sap.aha.io/settings/api_keys" target="_blank" rel="noreferrer"
+          className="text-primary-500 hover:underline">
+          sap.aha.io/settings/api_keys
+        </a>
+      </p>
+    </div>
   );
 }
 

@@ -2,7 +2,10 @@ import os
 import sys
 import datetime as _datetime
 import click
-from ..tokens import ensure_token, ensure_teams_token, ensure_graph_token, set_token, clear_tokens, token_status, extract_tokens_from_chrome
+from ..tokens import (ensure_token, ensure_teams_token, ensure_graph_token,
+                      set_token, clear_tokens, token_status, extract_tokens_from_chrome,
+                      get_aha_token, set_aha_token, clear_aha_token,
+                      check_sso_session, ensure_spo_token, load_tokens, is_token_usable)
 
 _DEBUG_LOG = os.path.join(os.path.expanduser('~'), '.m365-cli', 'debug.log')
 
@@ -37,9 +40,28 @@ def auth():
 @click.option('--json', 'as_json', is_flag=True, help='Output raw JSON')
 @click.pass_context
 def auth_status(ctx, as_json):
-    """Show cached token status."""
+    """Show cached token status including SAP additional services."""
     try:
         status = token_status()
+        # Aha! API token
+        aha_tok = get_aha_token()
+        status['aha'] = {'valid': bool(aha_tok), 'cached': bool(aha_tok)}
+        # Jira SSO (browser session on jira.tools.sap)
+        jira_ok = check_sso_session('jira.tools.sap')
+        status['jira'] = {'valid': jira_ok, 'cached': jira_ok}
+        # Confluence Wiki SSO (browser session on wiki.one.int.sap)
+        wiki_ok = check_sso_session('wiki.one.int.sap')
+        status['wiki'] = {'valid': wiki_ok, 'cached': wiki_ok}
+        # SharePoint SPO token
+        tokens = load_tokens()
+        spo_entry = tokens.get('spo:sap.sharepoint.com')
+        spo_usable = is_token_usable(spo_entry)
+        status['sharepoint'] = {
+            'valid': spo_usable,
+            'cached': bool(spo_entry),
+            'expiresInMin': round((spo_entry['expiresOn'] - __import__('time').time()) / 60)
+                if spo_entry and spo_entry.get('expiresOn') and spo_usable else None,
+        }
         if as_json:
             ctx.obj['out']({'ok': True, **status})
         else:
@@ -173,3 +195,43 @@ def auth_set_rest(ctx, token):
     """Manually set Outlook REST API token."""
     set_token('rest', token)
     ctx.obj['text']('REST token saved.')
+
+
+@auth.command('set-aha-token')
+@click.argument('token')
+@click.option('--json', 'as_json', is_flag=True)
+@click.pass_context
+def auth_set_aha(ctx, token, as_json):
+    """Save an Aha! API token."""
+    set_aha_token(token)
+    if as_json:
+        ctx.obj['out']({'ok': True, 'saved': True})
+    else:
+        ctx.obj['text']('Aha! token saved.')
+
+
+@auth.command('clear-aha-token')
+@click.option('--json', 'as_json', is_flag=True)
+@click.pass_context
+def auth_clear_aha(ctx, as_json):
+    """Remove the stored Aha! API token."""
+    clear_aha_token()
+    if as_json:
+        ctx.obj['out']({'ok': True, 'cleared': True})
+    else:
+        ctx.obj['text']('Aha! token cleared.')
+
+
+@auth.command('refresh-sharepoint')
+@click.option('--json', 'as_json', is_flag=True)
+@click.pass_context
+def auth_refresh_spo(ctx, as_json):
+    """Re-exchange Teams refresh token for a fresh SharePoint token."""
+    try:
+        ensure_spo_token('sap.sharepoint.com')
+        if as_json:
+            ctx.obj['out']({'ok': True})
+        else:
+            ctx.obj['text']('SharePoint token refreshed.')
+    except Exception as e:
+        ctx.obj['die'](str(e))

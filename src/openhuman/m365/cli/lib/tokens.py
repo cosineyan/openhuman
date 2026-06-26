@@ -627,3 +627,41 @@ def get_tenant_id(tokens):
         except Exception:
             pass
     raise RuntimeError('Tenant ID not found. Run "m365-cli auth login" or ensure Teams Web is open.')
+
+
+# --- SAP additional services ---
+
+def get_aha_token():
+    """Return the Aha! API token stored in the token cache, or None."""
+    tokens = load_tokens()
+    return tokens.get('ahaToken') or None
+
+
+def set_aha_token(token_str):
+    """Persist an Aha! API token."""
+    tokens = load_tokens()
+    tokens['ahaToken'] = token_str
+    save_tokens(tokens)
+
+
+def clear_aha_token():
+    tokens = load_tokens()
+    tokens.pop('ahaToken', None)
+    save_tokens(tokens)
+
+
+def check_sso_session(domain):
+    """Check whether a Chrome session exists for the given domain.
+    Returns True if a tab is open on that domain, False otherwise."""
+    try:
+        resp = mcp_browser_cmd({'command': 'sessions'})
+        if not resp.get('ok'):
+            return False
+        return any(domain in (s.get('url') or '') for s in resp.get('sessions', []))
+    except Exception:
+        return False
+
+
+def ensure_spo_token_cached():
+    """Ensure sap.sharepoint.com SPO token is cached and valid."""
+    return ensure_spo_token('sap.sharepoint.com')
