@@ -81,7 +81,8 @@ function ConnectionTile({ name, statusLabel, status, icon, onClick }: Connection
       type="button"
       onClick={onClick}
       className={`group flex flex-col items-center gap-2 rounded-2xl border p-3 pb-3 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 ${tileBorder(status)}`}>
-      <div className="relative flex h-12 w-12 flex-shrink-0 items-center justify-center text-stone-700 dark:text-neutral-200 [&>span]:h-12 [&>span]:w-12 [&>span]:rounded-2xl [&_svg]:h-7 [&_svg]:w-7">
+      {/* Icon container: same as ChannelTile — h-12 w-12, inner SVG h-7 w-7 */}
+      <div className="relative flex h-12 w-12 flex-shrink-0 items-center justify-center [&_svg]:h-7 [&_svg]:w-7">
         {icon}
       </div>
       <div className="flex min-h-[2.5rem] w-full min-w-0 flex-col items-center justify-start gap-0.5">
@@ -97,29 +98,58 @@ function ConnectionTile({ name, statusLabel, status, icon, onClick }: Connection
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Coloured icon badges — same pattern as SkillIconBadge in skillIcons.tsx
+// Service icons — large, branded, same visual weight as Connections logos
+// Each is a rounded square with brand color background + white icon inside,
+// matching the size that ChannelTile renders them (28px SVG in 48px container)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function IconBadge({
-  bg,
-  fg,
-  children,
-  label,
-}: {
-  bg: string;
-  fg: string;
-  children: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <span
-      role="img"
-      aria-label={label}
-      className={`flex h-8 w-8 items-center justify-center rounded-xl shadow-sm ring-1 ring-black/5 ${bg}`}>
-      <span className={`flex h-[18px] w-[18px] items-center justify-center ${fg}`}>{children}</span>
-    </span>
-  );
-}
+const ChromeIcon = () => (
+  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F3F0FF] shadow-sm ring-1 ring-black/5">
+    <svg viewBox="0 0 28 28" fill="none" className="h-7 w-7">
+      <circle cx="14" cy="14" r="5.5" fill="#4F46E5" />
+      <circle cx="14" cy="14" r="11" stroke="#4F46E5" strokeWidth="2" fill="none" />
+      <line x1="14" y1="3" x2="14" y2="8.5" stroke="#4F46E5" strokeWidth="2" strokeLinecap="round" />
+      <line x1="23.5" y1="19.5" x2="18.2" y2="16.5" stroke="#4F46E5" strokeWidth="2" strokeLinecap="round" />
+      <line x1="4.5" y1="19.5" x2="9.8" y2="16.5" stroke="#4F46E5" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  </span>
+);
+
+const OutlookIcon = () => (
+  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E8F3FD] shadow-sm ring-1 ring-black/5">
+    <svg viewBox="0 0 28 28" fill="none" className="h-7 w-7">
+      {/* Envelope body */}
+      <rect x="3" y="7" width="22" height="14" rx="2" fill="#0078D4" />
+      {/* Envelope flap */}
+      <path d="M3 9l11 7 11-7" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </svg>
+  </span>
+);
+
+const GraphIcon = () => (
+  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E8F3FD] shadow-sm ring-1 ring-black/5">
+    <svg viewBox="0 0 28 28" fill="none" className="h-7 w-7">
+      {/* Microsoft 4-square logo */}
+      <rect x="3" y="3" width="10" height="10" rx="1.5" fill="#0078D4" />
+      <rect x="15" y="3" width="10" height="10" rx="1.5" fill="#0078D4" opacity="0.75" />
+      <rect x="3" y="15" width="10" height="10" rx="1.5" fill="#0078D4" opacity="0.75" />
+      <rect x="15" y="15" width="10" height="10" rx="1.5" fill="#0078D4" opacity="0.5" />
+    </svg>
+  </span>
+);
+
+const TeamsIcon = () => (
+  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EEF0FF] shadow-sm ring-1 ring-black/5">
+    <svg viewBox="0 0 28 28" fill="#5059C9" className="h-7 w-7">
+      {/* Larger person */}
+      <circle cx="16" cy="8" r="3.5" />
+      <path d="M10 20c0-3.314 2.686-6 6-6s6 2.686 6 6H10z" />
+      {/* Smaller person */}
+      <circle cx="9" cy="10" r="2.5" />
+      <path d="M3.5 20c0-2.485 2.015-4.5 4.5-4.5h3a4.5 4.5 0 011.5.255A6 6 0 0010 20H3.5z" opacity="0.7" />
+    </svg>
+  </span>
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Systems Tab
@@ -204,25 +234,7 @@ function SystemsTab() {
           ? 'connected'
           : 'disconnected') as TileStatus,
       sublabel: chromeStatus?.ok ? `:${chromeStatus.port}` : undefined,
-      icon: (
-        <IconBadge bg="bg-[#EEF2FF]" fg="text-[#4F46E5]" label="mcp-chrome">
-          {/* Chrome icon */}
-          <svg viewBox="0 0 18 18" fill="none" className="h-[18px] w-[18px]">
-            <circle cx="9" cy="9" r="4" fill="currentColor" />
-            <circle cx="9" cy="9" r="7.5" stroke="currentColor" strokeWidth="1.5" fill="none" />
-            <line x1="9" y1="1.5" x2="9" y2="6" stroke="currentColor" strokeWidth="1.5" />
-            <line
-              x1="15.9"
-              y1="12.75"
-              x2="11.6"
-              y2="10.5"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            />
-            <line x1="2.1" y1="12.75" x2="6.4" y2="10.5" stroke="currentColor" strokeWidth="1.5" />
-          </svg>
-        </IconBadge>
-      ),
+      icon: <ChromeIcon />,
     },
     {
       key: 'rest',
@@ -232,14 +244,7 @@ function SystemsTab() {
         status?.rest?.expiresInMin != null && status.rest.valid
           ? `${status.rest.expiresInMin}m`
           : undefined,
-      icon: (
-        <IconBadge bg="bg-[#EBF5FB]" fg="text-[#0078D4]" label="Outlook">
-          {/* Outlook envelope icon */}
-          <svg viewBox="0 0 18 18" fill="currentColor" className="h-[18px] w-[18px]">
-            <path d="M2 4.5A2.5 2.5 0 014.5 2h9A2.5 2.5 0 0116 4.5v9a2.5 2.5 0 01-2.5 2.5h-9A2.5 2.5 0 012 13.5v-9zm2 0v.38l5 3.12 5-3.12V4.5a.5.5 0 00-.5-.5h-9a.5.5 0 00-.5.5zm10 2.12L9 9.88 4 6.62V13.5a.5.5 0 00.5.5h9a.5.5 0 00.5-.5V6.62z" />
-          </svg>
-        </IconBadge>
-      ),
+      icon: <OutlookIcon />,
     },
     {
       key: 'graph',
@@ -249,17 +254,7 @@ function SystemsTab() {
         status?.graph?.expiresInMin != null && status.graph.valid
           ? `${status.graph.expiresInMin}m`
           : undefined,
-      icon: (
-        <IconBadge bg="bg-[#F0F7FF]" fg="text-[#0078D4]" label="Graph API">
-          {/* Microsoft M logo */}
-          <svg viewBox="0 0 18 18" fill="currentColor" className="h-[18px] w-[18px]">
-            <rect x="1" y="1" width="7.5" height="7.5" rx="1" />
-            <rect x="9.5" y="1" width="7.5" height="7.5" rx="1" opacity=".7" />
-            <rect x="1" y="9.5" width="7.5" height="7.5" rx="1" opacity=".7" />
-            <rect x="9.5" y="9.5" width="7.5" height="7.5" rx="1" opacity=".4" />
-          </svg>
-        </IconBadge>
-      ),
+      icon: <GraphIcon />,
     },
     {
       key: 'teams',
@@ -269,17 +264,7 @@ function SystemsTab() {
         status?.teams?.expiresInMin != null && status.teams.valid
           ? `${status.teams.expiresInMin}m`
           : undefined,
-      icon: (
-        <IconBadge bg="bg-[#EEF2FF]" fg="text-[#5059C9]" label="Teams">
-          {/* Teams person + T icon */}
-          <svg viewBox="0 0 18 18" fill="currentColor" className="h-[18px] w-[18px]">
-            <circle cx="11" cy="5" r="2.5" />
-            <path d="M7 13c0-2.21 1.79-4 4-4h0c2.21 0 4 1.79 4 4H7z" />
-            <circle cx="6" cy="6.5" r="2" />
-            <path d="M2 13c0-1.66 1.34-3 3-3h2.5a4 4 0 00-.5 2H2z" />
-          </svg>
-        </IconBadge>
-      ),
+      icon: <TeamsIcon />,
     },
   ] as const;
 
