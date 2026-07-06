@@ -15,7 +15,7 @@ const en: TranslationMap = {
   'nav.connections': 'Connections',
   'nav.memory': 'Intelligence',
   'nav.projects': 'Projects',
-  'nav.sapConnections': 'SAP',
+  'nav.sapConnections': 'SAP Systems',
   'nav.alerts': 'Alerts',
   'nav.rewards': 'Rewards',
   'nav.settings': 'Settings',
@@ -6075,6 +6075,8 @@ const en: TranslationMap = {
   'sap.systems.refreshing': 'Refreshing…',
   'sap.systems.disconnect': 'Disconnect',
   'sap.systems.disconnecting': 'Disconnecting…',
+  'sap.systems.waitingLogin': 'Waiting for login…',
+  'sap.systems.waitingLoginHint': 'Please complete login in the Outlook tab that just opened in Chrome.',
   'sap.systems.hint':
     'Tokens are extracted from your open Outlook/Teams tabs. Make sure you are logged into Outlook Web in Chrome before clicking Connect. If tokens are expired, the login process will auto-refresh the Outlook tab.',
   'sap.systems.mcpChrome.title': 'mcp-chrome Extension',
@@ -6089,7 +6091,17 @@ const en: TranslationMap = {
   'sap.credentials.ahaPlaceholder': 'Aha! API token',
   'sap.credentials.clear': 'Clear',
   'sap.credentials.ahaLink': 'Create a token at',
+  'sap.credentials.githubToolsTitle': 'GitHub (github.tools.sap)',
+  'sap.credentials.githubToolsDesc':
+    'Personal Access Token for github.tools.sap — used to read repos, issues, and PRs on the SAP internal GitHub instance.',
+  'sap.credentials.githubWdfTitle': 'GitHub (github.wdf.sap.corp)',
+  'sap.credentials.githubWdfDesc':
+    'Personal Access Token for github.wdf.sap.corp — used to read repos, issues, and PRs on the SAP WDF GitHub instance.',
+  'sap.credentials.githubTokenPlaceholder': 'GitHub Personal Access Token (ghp_…)',
+  'sap.credentials.githubTokenLink': 'Create a token at',
+  'sap.credentials.tokenStored': 'API key stored',
   'sap.systems.clickToOpen': 'Click to open',
+  'sap.systems.storedNoNetwork': 'Stored · no network',
 };
 
 export default en;

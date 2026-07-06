@@ -25,6 +25,8 @@ export interface M365TokenStatus {
   jira?: M365TokenEntry;
   wiki?: M365TokenEntry;
   sharepoint?: M365TokenEntry;
+  githubTools?: M365TokenEntry;
+  githubWdf?: M365TokenEntry;
 }
 
 // ---------------------------------------------------------------------------
@@ -79,4 +81,20 @@ export async function m365RefreshSharePoint(): Promise<void> {
 
 export async function m365OpenInChrome(url: string): Promise<void> {
   await callCoreRpc({ method: 'openhuman.m365_open_in_chrome', params: { url } });
+}
+
+export async function m365SetGithubToolsToken(token: string): Promise<void> {
+  await callCoreRpc({ method: 'openhuman.m365_set_github_tools_token', params: { token } });
+}
+
+export async function m365ClearGithubToolsToken(): Promise<void> {
+  await callCoreRpc({ method: 'openhuman.m365_clear_github_tools_token', params: {} });
+}
+
+export async function m365SetGithubWdfToken(token: string): Promise<void> {
+  await callCoreRpc({ method: 'openhuman.m365_set_github_wdf_token', params: { token } });
+}
+
+export async function m365ClearGithubWdfToken(): Promise<void> {
+  await callCoreRpc({ method: 'openhuman.m365_clear_github_wdf_token', params: {} });
 }

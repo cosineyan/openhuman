@@ -22,6 +22,10 @@ pub fn all_controller_schemas() -> Vec<ControllerSchema> {
         schema("clear_aha_token"),
         schema("refresh_sharepoint"),
         schema("open_in_chrome"),
+        schema("set_github_tools_token"),
+        schema("clear_github_tools_token"),
+        schema("set_github_wdf_token"),
+        schema("clear_github_wdf_token"),
     ]
 }
 
@@ -62,6 +66,22 @@ pub fn all_registered_controllers() -> Vec<RegisteredController> {
         RegisteredController {
             schema: schema("open_in_chrome"),
             handler: handle_open_in_chrome,
+        },
+        RegisteredController {
+            schema: schema("set_github_tools_token"),
+            handler: handle_set_github_tools_token,
+        },
+        RegisteredController {
+            schema: schema("clear_github_tools_token"),
+            handler: handle_clear_github_tools_token,
+        },
+        RegisteredController {
+            schema: schema("set_github_wdf_token"),
+            handler: handle_set_github_wdf_token,
+        },
+        RegisteredController {
+            schema: schema("clear_github_wdf_token"),
+            handler: handle_clear_github_wdf_token,
         },
     ]
 }
@@ -195,6 +215,64 @@ pub fn schema(function: &str) -> ControllerSchema {
                 required: true,
             }],
         },
+        "set_github_tools_token" => ControllerSchema {
+            namespace: "m365",
+            function: "set_github_tools_token",
+            description: "Save a Personal Access Token for github.tools.sap.",
+            inputs: vec![FieldSchema {
+                name: "token",
+                ty: TypeSchema::String,
+                comment: "GitHub PAT with repo/read:org scopes for github.tools.sap.",
+                required: true,
+            }],
+            outputs: vec![FieldSchema {
+                name: "result",
+                ty: TypeSchema::Json,
+                comment: "{ ok: true, saved: true }",
+                required: true,
+            }],
+        },
+        "clear_github_tools_token" => ControllerSchema {
+            namespace: "m365",
+            function: "clear_github_tools_token",
+            description: "Remove the stored PAT for github.tools.sap.",
+            inputs: vec![],
+            outputs: vec![FieldSchema {
+                name: "result",
+                ty: TypeSchema::Json,
+                comment: "{ ok: true, cleared: true }",
+                required: true,
+            }],
+        },
+        "set_github_wdf_token" => ControllerSchema {
+            namespace: "m365",
+            function: "set_github_wdf_token",
+            description: "Save a Personal Access Token for github.wdf.sap.corp.",
+            inputs: vec![FieldSchema {
+                name: "token",
+                ty: TypeSchema::String,
+                comment: "GitHub PAT with repo/read:org scopes for github.wdf.sap.corp.",
+                required: true,
+            }],
+            outputs: vec![FieldSchema {
+                name: "result",
+                ty: TypeSchema::Json,
+                comment: "{ ok: true, saved: true }",
+                required: true,
+            }],
+        },
+        "clear_github_wdf_token" => ControllerSchema {
+            namespace: "m365",
+            function: "clear_github_wdf_token",
+            description: "Remove the stored PAT for github.wdf.sap.corp.",
+            inputs: vec![],
+            outputs: vec![FieldSchema {
+                name: "result",
+                ty: TypeSchema::Json,
+                comment: "{ ok: true, cleared: true }",
+                required: true,
+            }],
+        },
         _ => ControllerSchema {
             namespace: "m365",
             function: "unknown",
@@ -321,6 +399,68 @@ fn handle_open_in_chrome(params: Map<String, Value>) -> ControllerFuture {
         let result = ops::open_in_chrome(&url).await.map_err(|e| e.to_string())?;
         to_json(RpcOutcome {
             value: result,
+            logs: vec![],
+        })
+    })
+}
+
+fn handle_set_github_tools_token(params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let config = config_rpc::load_config_with_timeout().await?;
+        let token = params
+            .get("token")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        ops::set_github_tools_token(&token, &config)
+            .await
+            .map_err(|e| e.to_string())?;
+        to_json(RpcOutcome {
+            value: serde_json::json!({ "ok": true, "saved": true }),
+            logs: vec![],
+        })
+    })
+}
+
+fn handle_clear_github_tools_token(_params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async {
+        let config = config_rpc::load_config_with_timeout().await?;
+        ops::clear_github_tools_token(&config)
+            .await
+            .map_err(|e| e.to_string())?;
+        to_json(RpcOutcome {
+            value: serde_json::json!({ "ok": true, "cleared": true }),
+            logs: vec![],
+        })
+    })
+}
+
+fn handle_set_github_wdf_token(params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let config = config_rpc::load_config_with_timeout().await?;
+        let token = params
+            .get("token")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        ops::set_github_wdf_token(&token, &config)
+            .await
+            .map_err(|e| e.to_string())?;
+        to_json(RpcOutcome {
+            value: serde_json::json!({ "ok": true, "saved": true }),
+            logs: vec![],
+        })
+    })
+}
+
+fn handle_clear_github_wdf_token(_params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async {
+        let config = config_rpc::load_config_with_timeout().await?;
+        ops::clear_github_wdf_token(&config)
+            .await
+            .map_err(|e| e.to_string())?;
+        to_json(RpcOutcome {
+            value: serde_json::json!({ "ok": true, "cleared": true }),
             logs: vec![],
         })
     })

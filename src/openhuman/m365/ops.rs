@@ -83,6 +83,10 @@ pub fn token_file_path(config: &Config) -> PathBuf {
 // ---------------------------------------------------------------------------
 
 async fn run_m365_cli(args: &[&str], config: &Config) -> Result<Value> {
+    run_m365_cli_owned(args.iter().map(|s| s.to_string()).collect(), config).await
+}
+
+async fn run_m365_cli_owned(args: Vec<String>, config: &Config) -> Result<Value> {
     let script = resolve_m365_cli_script().context(
         "m365_cli.py not found. Check bundled resources or set M365_CLI_SCRIPT env var.",
     )?;
@@ -108,7 +112,7 @@ async fn run_m365_cli(args: &[&str], config: &Config) -> Result<Value> {
 
     let output = tokio::process::Command::new("python3")
         .arg(&script)
-        .args(args)
+        .args(&args)
         .env("M365_TOKEN_FILE", token_file.to_string_lossy().as_ref())
         .output()
         .await
@@ -143,25 +147,34 @@ async fn run_m365_cli(args: &[&str], config: &Config) -> Result<Value> {
 // ---------------------------------------------------------------------------
 
 /// Return token status for graph, rest, and teams.
-/// If the rest token is cached but expired and an Outlook tab is open in Chrome,
-/// automatically triggers a background refresh so the next poll shows valid tokens.
+/// Automatically triggers background refresh when any token is expired OR
+/// expiring within 5 minutes, so the next 60-second UI poll shows valid tokens.
 pub async fn token_status(config: &Config) -> Result<Value> {
     let status = run_m365_cli(&["auth", "status", "--json"], config).await?;
 
-    // Auto-refresh: if rest is cached but expired, try a silent refresh in the
-    // background so the next 60-second UI poll picks up fresh tokens.
-    let rest_valid = status
-        .get("rest")
-        .and_then(|r| r.get("valid"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-    let rest_cached = status
-        .get("rest")
-        .and_then(|r| r.get("cached"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+    // Helper: check if a token entry needs refresh (expired or < 5 min remaining)
+    let needs_refresh = |key: &str| -> bool {
+        let entry = status.get(key);
+        let valid = entry.and_then(|e| e.get("valid")).and_then(|v| v.as_bool()).unwrap_or(false);
+        let cached = entry.and_then(|e| e.get("cached")).and_then(|v| v.as_bool()).unwrap_or(false);
+        let expires_in = entry.and_then(|e| e.get("expiresInMin")).and_then(|v| v.as_i64());
 
-    if rest_cached && !rest_valid {
+        if !cached {
+            return false; // never had a token, nothing to refresh
+        }
+        if !valid {
+            return true; // expired
+        }
+        // Valid but expiring within 5 minutes
+        matches!(expires_in, Some(mins) if mins < 5)
+    };
+
+    let should_refresh = needs_refresh("rest")
+        || needs_refresh("graph")
+        || needs_refresh("teams")
+        || needs_refresh("sharepoint");
+
+    if should_refresh {
         // Kick off a background refresh — doesn't block the status response.
         let config_clone = config.clone();
         tokio::spawn(async move {
@@ -208,7 +221,7 @@ pub async fn mcp_chrome_status() -> Value {
     }
 }
 
-/// Extract tokens from Chrome (opens Outlook tab if needed).
+/// Extract tokens from Chrome (opens Outlook tab if needed, waits until tokens appear).
 /// Returns updated token status.
 pub async fn auth_login(config: &Config) -> Result<Value> {
     run_m365_cli(&["auth", "login", "--json"], config).await
@@ -249,6 +262,26 @@ pub async fn clear_aha_token(config: &Config) -> Result<Value> {
 /// Re-exchange Teams refresh token for a fresh SharePoint token.
 pub async fn refresh_sharepoint(config: &Config) -> Result<Value> {
     run_m365_cli(&["auth", "refresh-sharepoint", "--json"], config).await
+}
+
+/// Save a GitHub PAT for github.tools.sap.
+pub async fn set_github_tools_token(token: &str, config: &Config) -> Result<Value> {
+    run_m365_cli(&["auth", "set-github-tools-token", token, "--json"], config).await
+}
+
+/// Remove the stored PAT for github.tools.sap.
+pub async fn clear_github_tools_token(config: &Config) -> Result<Value> {
+    run_m365_cli(&["auth", "clear-github-tools-token", "--json"], config).await
+}
+
+/// Save a GitHub PAT for github.wdf.sap.corp.
+pub async fn set_github_wdf_token(token: &str, config: &Config) -> Result<Value> {
+    run_m365_cli(&["auth", "set-github-wdf-token", token, "--json"], config).await
+}
+
+/// Remove the stored PAT for github.wdf.sap.corp.
+pub async fn clear_github_wdf_token(config: &Config) -> Result<Value> {
+    run_m365_cli(&["auth", "clear-github-wdf-token", "--json"], config).await
 }
 
 /// Open a URL in Chrome via mcp-chrome (to let user log in for SSO-based services).

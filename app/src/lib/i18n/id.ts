@@ -31,7 +31,7 @@ const messages: TranslationMap = {
   'nav.connections': 'Koneksi',
   'nav.memory': 'Memori',
   'nav.projects': 'Projects',
-  'nav.sapConnections': 'SAP',
+  'nav.sapConnections': 'SAP Systems',
   'nav.alerts': 'Peringatan',
   'nav.rewards': 'Hadiah',
   'nav.settings': 'Pengaturan',

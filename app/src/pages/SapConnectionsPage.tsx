@@ -18,8 +18,12 @@ import {
   m365AuthLogout,
   m365AuthRefresh,
   m365ClearAhaToken,
+  m365ClearGithubToolsToken,
+  m365ClearGithubWdfToken,
   m365OpenInChrome,
   m365SetAhaToken,
+  m365SetGithubToolsToken,
+  m365SetGithubWdfToken,
   type M365TokenStatus,
   type MpcChromeStatus,
 } from '../services/api/m365Api';
@@ -241,31 +245,27 @@ function AhaLogoBadge() {
   );
 }
 
-// Jira
+// Jira — blue ticket/issue icon distinct from Confluence's chevrons
 function JiraLogoBadge() {
-  const [failed, setFailed] = useState(false);
-  if (failed)
-    return (
-      <LogoBadge>
-        <svg viewBox="0 0 24 24" fill="#0052CC" className="h-6 w-6 p-0.5">
-          <path d="M11.571 11.513H0a5.218 5.218 0 005.232 5.215l2.345.001v2.27A5.215 5.215 0 0012.79 24V12.518a1.005 1.005 0 00-1.22-.005z" />
-          <path
-            d="M6.015 6.018H17.586a5.218 5.218 0 00-5.232-5.215l-2.345-.001V.532A5.215 5.215 0 004.796 0v11.495a1.005 1.005 0 001.22.005z"
-            opacity="0.7"
-          />
-          <path d="M11.571 6.018l-5.556 5.495 5.556 5.515 5.554-5.515-5.554-5.495z" opacity="0.4" />
-        </svg>
-      </LogoBadge>
-    );
   return (
     <LogoBadge>
-      <img
-        src="https://logos.composio.dev/api/jira"
-        alt="Jira"
-        className="h-full w-full object-contain p-1"
-        loading="lazy"
-        onError={() => setFailed(true)}
-      />
+      {/* Jira official logo: two interlocking "J" shapes */}
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 p-0.5">
+        <path
+          d="M11.53 0C9.07 0 7.07 1.97 7.07 4.4v.6H3.6C1.61 5 0 6.61 0 8.6v11.8C0 22.39 1.61 24 3.6 24h11.8c2 0 3.6-1.61 3.6-3.6v-.6h3.4c2 0 3.6-1.61 3.6-3.6V4.4C26 1.97 24.03 0 21.6 0z"
+          fill="none"
+        />
+        <path
+          d="M12.53 2H5a3 3 0 00-3 3v12a3 3 0 003 3h3v-2.5H5a.5.5 0 01-.5-.5V5a.5.5 0 01.5-.5h7a.5.5 0 01.5.5v1h2V5a3 3 0 00-2-2.83V2z"
+          fill="#0052CC"
+        />
+        <path
+          d="M19 7h-7a3 3 0 00-3 3v9a3 3 0 003 3h7a3 3 0 003-3v-9a3 3 0 00-3-3zm1 12a1 1 0 01-1 1h-7a1 1 0 01-1-1v-9a1 1 0 011-1h7a1 1 0 011 1v9z"
+          fill="#0052CC"
+        />
+        <rect x="14" y="12" width="4" height="1.5" rx="0.75" fill="#0052CC" />
+        <rect x="14" y="15" width="2.5" height="1.5" rx="0.75" fill="#0052CC" />
+      </svg>
     </LogoBadge>
   );
 }
@@ -312,6 +312,18 @@ function SharePointLogoBadge() {
   );
 }
 
+// GitHub (SAP Enterprise) — GitHub mark (Octocat silhouette simplified)
+function GithubLogoBadge() {
+  return (
+    <LogoBadge>
+      {/* GitHub Invertocat mark */}
+      <svg viewBox="0 0 24 24" className="h-6 w-6 p-0.5" fill="currentColor">
+        <path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.341-3.369-1.341-.454-1.154-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836a9.59 9.59 0 012.504.337c1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z" />
+      </svg>
+    </LogoBadge>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Systems Tab
 // ─────────────────────────────────────────────────────────────────────────────
@@ -322,6 +334,7 @@ function SystemsTab() {
   const [status, setStatus] = useState<M365TokenStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<'login' | 'refresh' | 'logout' | null>(null);
+  const [waitingLogin, setWaitingLogin] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -330,6 +343,19 @@ function SystemsTab() {
       setChromeStatus(chrome);
       setStatus(tokens);
       setError(null);
+      // If the backend just triggered a background refresh (any cached token
+      // was expired), schedule a follow-up poll in 8 s to pick up the result.
+      const anyExpiredNow = ['graph', 'rest', 'teams', 'sharepoint'].some(k => {
+        const e = tokens[k as keyof typeof tokens] as { cached?: boolean; valid?: boolean } | undefined;
+        return e?.cached && !e?.valid;
+      });
+      // If we were waiting for login and tokens now appear, clear waiting state.
+      if (tokens.rest?.valid || tokens.graph?.valid) {
+        setWaitingLogin(false);
+      }
+      if (anyExpiredNow) {
+        setTimeout(() => void load(), 8_000);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -339,15 +365,32 @@ function SystemsTab() {
 
   useEffect(() => {
     void load();
-    const id = setInterval(() => void load(), 60_000);
-    return () => clearInterval(id);
-  }, [load]);
+    // When any token is expired/missing, poll every 5 s so the UI reflects the
+    // background refresh quickly. Once all cached tokens are valid, slow back
+    // down to 60 s to avoid hammering the Python subprocess.
+    const scheduleNext = () => {
+      const anyExpired = status
+        ? ['graph', 'rest', 'teams', 'sharepoint'].some(k => {
+            const e = status[k as keyof typeof status] as { cached?: boolean; valid?: boolean } | undefined;
+            return e?.cached && !e?.valid;
+          })
+        : false;
+      // While waiting for user to log in: poll every 3 s.
+      // While any token expired (background refresh running): poll every 5 s.
+      // Otherwise: poll every 60 s.
+      const interval = waitingLogin ? 3_000 : anyExpired ? 5_000 : 60_000;
+      return setTimeout(() => { void load(); }, interval);
+    };
+    let timer = scheduleNext();
+    return () => clearTimeout(timer);
+  }, [load, status, waitingLogin]);
 
   const handleLogin = async () => {
     setBusy('login');
     setError(null);
     try {
       const s = await m365AuthLogin();
+      setWaitingLogin(false);
       setStatus(s);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -457,8 +500,28 @@ function SystemsTab() {
       key: 'aha',
       name: 'Aha!',
       status: tokenTileStatus(status?.aha),
-      sublabel: undefined,
+      sublabel: status?.aha?.cached && !status.aha.valid
+        ? t('sap.systems.storedNoNetwork')
+        : undefined,
       icon: <AhaLogoBadge />,
+    },
+    {
+      key: 'githubTools',
+      name: 'GitHub (tools)',
+      status: tokenTileStatus(status?.githubTools),
+      sublabel: status?.githubTools?.cached && !status.githubTools.valid
+        ? t('sap.systems.storedNoNetwork')
+        : undefined,
+      icon: <GithubLogoBadge />,
+    },
+    {
+      key: 'githubWdf',
+      name: 'GitHub (wdf)',
+      status: tokenTileStatus(status?.githubWdf),
+      sublabel: status?.githubWdf?.cached && !status.githubWdf.valid
+        ? t('sap.systems.storedNoNetwork')
+        : undefined,
+      icon: <GithubLogoBadge />,
     },
   ] as const;
 
@@ -556,34 +619,46 @@ function SystemsTab() {
       )}
 
       {/* Connect / Refresh / Disconnect — at the bottom like channel default selector */}
-      <div className="mt-4 flex items-center gap-2 border-t border-stone-100 dark:border-neutral-800 pt-3">
-        {isConnected ? (
-          <>
+      <div className="mt-4 flex flex-col gap-2 border-t border-stone-100 dark:border-neutral-800 pt-3">
+        <div className="flex items-center gap-2">
+          {isConnected ? (
+            <>
+              <button
+                type="button"
+                onClick={() => void handleRefresh()}
+                disabled={!!busy}
+                className="rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800/60 px-3 py-1.5 text-xs font-medium text-stone-600 dark:text-neutral-300 hover:border-stone-300 dark:hover:border-neutral-600 disabled:opacity-50 transition-colors">
+                {busy === 'refresh' ? t('sap.systems.refreshing') : t('sap.systems.refresh')}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleLogout()}
+                disabled={!!busy}
+                className="rounded-lg border border-red-200 dark:border-red-800/60 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:border-red-300 dark:hover:border-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50 transition-colors">
+                {busy === 'logout' ? t('sap.systems.disconnecting') : t('sap.systems.disconnect')}
+              </button>
+            </>
+          ) : (
             <button
               type="button"
-              onClick={() => void handleRefresh()}
-              disabled={!!busy}
-              className="rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800/60 px-3 py-1.5 text-xs font-medium text-stone-600 dark:text-neutral-300 hover:border-stone-300 dark:hover:border-neutral-600 disabled:opacity-50 transition-colors">
-              {busy === 'refresh' ? t('sap.systems.refreshing') : t('sap.systems.refresh')}
+              onClick={() => void handleLogin()}
+              disabled={!!busy || waitingLogin}
+              className="rounded-lg bg-primary-500 px-4 py-1.5 text-xs font-semibold text-white hover:bg-primary-600 disabled:opacity-50 transition-colors">
+              {busy === 'login'
+                ? t('sap.systems.connecting')
+                : waitingLogin
+                  ? t('sap.systems.waitingLogin')
+                  : t('sap.systems.connect')}
             </button>
-            <button
-              type="button"
-              onClick={() => void handleLogout()}
-              disabled={!!busy}
-              className="rounded-lg border border-red-200 dark:border-red-800/60 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:border-red-300 dark:hover:border-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50 transition-colors">
-              {busy === 'logout' ? t('sap.systems.disconnecting') : t('sap.systems.disconnect')}
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={() => void handleLogin()}
-            disabled={!!busy}
-            className="rounded-lg bg-primary-500 px-4 py-1.5 text-xs font-semibold text-white hover:bg-primary-600 disabled:opacity-50 transition-colors">
-            {busy === 'login' ? t('sap.systems.connecting') : t('sap.systems.connect')}
-          </button>
+          )}
+          {error && <p className="text-[11px] text-red-600 dark:text-red-400 ml-1">{error}</p>}
+        </div>
+        {waitingLogin && (
+          <p className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+            {t('sap.systems.waitingLoginHint')}
+          </p>
         )}
-        {error && <p className="text-[11px] text-red-600 dark:text-red-400 ml-1">{error}</p>}
       </div>
     </div>
   );
@@ -620,10 +695,36 @@ function EmptyState({ title, description }: { title: string; description: string
 
 function CredentialsTab() {
   const { t } = useT();
+
+  // Stored status — loaded on mount so we know which tokens are already present
+  const [ahaStored, setAhaStored] = useState(false);
+  const [ghToolsStored, setGhToolsStored] = useState(false);
+  const [ghWdfStored, setGhWdfStored] = useState(false);
+
+  useEffect(() => {
+    getM365TokenStatus()
+      .then(s => {
+        setAhaStored(Boolean(s.aha?.cached));
+        setGhToolsStored(Boolean(s.githubTools?.cached));
+        setGhWdfStored(Boolean(s.githubWdf?.cached));
+      })
+      .catch(() => {});
+  }, []);
+
   const [ahaToken, setAhaToken] = useState('');
   const [ahaSaving, setAhaSaving] = useState(false);
   const [ahaError, setAhaError] = useState<string | null>(null);
   const [ahaSaved, setAhaSaved] = useState(false);
+
+  const [ghToolsToken, setGhToolsToken] = useState('');
+  const [ghToolsSaving, setGhToolsSaving] = useState(false);
+  const [ghToolsError, setGhToolsError] = useState<string | null>(null);
+  const [ghToolsSaved, setGhToolsSaved] = useState(false);
+
+  const [ghWdfToken, setGhWdfToken] = useState('');
+  const [ghWdfSaving, setGhWdfSaving] = useState(false);
+  const [ghWdfError, setGhWdfError] = useState<string | null>(null);
+  const [ghWdfSaved, setGhWdfSaved] = useState(false);
 
   const handleSaveAha = async () => {
     if (!ahaToken.trim()) return;
@@ -632,6 +733,7 @@ function CredentialsTab() {
     try {
       await m365SetAhaToken(ahaToken.trim());
       setAhaSaved(true);
+      setAhaStored(true);
       setTimeout(() => setAhaSaved(false), 2000);
       setAhaToken('');
     } catch (e) {
@@ -644,51 +746,190 @@ function CredentialsTab() {
   const handleClearAha = async () => {
     try {
       await m365ClearAhaToken();
+      setAhaStored(false);
     } catch {
       // silent
     }
   };
 
+  const handleSaveGhTools = async () => {
+    if (!ghToolsToken.trim()) return;
+    setGhToolsSaving(true);
+    setGhToolsError(null);
+    try {
+      await m365SetGithubToolsToken(ghToolsToken.trim());
+      setGhToolsSaved(true);
+      setGhToolsStored(true);
+      setTimeout(() => setGhToolsSaved(false), 2000);
+      setGhToolsToken('');
+    } catch (e) {
+      setGhToolsError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGhToolsSaving(false);
+    }
+  };
+
+  const handleSaveGhWdf = async () => {
+    if (!ghWdfToken.trim()) return;
+    setGhWdfSaving(true);
+    setGhWdfError(null);
+    try {
+      await m365SetGithubWdfToken(ghWdfToken.trim());
+      setGhWdfSaved(true);
+      setGhWdfStored(true);
+      setTimeout(() => setGhWdfSaved(false), 2000);
+      setGhWdfToken('');
+    } catch (e) {
+      setGhWdfError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGhWdfSaving(false);
+    }
+  };
+
   return (
-    <div className="rounded-2xl border border-stone-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 shadow-soft">
-      <h3 className="text-sm font-semibold text-stone-900 dark:text-neutral-100 mb-1">Aha!</h3>
-      <p className="text-[11px] text-stone-500 dark:text-neutral-400 mb-3">
-        {t('sap.credentials.ahaDesc')}
-      </p>
-      <div className="flex gap-2">
-        <input
-          type="password"
-          value={ahaToken}
-          onChange={e => setAhaToken(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && void handleSaveAha()}
-          placeholder={t('sap.credentials.ahaPlaceholder')}
-          className="flex-1 rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-1.5 text-xs text-stone-800 dark:text-neutral-100 placeholder-stone-400 dark:placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
-        />
-        <button
-          type="button"
-          onClick={() => void handleSaveAha()}
-          disabled={ahaSaving || !ahaToken.trim()}
-          className="rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-600 disabled:opacity-50 transition-colors">
-          {ahaSaved ? '✓' : ahaSaving ? t('common.loading') : t('common.save')}
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleClearAha()}
-          className="rounded-lg border border-stone-200 dark:border-neutral-700 px-3 py-1.5 text-xs text-stone-500 dark:text-neutral-400 hover:bg-stone-50 dark:hover:bg-neutral-800 transition-colors">
-          {t('sap.credentials.clear')}
-        </button>
+    <div className="flex flex-col gap-4">
+      {/* Aha! */}
+      <div className="rounded-2xl border border-stone-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 shadow-soft">
+        <h3 className="text-sm font-semibold text-stone-900 dark:text-neutral-100 mb-1">Aha!</h3>
+        <p className="text-[11px] text-stone-500 dark:text-neutral-400 mb-3">
+          {t('sap.credentials.ahaDesc')}
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="password"
+            value={ahaToken}
+            onChange={e => setAhaToken(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && void handleSaveAha()}
+            placeholder={t('sap.credentials.ahaPlaceholder')}
+            className="flex-1 rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-1.5 text-xs text-stone-800 dark:text-neutral-100 placeholder-stone-400 dark:placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+          />
+          <button
+            type="button"
+            onClick={() => void handleSaveAha()}
+            disabled={ahaSaving || !ahaToken.trim()}
+            className="rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-600 disabled:opacity-50 transition-colors">
+            {ahaSaved ? '✓' : ahaSaving ? t('common.loading') : t('common.save')}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleClearAha()}
+            className="rounded-lg border border-stone-200 dark:border-neutral-700 px-3 py-1.5 text-xs text-stone-500 dark:text-neutral-400 hover:bg-stone-50 dark:hover:bg-neutral-800 transition-colors">
+            {t('sap.credentials.clear')}
+          </button>
+        </div>
+        {ahaStored && (
+          <p className="mt-1.5 text-xs text-sage-700 dark:text-sage-300">{t('sap.credentials.tokenStored')}</p>
+        )}
+        {ahaError && <p className="mt-2 text-[11px] text-red-600 dark:text-red-400">{ahaError}</p>}
+        <p className="mt-2 text-[10px] text-stone-400 dark:text-neutral-500">
+          {t('sap.credentials.ahaLink')}{' '}
+          <a
+            href="https://sap.aha.io/settings/api_keys"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary-500 hover:underline">
+            sap.aha.io/settings/api_keys
+          </a>
+        </p>
       </div>
-      {ahaError && <p className="mt-2 text-[11px] text-red-600 dark:text-red-400">{ahaError}</p>}
-      <p className="mt-2 text-[10px] text-stone-400 dark:text-neutral-500">
-        {t('sap.credentials.ahaLink')}{' '}
-        <a
-          href="https://sap.aha.io/settings/api_keys"
-          target="_blank"
-          rel="noreferrer"
-          className="text-primary-500 hover:underline">
-          sap.aha.io/settings/api_keys
-        </a>
-      </p>
+
+      {/* GitHub (github.tools.sap) */}
+      <div className="rounded-2xl border border-stone-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 shadow-soft">
+        <h3 className="text-sm font-semibold text-stone-900 dark:text-neutral-100 mb-1">
+          {t('sap.credentials.githubToolsTitle')}
+        </h3>
+        <p className="text-[11px] text-stone-500 dark:text-neutral-400 mb-3">
+          {t('sap.credentials.githubToolsDesc')}
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="password"
+            value={ghToolsToken}
+            onChange={e => setGhToolsToken(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && void handleSaveGhTools()}
+            placeholder={t('sap.credentials.githubTokenPlaceholder')}
+            className="flex-1 rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-1.5 text-xs text-stone-800 dark:text-neutral-100 placeholder-stone-400 dark:placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+          />
+          <button
+            type="button"
+            onClick={() => void handleSaveGhTools()}
+            disabled={ghToolsSaving || !ghToolsToken.trim()}
+            className="rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-600 disabled:opacity-50 transition-colors">
+            {ghToolsSaved ? '✓' : ghToolsSaving ? t('common.loading') : t('common.save')}
+          </button>
+          <button
+            type="button"
+            onClick={() => void m365ClearGithubToolsToken().then(() => setGhToolsStored(false))}
+            className="rounded-lg border border-stone-200 dark:border-neutral-700 px-3 py-1.5 text-xs text-stone-500 dark:text-neutral-400 hover:bg-stone-50 dark:hover:bg-neutral-800 transition-colors">
+            {t('sap.credentials.clear')}
+          </button>
+        </div>
+        {ghToolsStored && (
+          <p className="mt-1.5 text-xs text-sage-700 dark:text-sage-300">{t('sap.credentials.tokenStored')}</p>
+        )}
+        {ghToolsError && (
+          <p className="mt-2 text-[11px] text-red-600 dark:text-red-400">{ghToolsError}</p>
+        )}
+        <p className="mt-2 text-[10px] text-stone-400 dark:text-neutral-500">
+          {t('sap.credentials.githubTokenLink')}{' '}
+          <a
+            href="https://github.tools.sap/settings/tokens"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary-500 hover:underline">
+            github.tools.sap/settings/tokens
+          </a>
+        </p>
+      </div>
+
+      {/* GitHub (github.wdf.sap.corp) */}
+      <div className="rounded-2xl border border-stone-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 shadow-soft">
+        <h3 className="text-sm font-semibold text-stone-900 dark:text-neutral-100 mb-1">
+          {t('sap.credentials.githubWdfTitle')}
+        </h3>
+        <p className="text-[11px] text-stone-500 dark:text-neutral-400 mb-3">
+          {t('sap.credentials.githubWdfDesc')}
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="password"
+            value={ghWdfToken}
+            onChange={e => setGhWdfToken(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && void handleSaveGhWdf()}
+            placeholder={t('sap.credentials.githubTokenPlaceholder')}
+            className="flex-1 rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800 px-3 py-1.5 text-xs text-stone-800 dark:text-neutral-100 placeholder-stone-400 dark:placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+          />
+          <button
+            type="button"
+            onClick={() => void handleSaveGhWdf()}
+            disabled={ghWdfSaving || !ghWdfToken.trim()}
+            className="rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-600 disabled:opacity-50 transition-colors">
+            {ghWdfSaved ? '✓' : ghWdfSaving ? t('common.loading') : t('common.save')}
+          </button>
+          <button
+            type="button"
+            onClick={() => void m365ClearGithubWdfToken().then(() => setGhWdfStored(false))}
+            className="rounded-lg border border-stone-200 dark:border-neutral-700 px-3 py-1.5 text-xs text-stone-500 dark:text-neutral-400 hover:bg-stone-50 dark:hover:bg-neutral-800 transition-colors">
+            {t('sap.credentials.clear')}
+          </button>
+        </div>
+        {ghWdfStored && (
+          <p className="mt-1.5 text-xs text-sage-700 dark:text-sage-300">{t('sap.credentials.tokenStored')}</p>
+        )}
+        {ghWdfError && (
+          <p className="mt-2 text-[11px] text-red-600 dark:text-red-400">{ghWdfError}</p>
+        )}
+        <p className="mt-2 text-[10px] text-stone-400 dark:text-neutral-500">
+          {t('sap.credentials.githubTokenLink')}{' '}
+          <a
+            href="https://github.wdf.sap.corp/settings/tokens"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary-500 hover:underline">
+            github.wdf.sap.corp/settings/tokens
+          </a>
+        </p>
+      </div>
     </div>
   );
 }

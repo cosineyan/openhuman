@@ -15,6 +15,9 @@ CONFIG_DIR = os.path.dirname(
 TOKEN_FILE = os.environ.get('M365_TOKEN_FILE') or os.path.join(
     os.path.expanduser('~'), '.m365-cli', 'tokens.json'
 )
+# Long-lived credentials (Aha!, GitHub PATs) stored separately so they are
+# never touched by clear_tokens() or any M365 session refresh flow.
+CREDENTIALS_FILE = os.path.join(CONFIG_DIR, 'credentials.json')
 DEBUG_LOG = os.path.join(CONFIG_DIR, 'debug.log')
 REFRESH_THRESHOLD_MIN = 5
 
@@ -56,6 +59,21 @@ def save_tokens(tokens):
     os.makedirs(CONFIG_DIR, exist_ok=True)
     with open(TOKEN_FILE, 'w') as f:
         f.write(json.dumps(tokens, indent=2) + '\n')
+
+
+def load_credentials():
+    """Load long-lived credentials (Aha!, GitHub PATs) from a separate file."""
+    try:
+        with open(CREDENTIALS_FILE, 'r') as f:
+            return json.loads(f.read())
+    except Exception:
+        return {}
+
+
+def save_credentials(creds):
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    with open(CREDENTIALS_FILE, 'w') as f:
+        f.write(json.dumps(creds, indent=2) + '\n')
 
 
 # --- Token validity ---
@@ -120,6 +138,8 @@ def set_token(token_type, token_str):
 
 
 def clear_tokens():
+    """Clear all M365 session tokens by removing the token file.
+    Credentials (Aha!, GitHub PATs) live in a separate file and are unaffected."""
     try:
         os.unlink(TOKEN_FILE)
     except Exception:
@@ -195,12 +215,37 @@ def navigate_tab(sid, url):
     mcp_browser_cmd({'command': 'navigate', 'url': url, 'sessionId': sid}, 15000)
 
 
+def _reconnect_extension():
+    """Re-establish the mcp-chrome extension ↔ native host connection after sleep/wake.
+
+    After macOS sleeps, the native messaging pipe between Chrome extension and the
+    Node native host drops. The extension reconnects automatically when it gets
+    activity — the simplest trigger is navigating an existing tab, which fires
+    Chrome's webNavigation events and wakes the extension's background service worker.
+    """
+    try:
+        resp = mcp_browser_cmd({'command': 'sessions'}, 5000)
+        sessions = resp.get('sessions', [])
+        if sessions:
+            # Navigate an existing tab to the same URL — triggers extension wake-up.
+            sid = sessions[0]['id']
+            url = sessions[0].get('url', 'about:blank')
+            mcp_browser_cmd({'command': 'navigate', 'url': url, 'sessionId': sid}, 8000)
+            time.sleep(1)
+    except Exception:
+        pass
+
+
 def extract_from_session(sid):
     resp = mcp_browser_cmd({'command': 'exec', 'sessionId': sid, 'code': EXTRACT_JS, 'timeout': 15}, 30000)
     if not resp.get('ok') or resp.get('data') is None:
         return None
     data = resp['data']
-    return json.loads(data) if isinstance(data, str) else data
+    result = json.loads(data) if isinstance(data, str) else data
+    # If both tokens are null the extension injected but found nothing —
+    # this can happen right after sleep/wake when the page hasn't re-authed.
+    # Return the result as-is; callers will retry or open a new tab.
+    return result
 
 
 def open_and_wait_for_token(token_type, max_wait_sec=90):
@@ -311,13 +356,13 @@ def extract_tokens_from_chrome():
 
     Strategy:
     1. Check for an existing Outlook tab with valid tokens — reuse it (no new tab).
-    2. If existing tab has expired tokens — open a NEW tab, wait for tokens, then
-       close the new tab (keep the old one).
-    3. If no Outlook tab exists — open one, wait, then close it.
+    2. If existing tab has expired/stale tokens — wait on that SAME tab for up to 90 s
+       (user may be mid-login). Do NOT open another tab to avoid pile-up.
+    3. If no Outlook tab exists at all — open one, wait, then close it.
     """
-    auto_opened_sid = None  # track any tab we opened so we can close it
+    auto_opened_sid = None  # track a tab we opened so we can close it on success
 
-    # 1. Try existing tab first.
+    # 1. Try existing tab first — valid tokens → done immediately.
     existing_sid = find_outlook_session()
     if existing_sid:
         try:
@@ -332,9 +377,31 @@ def extract_tokens_from_chrome():
                 return tokens
         except Exception:
             pass
-        # Existing tab has expired/stuck tokens — fall through to open a fresh tab.
 
-    # 2 & 3. Open a new tab, wait briefly, then close it.
+        # 2. Existing tab present but tokens stale/absent — wait on it (user may be
+        #    mid-login). Do NOT open a second Outlook tab.
+        deadline = time.time() + 90
+        time.sleep(3)
+        while time.time() < deadline:
+            try:
+                data = extract_from_session(existing_sid)
+                rest_entry = (data or {}).get('rest') or {}
+                graph_entry = (data or {}).get('graph') or {}
+                now = int(time.time())
+                rest_ok = rest_entry.get('token') and rest_entry.get('expiresOn', 0) > now
+                graph_ok = graph_entry.get('token') and graph_entry.get('expiresOn', 0) > now
+                if rest_ok and graph_ok:
+                    tokens = load_tokens()
+                    tokens['rest'] = {**rest_entry, 'sessionId': existing_sid}
+                    tokens['graph'] = {**graph_entry, 'sessionId': existing_sid}
+                    save_tokens(tokens)
+                    return tokens
+            except Exception:
+                pass
+            time.sleep(3)
+        # Still nothing after 90 s — fall through and open a new tab as last resort.
+
+    # 3. No Outlook tab at all — open one, wait, close it when done.
     try:
         auto_opened_sid = open_outlook_tab()
         deadline = time.time() + 90
@@ -632,22 +699,58 @@ def get_tenant_id(tokens):
 # --- SAP additional services ---
 
 def get_aha_token():
-    """Return the Aha! API token stored in the token cache, or None."""
-    tokens = load_tokens()
-    return tokens.get('ahaToken') or None
+    """Return the Aha! API token, or None."""
+    return load_credentials().get('ahaToken') or None
 
 
 def set_aha_token(token_str):
     """Persist an Aha! API token."""
-    tokens = load_tokens()
-    tokens['ahaToken'] = token_str
-    save_tokens(tokens)
+    creds = load_credentials()
+    creds['ahaToken'] = token_str
+    save_credentials(creds)
 
 
 def clear_aha_token():
-    tokens = load_tokens()
-    tokens.pop('ahaToken', None)
-    save_tokens(tokens)
+    creds = load_credentials()
+    creds.pop('ahaToken', None)
+    save_credentials(creds)
+
+
+# --- SAP GitHub PAT tokens ---
+
+def get_github_token(host_key):
+    """Return the stored GitHub PAT for the given host key (e.g. 'tools' or 'wdf'), or None."""
+    return load_credentials().get(f'githubToken:{host_key}') or None
+
+
+def set_github_token(host_key, token_str):
+    """Persist a GitHub PAT for the given host key."""
+    creds = load_credentials()
+    creds[f'githubToken:{host_key}'] = token_str
+    save_credentials(creds)
+
+
+def clear_github_token(host_key):
+    creds = load_credentials()
+    creds.pop(f'githubToken:{host_key}', None)
+    save_credentials(creds)
+
+
+def check_github_accessible(host_key, api_base):
+    """Return True if the stored PAT can reach the GitHub API /user endpoint."""
+    pat = get_github_token(host_key)
+    if not pat:
+        return False
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            f'{api_base}/api/v3/user',
+            headers={'Authorization': f'token {pat}', 'User-Agent': 'openhuman/1.0'},
+        )
+        resp = urllib.request.urlopen(req, timeout=8)
+        return resp.status == 200
+    except Exception:
+        return False
 
 
 def check_sso_accessible(url, success_check=None):
