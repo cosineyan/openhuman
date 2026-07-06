@@ -911,7 +911,6 @@ function InboxPanel() {
         void apiClient.streams.stop(streamRef.current).catch(() => {});
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Bump version when a stream message arrives to trigger re-fetch.

@@ -131,9 +131,7 @@ pub fn claude_code_resume_session(
         Some(dir) => format!(
             "cd \"{dir}\" && claude --resume {session_id} --append-system-prompt '{system_prompt}'"
         ),
-        None => format!(
-            "claude --resume {session_id} --append-system-prompt '{system_prompt}'"
-        ),
+        None => format!("claude --resume {session_id} --append-system-prompt '{system_prompt}'"),
     };
     open_terminal_with_command(&cmd)
 }
