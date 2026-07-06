@@ -101,7 +101,12 @@ async fn watch_loop(task_id: String, reg: Arc<Mutex<HashMap<String, WatchEntry>>
         let (path, config, session_uuid, workspace_dir) = {
             let reg_guard = reg.lock().expect("registry lock");
             match reg_guard.get(&task_id) {
-                Some(e) => (e.session_path.clone(), Arc::clone(&e.config), e.session_uuid.clone(), e.workspace_dir.clone()),
+                Some(e) => (
+                    e.session_path.clone(),
+                    Arc::clone(&e.config),
+                    e.session_uuid.clone(),
+                    e.workspace_dir.clone(),
+                ),
                 None => {
                     log::debug!("[session_watcher] task={task_id} deregistered, stopping watcher");
                     return;
@@ -146,7 +151,13 @@ async fn watch_loop(task_id: String, reg: Arc<Mutex<HashMap<String, WatchEntry>>
     }
 }
 
-async fn process_session(config: Arc<Config>, task_id: String, session_path: PathBuf, session_uuid: String, workspace_dir: String) {
+async fn process_session(
+    config: Arc<Config>,
+    task_id: String,
+    session_path: PathBuf,
+    session_uuid: String,
+    workspace_dir: String,
+) {
     // Only process if the task is currently in a Blocked bucket.
     // If the user already moved it themselves, skip silently.
     match is_task_blocked(&config, &task_id) {
@@ -335,9 +346,14 @@ fn resolve_session_path(workspace_dir: &str, session_uuid: &str) -> Option<PathB
 // Teams-chat notification (fire-and-forget)
 // ---------------------------------------------------------------------------
 
-fn notify_teams_chat(task_id: &str, title: &str, status: &str, workspace_dir: &str, session_id: &str) {
-    let base = std::env::var("TEAMS_CHAT_URL")
-        .unwrap_or_else(|_| "http://localhost:13001".into());
+fn notify_teams_chat(
+    task_id: &str,
+    title: &str,
+    status: &str,
+    workspace_dir: &str,
+    session_id: &str,
+) {
+    let base = std::env::var("TEAMS_CHAT_URL").unwrap_or_else(|_| "http://localhost:13001".into());
     let notify_title = if status == "done" {
         format!("✅ Task done: {title}")
     } else {

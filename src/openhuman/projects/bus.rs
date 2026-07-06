@@ -307,7 +307,13 @@ async fn run_ai_task(
                         log::warn!("{LOG} task={task_id} no Blocked bucket — task stays in Doing");
                     }
                     emit_task_log(&task_id, response, "blocked");
-                    notify_teams_chat(&task_id, &title, "blocked", &cc_workspace_dir, &claude_resume_uuid);
+                    notify_teams_chat(
+                        &task_id,
+                        &title,
+                        "blocked",
+                        &cc_workspace_dir,
+                        &claude_resume_uuid,
+                    );
                     ("blocked", response.as_str())
                 } else {
                     let done_id = buckets
@@ -331,7 +337,13 @@ async fn run_ai_task(
                         );
                     }
                     emit_task_log(&task_id, response, "done");
-                    notify_teams_chat(&task_id, &title, "done", &cc_workspace_dir, &claude_resume_uuid);
+                    notify_teams_chat(
+                        &task_id,
+                        &title,
+                        "done",
+                        &cc_workspace_dir,
+                        &claude_resume_uuid,
+                    );
                     ("done", response.as_str())
                 }
             }
@@ -370,7 +382,13 @@ async fn run_ai_task(
                 } else {
                     log::warn!("{LOG} task={task_id} no Blocked bucket — task stays in Doing");
                 }
-                notify_teams_chat(&task_id, &title, "blocked", &cc_workspace_dir, &claude_resume_uuid);
+                notify_teams_chat(
+                    &task_id,
+                    &title,
+                    "blocked",
+                    &cc_workspace_dir,
+                    &claude_resume_uuid,
+                );
                 ("blocked", err_msg.as_str())
             }
         }
@@ -652,9 +670,14 @@ async fn run_agent(
 /// notification to the relay RSS feed (picked up by Power Automate → Teams).
 /// Silently skips if teams-chat is not running; logs a warning if the call
 /// fails for any other reason.
-fn notify_teams_chat(task_id: &str, title: &str, status: &str, workspace_dir: &str, session_id: &str) {
-    let base = std::env::var("TEAMS_CHAT_URL")
-        .unwrap_or_else(|_| "http://localhost:13001".into());
+fn notify_teams_chat(
+    task_id: &str,
+    title: &str,
+    status: &str,
+    workspace_dir: &str,
+    session_id: &str,
+) {
+    let base = std::env::var("TEAMS_CHAT_URL").unwrap_or_else(|_| "http://localhost:13001".into());
     let notify_title = if status == "done" {
         format!("✅ Task done: {title}")
     } else {
@@ -669,12 +692,16 @@ fn notify_teams_chat(task_id: &str, title: &str, status: &str, workspace_dir: &s
     tokio::spawn(async move {
         let url = format!("{base}/notify");
         match reqwest::Client::new().post(&url).json(&body).send().await {
-            Ok(resp) if resp.status().is_success() =>
-                log::debug!("[projects] teams-chat notified task={task_id}"),
-            Ok(resp) =>
-                log::warn!("[projects] teams-chat /notify returned {} for task={task_id}", resp.status()),
-            Err(e) =>
-                log::warn!("[projects] teams-chat unreachable, notification skipped for task={task_id}: {e}"),
+            Ok(resp) if resp.status().is_success() => {
+                log::debug!("[projects] teams-chat notified task={task_id}")
+            }
+            Ok(resp) => log::warn!(
+                "[projects] teams-chat /notify returned {} for task={task_id}",
+                resp.status()
+            ),
+            Err(e) => log::warn!(
+                "[projects] teams-chat unreachable, notification skipped for task={task_id}: {e}"
+            ),
         }
     });
 }
