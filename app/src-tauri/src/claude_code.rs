@@ -127,11 +127,16 @@ pub fn claude_code_resume_session(
         output a line that starts with exactly DONE: followed by a one-sentence \
         summary of what was accomplished. This allows the task tracking system to \
         automatically mark the task as done.";
+    // DISABLE_AUTO_UPDATE=true prevents oh-my-zsh from showing an interactive
+    // update prompt that intercepts the command and splits it mid-execution.
+    let prefix = "DISABLE_AUTO_UPDATE=true";
     let cmd = match workspace_dir.as_deref().filter(|s| !s.is_empty()) {
         Some(dir) => format!(
-            "cd \"{dir}\" && claude --resume {session_id} --append-system-prompt '{system_prompt}'"
+            "{prefix} cd \"{dir}\" && claude --resume {session_id} --append-system-prompt '{system_prompt}'"
         ),
-        None => format!("claude --resume {session_id} --append-system-prompt '{system_prompt}'"),
+        None => format!(
+            "{prefix} claude --resume {session_id} --append-system-prompt '{system_prompt}'"
+        ),
     };
     open_terminal_with_command(&cmd)
 }
