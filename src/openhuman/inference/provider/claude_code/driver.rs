@@ -337,7 +337,10 @@ async fn run_turn_inner(ctx: &TurnContext<'_>, force_new: bool) -> anyhow::Resul
     if let Some(p) = mcp_config_path.as_ref() {
         args.push("--mcp-config".into());
         args.push(p.display().to_string());
-        args.push("--strict-mcp-config".into());
+        // Do NOT pass --strict-mcp-config: that would block the user's own
+        // ~/.claude/settings.json MCP servers AND skill loading. The openhuman
+        // MCP server is still the only entry in the config file, so it gets
+        // priority without locking out the user's installed skills.
     }
     // Tool surface follows the permission posture: full access → no
     // `--disallowedTools` (CC keeps its entire toolset incl. Bash/network);
