@@ -122,17 +122,18 @@ pub fn claude_code_resume_session(
     }
     // Instruct claude to signal task completion so the background watcher can
     // detect it and automatically update the task status.
+    // Note: no double-quotes inside the prompt to avoid AppleScript escaping issues.
     let system_prompt = "When you have fully completed the task the user asked you to do, \
-        output a line that starts with exactly 'DONE: ' followed by a one-sentence \
+        output a line that starts with exactly DONE: followed by a one-sentence \
         summary of what was accomplished. This allows the task tracking system to \
         automatically mark the task as done.";
-    let prompt_arg = format!(
-        "--append-system-prompt \"{}\"",
-        system_prompt.replace('"', "\\\"")
-    );
     let cmd = match workspace_dir.as_deref().filter(|s| !s.is_empty()) {
-        Some(dir) => format!("cd \"{dir}\" && claude --resume {session_id} {prompt_arg}"),
-        None => format!("claude --resume {session_id} {prompt_arg}"),
+        Some(dir) => format!(
+            "cd \"{dir}\" && claude --resume {session_id} --append-system-prompt '{system_prompt}'"
+        ),
+        None => format!(
+            "claude --resume {session_id} --append-system-prompt '{system_prompt}'"
+        ),
     };
     open_terminal_with_command(&cmd)
 }
