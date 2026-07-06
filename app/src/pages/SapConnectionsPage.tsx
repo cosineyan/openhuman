@@ -4,7 +4,7 @@
  * Layout mirrors the Connections page: TwoPaneNav sidebar + PanelPage content.
  * Systems tab style mirrors the Channels tab in Skills.tsx.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import PanelPage from '../components/layout/PanelPage';
@@ -337,6 +337,8 @@ function SystemsTab() {
   const [waitingLogin, setWaitingLogin] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const loadRef = useRef<(() => Promise<void>) | undefined>(undefined);
+
   const load = useCallback(async () => {
     try {
       const [chrome, tokens] = await Promise.all([getMcpChromeStatus(), getM365TokenStatus()]);
@@ -356,7 +358,7 @@ function SystemsTab() {
         setWaitingLogin(false);
       }
       if (anyExpiredNow) {
-        setTimeout(() => void load(), 8_000);
+        setTimeout(() => void loadRef.current?.(), 8_000);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -364,6 +366,8 @@ function SystemsTab() {
       setLoading(false);
     }
   }, []);
+
+  loadRef.current = load;
 
   useEffect(() => {
     void load();
