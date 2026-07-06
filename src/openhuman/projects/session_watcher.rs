@@ -32,6 +32,8 @@ fn registry() -> &'static Arc<Mutex<HashMap<String, WatchEntry>>> {
 struct WatchEntry {
     task_id: String,
     session_path: PathBuf,
+    session_uuid: String,
+    workspace_dir: String,
     config: Arc<Config>,
 }
 
@@ -65,6 +67,8 @@ pub fn register_session_watch(
     let entry = WatchEntry {
         task_id: task_id.clone(),
         session_path: session_path.clone(),
+        session_uuid: session_uuid.clone(),
+        workspace_dir: workspace_dir.clone(),
         config: Arc::clone(&config),
     };
 
@@ -94,10 +98,10 @@ async fn watch_loop(task_id: String, reg: Arc<Mutex<HashMap<String, WatchEntry>>
         tokio::time::sleep(POLL_INTERVAL).await;
 
         // Check if we're still registered (deregistered means another run started).
-        let (path, config) = {
+        let (path, config, session_uuid, workspace_dir) = {
             let reg_guard = reg.lock().expect("registry lock");
             match reg_guard.get(&task_id) {
-                Some(e) => (e.session_path.clone(), Arc::clone(&e.config)),
+                Some(e) => (e.session_path.clone(), Arc::clone(&e.config), e.session_uuid.clone(), e.workspace_dir.clone()),
                 None => {
                     log::debug!("[session_watcher] task={task_id} deregistered, stopping watcher");
                     return;
@@ -135,14 +139,14 @@ async fn watch_loop(task_id: String, reg: Arc<Mutex<HashMap<String, WatchEntry>>
                     "[session_watcher] task={task_id} idle timeout reached, processing session"
                 );
                 reg.lock().expect("registry lock").remove(&task_id);
-                process_session(config, task_id, path).await;
+                process_session(config, task_id, path, session_uuid, workspace_dir).await;
                 return;
             }
         }
     }
 }
 
-async fn process_session(config: Arc<Config>, task_id: String, session_path: PathBuf) {
+async fn process_session(config: Arc<Config>, task_id: String, session_path: PathBuf, session_uuid: String, workspace_dir: String) {
     // Only process if the task is currently in a Blocked bucket.
     // If the user already moved it themselves, skip silently.
     match is_task_blocked(&config, &task_id) {
@@ -225,6 +229,10 @@ async fn process_session(config: Arc<Config>, task_id: String, session_path: Pat
             Ok(true) => log::info!("[session_watcher] task={task_id} moved to Done"),
             Ok(false) => log::warn!("[session_watcher] task={task_id} no Done bucket found"),
             Err(e) => log::warn!("[session_watcher] task={task_id} failed to move to Done: {e}"),
+        }
+        // Notify teams-chat so the relay RSS picks up the completion.
+        if let Ok(task) = store::get_task(&config, &task_id) {
+            notify_teams_chat(&task_id, &task.title, "done", &workspace_dir, &session_uuid);
         }
     }
 }
@@ -321,4 +329,35 @@ fn resolve_session_path(workspace_dir: &str, session_uuid: &str) -> Option<PathB
     let sanitized = workspace_dir.trim_start_matches('/').replace('/', "-");
     let project_dir = home.join(".claude").join("projects").join(&sanitized);
     Some(project_dir.join(format!("{session_uuid}.jsonl")))
+}
+
+// ---------------------------------------------------------------------------
+// Teams-chat notification (fire-and-forget)
+// ---------------------------------------------------------------------------
+
+fn notify_teams_chat(task_id: &str, title: &str, status: &str, workspace_dir: &str, session_id: &str) {
+    let base = std::env::var("TEAMS_CHAT_URL")
+        .unwrap_or_else(|_| "http://localhost:13001".into());
+    let notify_title = if status == "done" {
+        format!("✅ Task done: {title}")
+    } else {
+        format!("⚠️ Task blocked: {title}")
+    };
+    let body = serde_json::json!({
+        "session_id": session_id,
+        "project_path": workspace_dir,
+        "title": notify_title,
+    });
+    let task_id = task_id.to_string();
+    tokio::spawn(async move {
+        let url = format!("{base}/notify");
+        match reqwest::Client::new().post(&url).json(&body).send().await {
+            Ok(resp) if resp.status().is_success() =>
+                log::debug!("[session_watcher] teams-chat notified task={task_id}"),
+            Ok(resp) =>
+                log::warn!("[session_watcher] teams-chat /notify returned {} for task={task_id}", resp.status()),
+            Err(e) =>
+                log::warn!("[session_watcher] teams-chat unreachable, notification skipped for task={task_id}: {e}"),
+        }
+    });
 }
