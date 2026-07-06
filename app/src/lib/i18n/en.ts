@@ -6076,7 +6076,8 @@ const en: TranslationMap = {
   'sap.systems.disconnect': 'Disconnect',
   'sap.systems.disconnecting': 'Disconnecting…',
   'sap.systems.waitingLogin': 'Waiting for login…',
-  'sap.systems.waitingLoginHint': 'Please complete login in the Outlook tab that just opened in Chrome.',
+  'sap.systems.waitingLoginHint':
+    'Please complete login in the Outlook tab that just opened in Chrome.',
   'sap.systems.hint':
     'Tokens are extracted from your open Outlook/Teams tabs. Make sure you are logged into Outlook Web in Chrome before clicking Connect. If tokens are expired, the login process will auto-refresh the Outlook tab.',
   'sap.systems.mcpChrome.title': 'mcp-chrome Extension',

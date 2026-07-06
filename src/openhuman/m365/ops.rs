@@ -155,9 +155,17 @@ pub async fn token_status(config: &Config) -> Result<Value> {
     // Helper: check if a token entry needs refresh (expired or < 5 min remaining)
     let needs_refresh = |key: &str| -> bool {
         let entry = status.get(key);
-        let valid = entry.and_then(|e| e.get("valid")).and_then(|v| v.as_bool()).unwrap_or(false);
-        let cached = entry.and_then(|e| e.get("cached")).and_then(|v| v.as_bool()).unwrap_or(false);
-        let expires_in = entry.and_then(|e| e.get("expiresInMin")).and_then(|v| v.as_i64());
+        let valid = entry
+            .and_then(|e| e.get("valid"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let cached = entry
+            .and_then(|e| e.get("cached"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let expires_in = entry
+            .and_then(|e| e.get("expiresInMin"))
+            .and_then(|v| v.as_i64());
 
         if !cached {
             return false; // never had a token, nothing to refresh

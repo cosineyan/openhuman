@@ -346,7 +346,9 @@ function SystemsTab() {
       // If the backend just triggered a background refresh (any cached token
       // was expired), schedule a follow-up poll in 8 s to pick up the result.
       const anyExpiredNow = ['graph', 'rest', 'teams', 'sharepoint'].some(k => {
-        const e = tokens[k as keyof typeof tokens] as { cached?: boolean; valid?: boolean } | undefined;
+        const e = tokens[k as keyof typeof tokens] as
+          | { cached?: boolean; valid?: boolean }
+          | undefined;
         return e?.cached && !e?.valid;
       });
       // If we were waiting for login and tokens now appear, clear waiting state.
@@ -371,7 +373,9 @@ function SystemsTab() {
     const scheduleNext = () => {
       const anyExpired = status
         ? ['graph', 'rest', 'teams', 'sharepoint'].some(k => {
-            const e = status[k as keyof typeof status] as { cached?: boolean; valid?: boolean } | undefined;
+            const e = status[k as keyof typeof status] as
+              | { cached?: boolean; valid?: boolean }
+              | undefined;
             return e?.cached && !e?.valid;
           })
         : false;
@@ -379,9 +383,11 @@ function SystemsTab() {
       // While any token expired (background refresh running): poll every 5 s.
       // Otherwise: poll every 60 s.
       const interval = waitingLogin ? 3_000 : anyExpired ? 5_000 : 60_000;
-      return setTimeout(() => { void load(); }, interval);
+      return setTimeout(() => {
+        void load();
+      }, interval);
     };
-    let timer = scheduleNext();
+    const timer = scheduleNext();
     return () => clearTimeout(timer);
   }, [load, status, waitingLogin]);
 
@@ -500,27 +506,28 @@ function SystemsTab() {
       key: 'aha',
       name: 'Aha!',
       status: tokenTileStatus(status?.aha),
-      sublabel: status?.aha?.cached && !status.aha.valid
-        ? t('sap.systems.storedNoNetwork')
-        : undefined,
+      sublabel:
+        status?.aha?.cached && !status.aha.valid ? t('sap.systems.storedNoNetwork') : undefined,
       icon: <AhaLogoBadge />,
     },
     {
       key: 'githubTools',
       name: 'GitHub (tools)',
       status: tokenTileStatus(status?.githubTools),
-      sublabel: status?.githubTools?.cached && !status.githubTools.valid
-        ? t('sap.systems.storedNoNetwork')
-        : undefined,
+      sublabel:
+        status?.githubTools?.cached && !status.githubTools.valid
+          ? t('sap.systems.storedNoNetwork')
+          : undefined,
       icon: <GithubLogoBadge />,
     },
     {
       key: 'githubWdf',
       name: 'GitHub (wdf)',
       status: tokenTileStatus(status?.githubWdf),
-      sublabel: status?.githubWdf?.cached && !status.githubWdf.valid
-        ? t('sap.systems.storedNoNetwork')
-        : undefined,
+      sublabel:
+        status?.githubWdf?.cached && !status.githubWdf.valid
+          ? t('sap.systems.storedNoNetwork')
+          : undefined,
       icon: <GithubLogoBadge />,
     },
   ] as const;
@@ -818,7 +825,9 @@ function CredentialsTab() {
           </button>
         </div>
         {ahaStored && (
-          <p className="mt-1.5 text-xs text-sage-700 dark:text-sage-300">{t('sap.credentials.tokenStored')}</p>
+          <p className="mt-1.5 text-xs text-sage-700 dark:text-sage-300">
+            {t('sap.credentials.tokenStored')}
+          </p>
         )}
         {ahaError && <p className="mt-2 text-[11px] text-red-600 dark:text-red-400">{ahaError}</p>}
         <p className="mt-2 text-[10px] text-stone-400 dark:text-neutral-500">
@@ -865,7 +874,9 @@ function CredentialsTab() {
           </button>
         </div>
         {ghToolsStored && (
-          <p className="mt-1.5 text-xs text-sage-700 dark:text-sage-300">{t('sap.credentials.tokenStored')}</p>
+          <p className="mt-1.5 text-xs text-sage-700 dark:text-sage-300">
+            {t('sap.credentials.tokenStored')}
+          </p>
         )}
         {ghToolsError && (
           <p className="mt-2 text-[11px] text-red-600 dark:text-red-400">{ghToolsError}</p>
@@ -914,7 +925,9 @@ function CredentialsTab() {
           </button>
         </div>
         {ghWdfStored && (
-          <p className="mt-1.5 text-xs text-sage-700 dark:text-sage-300">{t('sap.credentials.tokenStored')}</p>
+          <p className="mt-1.5 text-xs text-sage-700 dark:text-sage-300">
+            {t('sap.credentials.tokenStored')}
+          </p>
         )}
         {ghWdfError && (
           <p className="mt-2 text-[11px] text-red-600 dark:text-red-400">{ghWdfError}</p>
