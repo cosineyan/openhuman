@@ -361,6 +361,8 @@ function SystemsTab() {
         setTimeout(() => void loadRef.current?.(), 8_000);
       }
     } catch (e) {
+      // On poll failure keep existing status — don't reset to null which would
+      // flip the Connect/Disconnect buttons back to Connect on every transient error.
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);

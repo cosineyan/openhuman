@@ -775,7 +775,7 @@ def check_sso_accessible(url, success_check=None):
 def check_domain_cookies(domain):
     """Check whether Chrome has cookies for a given domain (SSO session indicator)."""
     try:
-        resp = mcp_browser_cmd({'command': 'get-cookies', 'domain': domain}, timeout_ms=5000)
+        resp = mcp_browser_cmd({'command': 'get-cookies', 'domain': domain}, timeout_ms=2000)
         if not resp.get('ok'):
             return False
         # get-cookies response has 'cookieHeader' or 'data' or 'cookies' key

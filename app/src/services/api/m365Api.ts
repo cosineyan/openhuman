@@ -44,7 +44,11 @@ export async function getMcpChromeStatus(): Promise<MpcChromeStatus> {
 }
 
 export async function getM365TokenStatus(): Promise<M365TokenStatus> {
-  return callCoreRpc<M365TokenStatus>({ method: 'openhuman.m365_token_status', params: {} });
+  return callCoreRpc<M365TokenStatus>({
+    method: 'openhuman.m365_token_status',
+    params: {},
+    timeoutMs: 45_000,
+  });
 }
 
 export async function m365AuthLogin(): Promise<M365TokenStatus> {
