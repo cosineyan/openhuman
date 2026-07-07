@@ -7,9 +7,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 
 use crate::openhuman::config::Config;
-use crate::openhuman::memory_sources::types::{
-    ContentType, SourceContent, SourceItem, SourceKind,
-};
+use crate::openhuman::memory_sources::types::{ContentType, SourceContent, SourceItem, SourceKind};
 
 use super::{MemorySourceEntry, SourceReader};
 
@@ -23,21 +21,16 @@ const DEFAULT_MAX_ITEMS: u32 = 50;
 
 fn read_graph_token(config: &Config) -> Result<String, String> {
     let path = config.workspace_dir.join("m365").join("tokens.json");
-    let raw = std::fs::read_to_string(&path)
-        .map_err(|e| format!("cannot read m365 token file: {e}"))?;
+    let raw =
+        std::fs::read_to_string(&path).map_err(|e| format!("cannot read m365 token file: {e}"))?;
     let tokens: serde_json::Value =
         serde_json::from_str(&raw).map_err(|e| format!("cannot parse m365 token file: {e}"))?;
     let entry = tokens
         .get("graph")
         .ok_or("graph token not found — please connect Outlook in SAP Systems")?;
-    let exp = entry
-        .get("expiresOn")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0);
+    let exp = entry.get("expiresOn").and_then(|v| v.as_i64()).unwrap_or(0);
     if exp > 0 && exp < Utc::now().timestamp() {
-        return Err(
-            "graph token expired — please click Refresh in SAP Systems to renew it".into(),
-        );
+        return Err("graph token expired — please click Refresh in SAP Systems to renew it".into());
     }
     entry
         .get("token")
@@ -138,7 +131,10 @@ impl SourceReader for OutlookMailReader {
         );
         let msg = graph_get(&token, &url).await?;
 
-        let subject = msg["subject"].as_str().unwrap_or("(no subject)").to_string();
+        let subject = msg["subject"]
+            .as_str()
+            .unwrap_or("(no subject)")
+            .to_string();
         let from = msg["from"]["emailAddress"]["address"]
             .as_str()
             .unwrap_or("")
@@ -228,8 +224,14 @@ impl SourceReader for OutlookCalendarReader {
         );
         let event = graph_get(&token, &url).await?;
 
-        let subject = event["subject"].as_str().unwrap_or("(no title)").to_string();
-        let start = event["start"]["dateTime"].as_str().unwrap_or("").to_string();
+        let subject = event["subject"]
+            .as_str()
+            .unwrap_or("(no title)")
+            .to_string();
+        let start = event["start"]["dateTime"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
         let end = event["end"]["dateTime"].as_str().unwrap_or("").to_string();
         let organizer = event["organizer"]["emailAddress"]["name"]
             .as_str()
@@ -291,8 +293,7 @@ impl SourceReader for TeamsMessagesReader {
         let messages_per_chat = messages_per_chat.max(5);
 
         // List recent chats
-        let chats_url =
-            format!("{GRAPH_BASE}/me/chats?$top={top_chats}&$select=id,topic,chatType");
+        let chats_url = format!("{GRAPH_BASE}/me/chats?$top={top_chats}&$select=id,topic,chatType");
         let chats_data = graph_get(&token, &chats_url).await?;
         let chats = chats_data
             .get("value")
@@ -320,12 +321,10 @@ impl SourceReader for TeamsMessagesReader {
                             if msg_id.is_empty() {
                                 continue;
                             }
-                            let created =
-                                msg["createdDateTime"].as_str().unwrap_or("").to_string();
-                            let updated_at_ms =
-                                chrono::DateTime::parse_from_rfc3339(&created)
-                                    .ok()
-                                    .map(|dt| dt.timestamp_millis());
+                            let created = msg["createdDateTime"].as_str().unwrap_or("").to_string();
+                            let updated_at_ms = chrono::DateTime::parse_from_rfc3339(&created)
+                                .ok()
+                                .map(|dt| dt.timestamp_millis());
                             let sender = msg["from"]["user"]["displayName"]
                                 .as_str()
                                 .unwrap_or("Unknown")

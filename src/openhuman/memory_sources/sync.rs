@@ -114,9 +114,7 @@ pub async fn sync_source(source: MemorySourceEntry, config: Config) -> Result<()
                 | SourceKind::WebPage
                 | SourceKind::OutlookMail
                 | SourceKind::OutlookCalendar
-                | SourceKind::TeamsMessages => {
-                    sync_items_individually(&source, &config).await
-                }
+                | SourceKind::TeamsMessages => sync_items_individually(&source, &config).await,
                 SourceKind::TwitterQuery => Err(
                     "Twitter sync not yet configured. Provide bearer token in settings."
                         .to_string(),
