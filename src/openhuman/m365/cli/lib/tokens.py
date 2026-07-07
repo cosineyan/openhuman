@@ -373,8 +373,12 @@ def extract_tokens_from_chrome():
             data = extract_from_session(existing_sid)
             if data and _tokens_are_valid(data):
                 tokens = load_tokens()
+                # The graph token from the Outlook tab (appid 9199bf20) includes
+                # Chat.Read but NOT Mail.Read. Store it under 'graph_chat' so the
+                # Teams reader can use it, but do NOT overwrite 'graph' which holds
+                # the Mail.Read token obtained via Teams refresh token exchange.
                 if data.get('graph') and data.get('graph', {}).get('token'):
-                    tokens['graph'] = {**data['graph'], 'sessionId': existing_sid}
+                    tokens['graph_chat'] = {**data['graph'], 'sessionId': existing_sid}
                 if data.get('rest') and data.get('rest', {}).get('token'):
                     tokens['rest'] = {**data['rest'], 'sessionId': existing_sid}
                 save_tokens(tokens)
@@ -397,7 +401,7 @@ def extract_tokens_from_chrome():
                 if rest_ok and graph_ok:
                     tokens = load_tokens()
                     tokens['rest'] = {**rest_entry, 'sessionId': existing_sid}
-                    tokens['graph'] = {**graph_entry, 'sessionId': existing_sid}
+                    tokens['graph_chat'] = {**graph_entry, 'sessionId': existing_sid}
                     save_tokens(tokens)
                     return tokens
             except Exception:
@@ -421,7 +425,7 @@ def extract_tokens_from_chrome():
                 # Both tokens available — save and close immediately.
                 tokens = load_tokens()
                 tokens['rest'] = {**rest_entry, 'sessionId': None}
-                tokens['graph'] = {**graph_entry, 'sessionId': None}
+                tokens['graph_chat'] = {**graph_entry, 'sessionId': None}
                 save_tokens(tokens)
                 close_tab(auto_opened_sid)
                 return tokens
@@ -437,7 +441,7 @@ def extract_tokens_from_chrome():
             raise RuntimeError('Token extraction returned empty result after 90s')
         tokens = load_tokens()
         if data.get('graph') and data.get('graph', {}).get('token'):
-            tokens['graph'] = {**data['graph'], 'sessionId': None}
+            tokens['graph_chat'] = {**data['graph'], 'sessionId': None}
         if data.get('rest') and data.get('rest', {}).get('token'):
             tokens['rest'] = {**data['rest'], 'sessionId': None}
         save_tokens(tokens)
