@@ -278,6 +278,13 @@ def auth_refresh(ctx, as_json):
             except Exception as e:
                 errors.append(f'sharepoint: {e}')
 
+        # Always refresh graph_chat (Outlook Web token with Chat.Read scope)
+        # so Teams Messages sync stays functional after the regular token refresh.
+        try:
+            ensure_chat_graph_token(force=True)
+        except Exception as e:
+            errors.append(f'graph_chat: {e}')
+
         status = token_status()
         rest_ok = status.get('rest', {}).get('valid', False)
         if not rest_ok:
