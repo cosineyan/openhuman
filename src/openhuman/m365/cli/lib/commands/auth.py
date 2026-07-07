@@ -226,10 +226,16 @@ def auth_refresh(ctx, as_json):
     try:
         cached = load_tokens()
 
+        def _is_cached(key):
+            """Token has been stored at some point (may be expired)."""
+            return bool(cached.get(key))
+
         def _needs_refresh(key):
             entry = cached.get(key)
+            if not entry:
+                return False  # never stored — skip, don't open Chrome
             if not is_token_usable(entry):
-                return True  # expired or missing
+                return True  # cached but expired
             exp = (entry or {}).get('expiresOn')
             if exp is None:
                 return False
@@ -237,7 +243,7 @@ def auth_refresh(ctx, as_json):
 
         errors = []
 
-        # REST token: needs Chrome tab if missing/expired
+        # REST token: only try Chrome if we have previously cached a token
         if _needs_refresh('rest'):
             try:
                 extract_tokens_from_chrome()
