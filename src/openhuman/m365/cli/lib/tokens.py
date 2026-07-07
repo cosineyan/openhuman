@@ -682,6 +682,42 @@ def ensure_graph_token(force=False):
         raise
 
 
+def ensure_chat_graph_token(force=False):
+    """Get a Graph API token with Chat.Read scope.
+
+    The token extracted directly from the Outlook tab (appid 9199bf20, Outlook
+    Web Client) includes Chat.Read scope, unlike the token obtained via Teams
+    refresh token exchange (appid 5e3ce6c0, Teams Web Client) which does not.
+
+    We cache it under the 'graph_chat' key to avoid overwriting the regular
+    graph token used for mail/calendar calls.
+    """
+    tokens = load_tokens()
+    entry = tokens.get('graph_chat')
+    if not force and is_token_usable(entry):
+        return entry['token']
+
+    # Extract fresh token from the open Outlook tab.
+    sid = find_outlook_session()
+    if not sid:
+        raise RuntimeError(
+            'No Outlook tab found. Please open Outlook Web to enable Teams chat sync.'
+        )
+    data = extract_from_session(sid)
+    now = int(time.time())
+    graph_entry = (data or {}).get('graph') or {}
+    if graph_entry.get('token') and graph_entry.get('expiresOn', 0) > now:
+        t = load_tokens()
+        t['graph_chat'] = {'token': graph_entry['token'], 'expiresOn': graph_entry['expiresOn']}
+        save_tokens(t)
+        return graph_entry['token']
+
+    raise RuntimeError(
+        'Could not obtain a Chat.Read graph token from Outlook tab. '
+        'Ensure Outlook Web is open and you are logged in.'
+    )
+
+
 def get_tenant_id(tokens):
     if tokens.get('teamsTenantId'):
         return tokens['teamsTenantId']

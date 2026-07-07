@@ -20,23 +20,34 @@ const DEFAULT_MAX_ITEMS: u32 = 50;
 // ---------------------------------------------------------------------------
 
 fn read_graph_token(config: &Config) -> Result<String, String> {
+    read_token_by_key(config, "graph")
+}
+
+/// Read the graph_chat token (Outlook Web appid 9199bf20, includes Chat.Read scope).
+fn read_chat_graph_token(config: &Config) -> Result<String, String> {
+    read_token_by_key(config, "graph_chat")
+}
+
+fn read_token_by_key(config: &Config, key: &str) -> Result<String, String> {
     let path = config.workspace_dir.join("m365").join("tokens.json");
     let raw =
         std::fs::read_to_string(&path).map_err(|e| format!("cannot read m365 token file: {e}"))?;
     let tokens: serde_json::Value =
         serde_json::from_str(&raw).map_err(|e| format!("cannot parse m365 token file: {e}"))?;
     let entry = tokens
-        .get("graph")
-        .ok_or("graph token not found — please connect Outlook in SAP Systems")?;
+        .get(key)
+        .ok_or_else(|| format!("{key} token not found — please connect Outlook in SAP Systems"))?;
     let exp = entry.get("expiresOn").and_then(|v| v.as_i64()).unwrap_or(0);
     if exp > 0 && exp < Utc::now().timestamp() {
-        return Err("graph token expired — please click Refresh in SAP Systems to renew it".into());
+        return Err(format!(
+            "{key} token expired — please click Refresh in SAP Systems to renew it"
+        ));
     }
     entry
         .get("token")
         .and_then(|v| v.as_str())
         .map(str::to_string)
-        .ok_or_else(|| "graph token value is missing".into())
+        .ok_or_else(|| format!("{key} token value is missing"))
 }
 
 // ---------------------------------------------------------------------------
@@ -271,8 +282,11 @@ impl SourceReader for OutlookCalendarReader {
 }
 
 // ---------------------------------------------------------------------------
-// TeamsMessagesReader
-// ---------------------------------------------------------------------------
+// NOTE: The regular graph token (obtained via Teams refresh token exchange,
+// appid 5e3ce6c0) does NOT include Chat.Read scope. We use graph_chat token
+// (from the Outlook tab's MSAL cache, appid 9199bf20) which includes Chat.Read.
+// This token is populated by ensure_chat_graph_token() in tokens.py and cached
+// under the 'graph_chat' key in tokens.json.
 
 pub struct TeamsMessagesReader;
 
@@ -287,28 +301,32 @@ impl SourceReader for TeamsMessagesReader {
         source: &MemorySourceEntry,
         config: &Config,
     ) -> Result<Vec<SourceItem>, String> {
-        let token = read_graph_token(config)?;
+        let token = read_chat_graph_token(config).map_err(|e| {
+            format!("{e}. Hint: sync Outlook Mail first to populate the chat graph token.")
+        })?;
+        let days = source.m365_sync_days.unwrap_or(DEFAULT_SYNC_DAYS);
         let top_chats = 20usize;
-        let messages_per_chat = source.m365_max_items.unwrap_or(DEFAULT_MAX_ITEMS) / 4;
-        let messages_per_chat = messages_per_chat.max(5);
+        let messages_per_chat = (source.m365_max_items.unwrap_or(DEFAULT_MAX_ITEMS) / 4).max(5);
 
-        // List recent chats
-        let chats_url = format!("{GRAPH_BASE}/me/chats?$top={top_chats}&$select=id,topic,chatType");
+        let chats_url = format!(
+            "{GRAPH_BASE}/me/chats?$top={top_chats}&$select=id,topic,chatType\
+             &$orderby=lastMessagePreview/createdDateTime desc"
+        );
         let chats_data = graph_get(&token, &chats_url).await?;
         let chats = chats_data
             .get("value")
             .and_then(|v| v.as_array())
             .ok_or("unexpected chats response")?;
 
+        let since_ms = (chrono::Utc::now() - chrono::Duration::days(days as i64)).timestamp_millis();
         let mut items = Vec::new();
+
         for chat in chats.iter().take(top_chats) {
             let chat_id = chat["id"].as_str().unwrap_or("").to_string();
             if chat_id.is_empty() {
                 continue;
             }
             let topic = chat["topic"].as_str().unwrap_or("Chat").to_string();
-
-            // Get recent messages for this chat
             let msgs_url = format!(
                 "{GRAPH_BASE}/me/chats/{chat_id}/messages\
                  ?$top={messages_per_chat}&$select=id,body,from,createdDateTime"
@@ -321,10 +339,17 @@ impl SourceReader for TeamsMessagesReader {
                             if msg_id.is_empty() {
                                 continue;
                             }
-                            let created = msg["createdDateTime"].as_str().unwrap_or("").to_string();
-                            let updated_at_ms = chrono::DateTime::parse_from_rfc3339(&created)
+                            let created =
+                                msg["createdDateTime"].as_str().unwrap_or("").to_string();
+                            let ts = chrono::DateTime::parse_from_rfc3339(&created)
                                 .ok()
                                 .map(|dt| dt.timestamp_millis());
+                            // Skip messages older than sync window
+                            if let Some(t) = ts {
+                                if t < since_ms {
+                                    continue;
+                                }
+                            }
                             let sender = msg["from"]["user"]["displayName"]
                                 .as_str()
                                 .unwrap_or("Unknown")
@@ -332,7 +357,7 @@ impl SourceReader for TeamsMessagesReader {
                             items.push(SourceItem {
                                 id: format!("{chat_id}::{msg_id}"),
                                 title: format!("[{topic}] {sender}"),
-                                updated_at_ms,
+                                updated_at_ms: ts,
                             });
                         }
                     }
@@ -356,17 +381,15 @@ impl SourceReader for TeamsMessagesReader {
         item_id: &str,
         config: &Config,
     ) -> Result<SourceContent, String> {
-        // item_id format: "<chat_id>::<message_id>"
         let parts: Vec<&str> = item_id.splitn(2, "::").collect();
         if parts.len() != 2 {
             return Err(format!("invalid Teams message id: {item_id}"));
         }
         let (chat_id, msg_id) = (parts[0], parts[1]);
-
-        let token = read_graph_token(config)?;
+        let token = read_chat_graph_token(config)?;
         let url = format!(
             "{GRAPH_BASE}/me/chats/{chat_id}/messages/{msg_id}\
-             ?$select=id,body,from,createdDateTime,subject"
+             ?$select=id,body,from,createdDateTime"
         );
         let msg = graph_get(&token, &url).await?;
 
@@ -382,11 +405,10 @@ impl SourceReader for TeamsMessagesReader {
         } else {
             ContentType::Plaintext
         };
-        let title = format!("Teams message from {sender} at {created}");
 
         Ok(SourceContent {
             id: item_id.to_string(),
-            title,
+            title: format!("Teams message from {sender} at {created}"),
             body: body_content,
             content_type,
             metadata: serde_json::json!({

@@ -11,7 +11,8 @@ from ..tokens import (ensure_token, ensure_teams_token, ensure_graph_token,
                       get_github_token, set_github_token, clear_github_token,
                       check_github_accessible,
                       find_outlook_session, open_outlook_tab,
-                      extract_from_session, close_tab)
+                      extract_from_session, close_tab,
+                      ensure_chat_graph_token)
 
 _DEBUG_LOG = os.path.join(os.path.expanduser('~'), '.m365-cli', 'debug.log')
 
@@ -124,6 +125,10 @@ def auth_login(ctx, as_json):
                     ensure_teams_token(force=True)
                 except Exception:
                     pass
+                try:
+                    ensure_chat_graph_token(force=True)
+                except Exception:
+                    pass
                 st = token_status()
                 if as_json:
                     ctx.obj['out']({'ok': True, **st})
@@ -140,6 +145,10 @@ def auth_login(ctx, as_json):
             pass
         try:
             ensure_teams_token(force=True)
+        except Exception:
+            pass
+        try:
+            ensure_chat_graph_token(force=True)
         except Exception:
             pass
         st = token_status()
