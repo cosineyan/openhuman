@@ -5,11 +5,15 @@
 //! `src/openhuman/m365/cli/` and is bundled into the Tauri resource dir.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::{Context, Result};
 use serde_json::Value;
 
 use crate::openhuman::config::Config;
+
+/// Guard: ensures at most one background auth_refresh runs at a time.
+static REFRESH_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 
 // ---------------------------------------------------------------------------
 // Script resolution
@@ -183,13 +187,22 @@ pub async fn token_status(config: &Config) -> Result<Value> {
         || needs_refresh("sharepoint");
 
     if should_refresh {
-        // Kick off a background refresh — doesn't block the status response.
-        let config_clone = config.clone();
-        tokio::spawn(async move {
-            if let Err(e) = auth_refresh(&config_clone).await {
-                log::debug!("[m365] background auto-refresh failed: {e}");
-            }
-        });
+        // Only spawn one background refresh at a time — if one is already running,
+        // skip to avoid opening multiple Chrome tabs concurrently.
+        if REFRESH_IN_FLIGHT
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+        {
+            let config_clone = config.clone();
+            tokio::spawn(async move {
+                if let Err(e) = auth_refresh(&config_clone).await {
+                    log::debug!("[m365] background auto-refresh failed: {e}");
+                }
+                REFRESH_IN_FLIGHT.store(false, Ordering::SeqCst);
+            });
+        } else {
+            log::debug!("[m365] background refresh already in flight, skipping");
+        }
     }
 
     Ok(status)
