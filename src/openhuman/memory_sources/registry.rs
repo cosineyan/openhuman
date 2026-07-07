@@ -270,6 +270,8 @@ fn upsert_composio_entry_in_place(
         max_tokens_per_sync: None,
         max_cost_per_sync_usd: None,
         sync_depth_days: default_sync_depth_days,
+        m365_sync_days: None,
+        m365_max_items: None,
     };
     sources.push(entry.clone());
     (entry, true)

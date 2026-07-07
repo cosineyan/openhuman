@@ -4,6 +4,7 @@ pub mod composio;
 pub mod conversation;
 pub mod folder;
 pub mod github;
+pub mod m365;
 pub mod rss;
 pub mod twitter;
 pub mod web_page;
@@ -42,5 +43,8 @@ pub fn reader_for(kind: &SourceKind) -> Box<dyn SourceReader> {
         SourceKind::TwitterQuery => Box::new(twitter::TwitterReader),
         SourceKind::RssFeed => Box::new(rss::RssReader),
         SourceKind::WebPage => Box::new(web_page::WebPageReader),
+        SourceKind::OutlookMail => Box::new(m365::OutlookMailReader),
+        SourceKind::OutlookCalendar => Box::new(m365::OutlookCalendarReader),
+        SourceKind::TeamsMessages => Box::new(m365::TeamsMessagesReader),
     }
 }

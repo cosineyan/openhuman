@@ -141,6 +141,10 @@ pub struct AddRequest {
     pub max_cost_per_sync_usd: Option<f64>,
     #[serde(default)]
     pub sync_depth_days: Option<u32>,
+    #[serde(default)]
+    pub m365_sync_days: Option<u32>,
+    #[serde(default)]
+    pub m365_max_items: Option<u32>,
 }
 
 fn default_true() -> bool {
@@ -181,6 +185,8 @@ pub async fn add_rpc(req: AddRequest) -> Result<RpcOutcome<AddResponse>, String>
         max_tokens_per_sync: req.max_tokens_per_sync,
         max_cost_per_sync_usd: req.max_cost_per_sync_usd,
         sync_depth_days: req.sync_depth_days,
+        m365_sync_days: req.m365_sync_days,
+        m365_max_items: req.m365_max_items,
     };
 
     // Apply conservative per-kind defaults when the caller left caps unset.
@@ -217,6 +223,14 @@ pub fn apply_kind_defaults(entry: &mut MemorySourceEntry) {
         SourceKind::TwitterQuery => {
             if entry.since_days.is_none() {
                 entry.since_days = Some(7);
+            }
+        }
+        SourceKind::OutlookMail | SourceKind::OutlookCalendar | SourceKind::TeamsMessages => {
+            if entry.m365_sync_days.is_none() {
+                entry.m365_sync_days = Some(30);
+            }
+            if entry.m365_max_items.is_none() {
+                entry.m365_max_items = Some(50);
             }
         }
         // Folder / WebPage / Composio: no defaults to apply here.

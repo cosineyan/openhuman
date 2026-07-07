@@ -115,6 +115,18 @@ fn kind_specific_fields() -> Vec<FieldSchema> {
             comment: "Only sync items from the last N days.",
             required: false,
         },
+        FieldSchema {
+            name: "m365_sync_days",
+            ty: TypeSchema::Option(Box::new(TypeSchema::U64)),
+            comment: "Lookback window in days for M365 sources (default 30).",
+            required: false,
+        },
+        FieldSchema {
+            name: "m365_max_items",
+            ty: TypeSchema::Option(Box::new(TypeSchema::U64)),
+            comment: "Max items per sync for M365 sources (default 50).",
+            required: false,
+        },
     ]
 }
 

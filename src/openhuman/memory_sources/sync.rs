@@ -109,7 +109,12 @@ pub async fn sync_source(source: MemorySourceEntry, config: Config) -> Result<()
                     .map(|o| o.records_ingested as usize)
                     .map_err(|e| format!("{e:#}"))
                 }
-                SourceKind::Folder | SourceKind::RssFeed | SourceKind::WebPage => {
+                SourceKind::Folder
+                | SourceKind::RssFeed
+                | SourceKind::WebPage
+                | SourceKind::OutlookMail
+                | SourceKind::OutlookCalendar
+                | SourceKind::TeamsMessages => {
                     sync_items_individually(&source, &config).await
                 }
                 SourceKind::TwitterQuery => Err(

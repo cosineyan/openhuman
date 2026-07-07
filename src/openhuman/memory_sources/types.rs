@@ -17,6 +17,9 @@ pub enum SourceKind {
     TwitterQuery,
     RssFeed,
     WebPage,
+    OutlookMail,
+    OutlookCalendar,
+    TeamsMessages,
 }
 
 impl SourceKind {
@@ -29,6 +32,9 @@ impl SourceKind {
             SourceKind::TwitterQuery => "twitter_query",
             SourceKind::RssFeed => "rss_feed",
             SourceKind::WebPage => "web_page",
+            SourceKind::OutlookMail => "outlook_mail",
+            SourceKind::OutlookCalendar => "outlook_calendar",
+            SourceKind::TeamsMessages => "teams_messages",
         }
     }
 }
@@ -91,6 +97,14 @@ pub struct MemorySourceEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selector: Option<String>,
 
+    // ── Outlook / Teams (M365) ──
+    /// Lookback window in days for M365 sources (default 30).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub m365_sync_days: Option<u32>,
+    /// Max items per sync for M365 sources (default 50).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub m365_max_items: Option<u32>,
+
     // ── Sync Budget (all source kinds) ──
     /// Maximum tokens to consume per sync run. Sync stops once this budget is hit.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -133,6 +147,11 @@ impl MemorySourceEntry {
             }
             SourceKind::WebPage => {
                 require_field(&self.url, "url")?;
+            }
+            SourceKind::OutlookMail
+            | SourceKind::OutlookCalendar
+            | SourceKind::TeamsMessages => {
+                // Token is read from the global m365 token file — no extra fields required.
             }
         }
         Ok(())
