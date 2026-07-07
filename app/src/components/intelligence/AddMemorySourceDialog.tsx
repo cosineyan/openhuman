@@ -51,6 +51,9 @@ const ALL_KINDS: SourceKind[] = [
   'rss_feed',
   'web_page',
   'twitter_query',
+  'outlook_mail',
+  'outlook_calendar',
+  'teams_messages',
 ];
 
 export function AddMemorySourceDialog({ open, onClose, onAdded }: AddMemorySourceDialogProps) {
@@ -164,6 +167,11 @@ export function AddMemorySourceDialog({ open, onClose, onAdded }: AddMemorySourc
           break;
         case 'twitter_query':
           params.query = query.trim();
+          break;
+        case 'outlook_mail':
+        case 'outlook_calendar':
+        case 'teams_messages':
+          // No extra fields needed — token is read from the m365 token file.
           break;
       }
 
@@ -520,6 +528,14 @@ function KindFields(props: KindFieldsProps) {
           onChange={props.setQuery}
           placeholder={t('memorySources.searchQueryPlaceholder')}
         />
+      );
+    case 'outlook_mail':
+    case 'outlook_calendar':
+    case 'teams_messages':
+      return (
+        <p className="text-xs text-stone-500 dark:text-neutral-400">
+          {t('memorySources.m365TokenHint')}
+        </p>
       );
     default:
       return null;

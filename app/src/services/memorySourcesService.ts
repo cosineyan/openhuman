@@ -17,7 +17,10 @@ export type SourceKind =
   | 'github_repo'
   | 'twitter_query'
   | 'rss_feed'
-  | 'web_page';
+  | 'web_page'
+  | 'outlook_mail'
+  | 'outlook_calendar'
+  | 'teams_messages';
 
 export interface MemorySourceEntry {
   id: string;
@@ -213,6 +216,9 @@ export const SOURCE_KIND_LABEL_KEYS: Record<SourceKind, string> = {
   twitter_query: 'memorySources.kind.twitter_query',
   rss_feed: 'memorySources.kind.rss_feed',
   web_page: 'memorySources.kind.web_page',
+  outlook_mail: 'memorySources.kind.outlook_mail',
+  outlook_calendar: 'memorySources.kind.outlook_calendar',
+  teams_messages: 'memorySources.kind.teams_messages',
 };
 
 export const SOURCE_KIND_ICONS: Record<SourceKind, string> = {
@@ -223,4 +229,7 @@ export const SOURCE_KIND_ICONS: Record<SourceKind, string> = {
   twitter_query: '🐦',
   rss_feed: '📡',
   web_page: '🌐',
+  outlook_mail: '📧',
+  outlook_calendar: '📅',
+  teams_messages: '💼',
 };

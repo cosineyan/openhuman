@@ -30,6 +30,9 @@ const KIND_FIELDS: Record<SourceKind, Array<keyof LimitFields>> = {
   twitter_query: ['since_days'],
   web_page: ['sync_depth_days'],
   folder: ['sync_depth_days'],
+  outlook_mail: ['sync_depth_days', 'max_items'],
+  outlook_calendar: ['sync_depth_days', 'max_items'],
+  teams_messages: ['sync_depth_days', 'max_items'],
 };
 
 // i18n key for each field label
