@@ -373,25 +373,37 @@ function SystemsTab() {
 
   useEffect(() => {
     void load();
-    // When any token is expired/missing, poll every 5 s so the UI reflects the
-    // background refresh quickly. Once all cached tokens are valid, slow back
-    // down to 60 s to avoid hammering the Python subprocess.
     const scheduleNext = () => {
-      const anyExpired = status
-        ? ['graph', 'rest', 'teams', 'sharepoint'].some(k => {
-            const e = status[k as keyof typeof status] as
-              | { cached?: boolean; valid?: boolean }
-              | undefined;
-            return e?.cached && !e?.valid;
-          })
-        : false;
-      // While waiting for user to log in: poll every 3 s.
-      // While any token expired (background refresh running): poll every 5 s.
-      // Otherwise: poll every 60 s.
-      const interval = waitingLogin ? 3_000 : anyExpired ? 5_000 : 60_000;
-      return setTimeout(() => {
-        void load();
-      }, interval);
+      // While waiting for login: poll every 3 s.
+      if (waitingLogin) return setTimeout(() => { void load(); }, 3_000);
+
+      if (!status) return setTimeout(() => { void load(); }, 60_000);
+
+      const m365Keys = ['graph', 'rest', 'teams', 'sharepoint'] as const;
+
+      // Any cached token expired → background refresh is running, poll fast.
+      const anyExpired = m365Keys.some(k => {
+        const e = status[k] as { cached?: boolean; valid?: boolean } | undefined;
+        return e?.cached && !e?.valid;
+      });
+      if (anyExpired) return setTimeout(() => { void load(); }, 5_000);
+
+      // All valid — schedule next check just before the soonest expiry.
+      // expiresInMin < 5 means background refresh will trigger; we check at that point.
+      const minExpiry = m365Keys.reduce((min, k) => {
+        const e = status[k] as { valid?: boolean; expiresInMin?: number | null } | undefined;
+        if (!e?.valid || e.expiresInMin == null) return min;
+        return Math.min(min, e.expiresInMin);
+      }, Infinity);
+
+      if (minExpiry === Infinity) {
+        // No valid tokens with known expiry — fall back to 60 s.
+        return setTimeout(() => { void load(); }, 60_000);
+      }
+
+      // Poll (minExpiry - 5) minutes from now, clamped to [30s, 30min].
+      const delayMs = Math.max(30_000, Math.min((minExpiry - 5) * 60_000, 30 * 60_000));
+      return setTimeout(() => { void load(); }, delayMs);
     };
     const timer = scheduleNext();
     return () => clearTimeout(timer);
