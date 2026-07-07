@@ -117,7 +117,9 @@ def get_token(token_type):
 def token_status():
     tokens = load_tokens()
     status = {}
-    for t in ['graph', 'rest', 'teams']:
+    # Use graph_chat (Outlook Web appid, includes Chat.Read + Mail.Read) as the
+    # primary Graph API token shown in SAP Systems. Fall back to graph if absent.
+    for t in ['rest', 'teams']:
         entry = tokens.get(t)
         if not entry or not entry.get('token'):
             status[t] = {'valid': False, 'cached': False}
@@ -128,6 +130,19 @@ def token_status():
                 'expiresInMin': expires_in_min(entry),
                 'sessionId': entry.get('sessionId'),
             }
+    # graph tile shows graph_chat status (broader scope); fall back to graph
+    for display_key, storage_key in [('graph', 'graph_chat'), ('graph', 'graph')]:
+        entry = tokens.get(storage_key)
+        if entry and entry.get('token'):
+            status['graph'] = {
+                'valid': is_token_usable(entry),
+                'cached': True,
+                'expiresInMin': expires_in_min(entry),
+                'sessionId': entry.get('sessionId'),
+            }
+            break
+    else:
+        status['graph'] = {'valid': False, 'cached': False}
     return status
 
 
