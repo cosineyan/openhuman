@@ -332,8 +332,8 @@ function SystemsTab() {
   const { t } = useT();
   const [chromeStatus, setChromeStatus] = useState<MpcChromeStatus | null>(null);
   const [status, setStatus] = useState<M365TokenStatus | null>(null);
-  const [loadedAt, setLoadedAt] = useState<number>(0); // Date.now() when status was fetched
-  const [now, setNow] = useState<number>(Date.now()); // ticks every 60s for display
+  const [loadedAt, setLoadedAt] = useState<number>(0);
+  const [now, setNow] = useState<number>(() => Date.now());
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<'login' | 'refresh' | 'logout' | null>(null);
   const [waitingLogin, setWaitingLogin] = useState(false);
