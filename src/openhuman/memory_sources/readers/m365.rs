@@ -27,9 +27,7 @@ fn read_graph_token(config: &Config) -> Result<String, String> {
 /// This token is refreshed by auth login/refresh in SAP Systems.
 fn read_chat_graph_token(config: &Config) -> Result<String, String> {
     read_token_by_key(config, "graph_chat").map_err(|e| {
-        format!(
-            "{e}. Please click Refresh in SAP Systems to renew the Teams chat token."
-        )
+        format!("{e}. Please click Refresh in SAP Systems to renew the Teams chat token.")
     })
 }
 
