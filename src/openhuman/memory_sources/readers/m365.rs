@@ -24,8 +24,34 @@ fn read_graph_token(config: &Config) -> Result<String, String> {
 }
 
 /// Read the graph_chat token (Outlook Web appid 9199bf20, includes Chat.Read scope).
+/// If expired or missing, attempts to refresh via the m365-cli Python script.
 fn read_chat_graph_token(config: &Config) -> Result<String, String> {
-    read_token_by_key(config, "graph_chat")
+    // First try cached token
+    if let Ok(tok) = read_token_by_key(config, "graph_chat") {
+        return Ok(tok);
+    }
+    // Token missing or expired — call Python CLI to refresh from Outlook tab
+    let script = crate::openhuman::m365::ops::resolve_m365_cli_script()
+        .ok_or("m365_cli.py not found")?;
+    let token_file = crate::openhuman::m365::ops::token_file_path(config);
+    let out = std::process::Command::new("python3")
+        .arg(&script)
+        .args(["auth", "login", "--json"])
+        .env("M365_TOKEN_FILE", token_file.to_string_lossy().as_ref())
+        .output()
+        .map_err(|e| format!("failed to run m365-cli: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "graph_chat token expired and auto-refresh failed. \
+             Please open Outlook Web in Chrome and click Connect in SAP Systems."
+        ));
+    }
+    // Re-read after refresh
+    read_token_by_key(config, "graph_chat").map_err(|_| {
+        "graph_chat token still missing after refresh. \
+         Please open Outlook Web in Chrome and click Connect in SAP Systems."
+            .into()
+    })
 }
 
 fn read_token_by_key(config: &Config, key: &str) -> Result<String, String> {
@@ -318,7 +344,8 @@ impl SourceReader for TeamsMessagesReader {
             .and_then(|v| v.as_array())
             .ok_or("unexpected chats response")?;
 
-        let since_ms = (chrono::Utc::now() - chrono::Duration::days(days as i64)).timestamp_millis();
+        let since_ms =
+            (chrono::Utc::now() - chrono::Duration::days(days as i64)).timestamp_millis();
         let mut items = Vec::new();
 
         for chat in chats.iter().take(top_chats) {
@@ -339,8 +366,7 @@ impl SourceReader for TeamsMessagesReader {
                             if msg_id.is_empty() {
                                 continue;
                             }
-                            let created =
-                                msg["createdDateTime"].as_str().unwrap_or("").to_string();
+                            let created = msg["createdDateTime"].as_str().unwrap_or("").to_string();
                             let ts = chrono::DateTime::parse_from_rfc3339(&created)
                                 .ok()
                                 .map(|dt| dt.timestamp_millis());
