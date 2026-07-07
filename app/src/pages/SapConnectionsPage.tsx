@@ -461,7 +461,9 @@ function SystemsTab() {
       setStatus(s);
       // Show warnings (e.g. Teams token could not be refreshed — needs re-login)
       if (s.warnings && s.warnings.length > 0) {
-        setError(`部分 token 刷新失败（${s.warnings.join('; ')}）— 请点 Connect 重新登录以恢复 Teams/SharePoint`);
+        setError(
+          `部分 token 刷新失败（${s.warnings.join('; ')}）— 请点 Connect 重新登录以恢复 Teams/SharePoint`
+        );
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

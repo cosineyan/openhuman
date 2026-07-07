@@ -17,7 +17,7 @@ export interface M365TokenEntry {
 
 export interface M365TokenStatus {
   ok: boolean;
-  warnings?: string[];  // partial refresh failures (e.g. Teams token expired with no refresh token)
+  warnings?: string[]; // partial refresh failures (e.g. Teams token expired with no refresh token)
   graph: M365TokenEntry;
   rest: M365TokenEntry;
   teams: M365TokenEntry;
