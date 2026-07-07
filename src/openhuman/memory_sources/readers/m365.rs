@@ -31,8 +31,8 @@ fn read_chat_graph_token(config: &Config) -> Result<String, String> {
         return Ok(tok);
     }
     // Token missing or expired — call Python CLI to refresh from Outlook tab
-    let script = crate::openhuman::m365::ops::resolve_m365_cli_script()
-        .ok_or("m365_cli.py not found")?;
+    let script =
+        crate::openhuman::m365::ops::resolve_m365_cli_script().ok_or("m365_cli.py not found")?;
     let token_file = crate::openhuman::m365::ops::token_file_path(config);
     let out = std::process::Command::new("python3")
         .arg(&script)
