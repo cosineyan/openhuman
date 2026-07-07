@@ -375,9 +375,15 @@ function SystemsTab() {
     void load();
     const scheduleNext = () => {
       // While waiting for login: poll every 3 s.
-      if (waitingLogin) return setTimeout(() => { void load(); }, 3_000);
+      if (waitingLogin)
+        return setTimeout(() => {
+          void load();
+        }, 3_000);
 
-      if (!status) return setTimeout(() => { void load(); }, 60_000);
+      if (!status)
+        return setTimeout(() => {
+          void load();
+        }, 60_000);
 
       const m365Keys = ['graph', 'rest', 'teams', 'sharepoint'] as const;
 
@@ -386,7 +392,10 @@ function SystemsTab() {
         const e = status[k] as { cached?: boolean; valid?: boolean } | undefined;
         return e?.cached && !e?.valid;
       });
-      if (anyExpired) return setTimeout(() => { void load(); }, 5_000);
+      if (anyExpired)
+        return setTimeout(() => {
+          void load();
+        }, 5_000);
 
       // All valid — schedule next check just before the soonest expiry.
       // expiresInMin < 5 means background refresh will trigger; we check at that point.
@@ -398,12 +407,16 @@ function SystemsTab() {
 
       if (minExpiry === Infinity) {
         // No valid tokens with known expiry — fall back to 60 s.
-        return setTimeout(() => { void load(); }, 60_000);
+        return setTimeout(() => {
+          void load();
+        }, 60_000);
       }
 
       // Poll (minExpiry - 5) minutes from now, clamped to [30s, 30min].
       const delayMs = Math.max(30_000, Math.min((minExpiry - 5) * 60_000, 30 * 60_000));
-      return setTimeout(() => { void load(); }, delayMs);
+      return setTimeout(() => {
+        void load();
+      }, delayMs);
     };
     const timer = scheduleNext();
     return () => clearTimeout(timer);
