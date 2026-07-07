@@ -166,7 +166,8 @@ def find_outlook_session():
         return None
     for s in resp['sessions']:
         url = s.get('url', '')
-        if 'outlook.office.com' in url or 'outlook.cloud.microsoft' in url:
+        # Must be the actual Outlook app, not an OAuth redirect page.
+        if url.startswith('https://outlook.office.com/') or url.startswith('https://outlook.cloud.microsoft/'):
             return s['id']
     return None
 
@@ -183,7 +184,10 @@ def find_teams_session():
     if not resp.get('ok') or not resp.get('sessions'):
         return None
     for s in resp['sessions']:
-        if 'teams.microsoft.com' in s.get('url', ''):
+        url = s.get('url', '')
+        # Must be the actual Teams app, not an OAuth redirect page that happens
+        # to contain teams.microsoft.com as a redirect_uri parameter.
+        if url.startswith('https://teams.microsoft.com/') or url.startswith('https://teams.cloud.microsoft/'):
             return s['id']
     return None
 
@@ -540,6 +544,7 @@ def ensure_teams_refresh_token(force_reauth=False):
                 t['teamsTenantId'] = data['tenantId']
             save_tokens(t)
             return data['refreshToken']
+        # exec returned null (extension disconnected or wrong tab) — fall through to open new tab
 
     sid = open_teams_tab()
     deadline = time.time() + 30
