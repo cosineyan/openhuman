@@ -332,8 +332,8 @@ function SystemsTab() {
   const { t } = useT();
   const [chromeStatus, setChromeStatus] = useState<MpcChromeStatus | null>(null);
   const [status, setStatus] = useState<M365TokenStatus | null>(null);
-  const [loadedAt, setLoadedAt] = useState<number>(0);  // Date.now() when status was fetched
-  const [now, setNow] = useState<number>(Date.now());    // ticks every 60s for display
+  const [loadedAt, setLoadedAt] = useState<number>(0); // Date.now() when status was fetched
+  const [now, setNow] = useState<number>(Date.now()); // ticks every 60s for display
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<'login' | 'refresh' | 'logout' | null>(null);
   const [waitingLogin, setWaitingLogin] = useState(false);
@@ -498,28 +498,40 @@ function SystemsTab() {
       key: 'rest',
       name: 'Outlook',
       status: tokenTileStatus(status?.rest),
-      sublabel: (() => { const m = adjustedExpiry(status?.rest?.expiresInMin); return status?.rest?.valid && m != null ? `${m}m` : undefined; })(),
+      sublabel: (() => {
+        const m = adjustedExpiry(status?.rest?.expiresInMin);
+        return status?.rest?.valid && m != null ? `${m}m` : undefined;
+      })(),
       icon: <OutlookLogoBadge />,
     },
     {
       key: 'graph',
       name: 'Graph API',
       status: tokenTileStatus(status?.graph),
-      sublabel: (() => { const m = adjustedExpiry(status?.graph?.expiresInMin); return status?.graph?.valid && m != null ? `${m}m` : undefined; })(),
+      sublabel: (() => {
+        const m = adjustedExpiry(status?.graph?.expiresInMin);
+        return status?.graph?.valid && m != null ? `${m}m` : undefined;
+      })(),
       icon: <GraphLogoBadge />,
     },
     {
       key: 'teams',
       name: 'Teams',
       status: tokenTileStatus(status?.teams),
-      sublabel: (() => { const m = adjustedExpiry(status?.teams?.expiresInMin); return status?.teams?.valid && m != null ? `${m}m` : undefined; })(),
+      sublabel: (() => {
+        const m = adjustedExpiry(status?.teams?.expiresInMin);
+        return status?.teams?.valid && m != null ? `${m}m` : undefined;
+      })(),
       icon: <TeamsLogoBadge />,
     },
     {
       key: 'sharepoint',
       name: 'SharePoint',
       status: tokenTileStatus(status?.sharepoint),
-      sublabel: (() => { const m = adjustedExpiry(status?.sharepoint?.expiresInMin); return status?.sharepoint?.valid && m != null ? `${m}m` : undefined; })(),
+      sublabel: (() => {
+        const m = adjustedExpiry(status?.sharepoint?.expiresInMin);
+        return status?.sharepoint?.valid && m != null ? `${m}m` : undefined;
+      })(),
       icon: <SharePointLogoBadge />,
     },
     {
