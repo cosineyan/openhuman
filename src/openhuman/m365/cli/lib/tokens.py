@@ -130,21 +130,11 @@ def token_status():
                 'expiresInMin': expires_in_min(entry),
                 'sessionId': entry.get('sessionId'),
             }
-    # graph tile: show graph_chat if valid (broader scope, includes Chat.Read),
-    # otherwise fall back to graph (Mail.Read scope, from Teams RT exchange).
-    # This way the tile stays green as long as at least one graph token works.
-    graph_chat = tokens.get('graph_chat')
+    # graph tile shows the regular graph token (Teams RT exchange, Mail.Read scope).
+    # graph_chat (Outlook Web appid, Chat.Read scope) is a separate token used
+    # only for Teams Messages sync and is NOT shown here to avoid confusion.
     graph = tokens.get('graph')
-    if graph_chat and graph_chat.get('token') and is_token_usable(graph_chat):
-        # graph_chat is valid — show it (best token)
-        status['graph'] = {
-            'valid': True,
-            'cached': True,
-            'expiresInMin': expires_in_min(graph_chat),
-            'sessionId': graph_chat.get('sessionId'),
-        }
-    elif graph and graph.get('token'):
-        # graph_chat expired or absent — fall back to regular graph token
+    if graph and graph.get('token'):
         status['graph'] = {
             'valid': is_token_usable(graph),
             'cached': True,
@@ -152,7 +142,7 @@ def token_status():
             'sessionId': graph.get('sessionId'),
         }
     else:
-        status['graph'] = {'valid': False, 'cached': bool(graph_chat or graph)}
+        status['graph'] = {'valid': False, 'cached': False}
     return status
 
 
