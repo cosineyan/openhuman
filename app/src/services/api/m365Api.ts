@@ -22,6 +22,7 @@ export interface M365TokenStatus {
   rest: M365TokenEntry;
   teams: M365TokenEntry;
   // SAP additional services
+  graph_chat?: M365TokenEntry; // Outlook Web token (Chat.Read) for Teams Messages sync
   aha?: M365TokenEntry;
   jira?: M365TokenEntry;
   wiki?: M365TokenEntry;

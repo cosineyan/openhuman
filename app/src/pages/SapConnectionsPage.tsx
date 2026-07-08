@@ -521,6 +521,19 @@ function SystemsTab() {
       icon: <GraphLogoBadge />,
     },
     {
+      key: 'graph_chat',
+      name: 'Teams Chat',
+      status: tokenTileStatus(status?.graph_chat),
+      sublabel: (() => {
+        const m = adjustedExpiry(status?.graph_chat?.expiresInMin);
+        if (status?.graph_chat?.valid && m != null) return `${m}m`;
+        if (status?.graph_chat?.cached && !status.graph_chat.valid)
+          return t('sap.systems.storedNoNetwork');
+        return undefined;
+      })(),
+      icon: <TeamsLogoBadge />,
+    },
+    {
       key: 'teams',
       name: 'Teams',
       status: tokenTileStatus(status?.teams),

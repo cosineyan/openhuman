@@ -143,6 +143,16 @@ def token_status():
         }
     else:
         status['graph'] = {'valid': False, 'cached': False}
+    # graph_chat tile: Outlook Web token (Chat.Read scope) for Teams Messages sync
+    graph_chat = tokens.get('graph_chat')
+    if graph_chat and graph_chat.get('token'):
+        status['graph_chat'] = {
+            'valid': is_token_usable(graph_chat),
+            'cached': True,
+            'expiresInMin': expires_in_min(graph_chat),
+        }
+    else:
+        status['graph_chat'] = {'valid': False, 'cached': False}
     return status
 
 
