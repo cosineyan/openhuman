@@ -72,7 +72,7 @@ pub fn base_tool_specs() -> Vec<McpToolSpec> {
             name: "memory.search",
             title: "Search Memory",
             description: "Keyword-search OpenHuman's local memory tree and return matching chunks ordered by recency.",
-            rpc_method: Some("openhuman.memory_tree_search"),
+            rpc_method: Some("openhuman.memory_search"),
             input_schema: query_schema("Substring to match against stored memory chunks."),
             annotations: read_only_local_annotations(),
         },
@@ -80,7 +80,7 @@ pub fn base_tool_specs() -> Vec<McpToolSpec> {
             name: "memory.recall",
             title: "Recall Memory",
             description: "Semantically recall local memory-tree chunks relevant to a natural-language query.",
-            rpc_method: Some("openhuman.memory_tree_recall"),
+            rpc_method: Some("openhuman.memory_recall"),
             input_schema: query_schema("Natural-language query to embed and rerank against memory summaries."),
             annotations: read_only_local_annotations(),
         },
@@ -88,7 +88,7 @@ pub fn base_tool_specs() -> Vec<McpToolSpec> {
             name: "tree.read_chunk",
             title: "Read Memory Chunk",
             description: "Read one memory-tree chunk by id. Use this to inspect the source text behind search or recall results.",
-            rpc_method: Some("openhuman.memory_tree_get_chunk"),
+            rpc_method: Some("openhuman.memory_get_chunk"),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -111,7 +111,7 @@ pub fn base_tool_specs() -> Vec<McpToolSpec> {
                           recent in my Gmail\", \"show me everything from last week about Alice\") \
                           rather than search by query. Returns chunks plus a total match count for \
                           pagination.",
-            rpc_method: Some("openhuman.memory_tree_list_chunks"),
+            rpc_method: Some("openhuman.memory_list_chunks"),
             input_schema: tree_browse_schema(),
             annotations: read_only_local_annotations(),
         },
@@ -122,7 +122,7 @@ pub fn base_tool_specs() -> Vec<McpToolSpec> {
                           topics, emails) across the local memory tree. Call this for entity \
                           discovery before drilling in with `tree.browse` (passing `entity_ids`) \
                           or `memory.search`. Returns entities ordered by reference count.",
-            rpc_method: Some("openhuman.memory_tree_top_entities"),
+            rpc_method: Some("openhuman.memory_top_entities"),
             input_schema: tree_top_entities_schema(),
             annotations: read_only_local_annotations(),
         },
@@ -134,7 +134,7 @@ pub fn base_tool_specs() -> Vec<McpToolSpec> {
                           chunk counts and last-activity timestamps. Use this when the user asks \
                           \"what data sources do I have\" or to discover source ids to pass into \
                           `tree.browse`.",
-            rpc_method: Some("openhuman.memory_tree_list_sources"),
+            rpc_method: Some("openhuman.memory_list_sources"),
             input_schema: tree_list_sources_schema(),
             annotations: read_only_local_annotations(),
         },
