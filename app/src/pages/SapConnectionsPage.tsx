@@ -691,6 +691,16 @@ function SystemsTab() {
                 className="rounded-lg border border-stone-200 dark:border-neutral-700 bg-stone-50 dark:bg-neutral-800/60 px-3 py-1.5 text-xs font-medium text-stone-600 dark:text-neutral-300 hover:border-stone-300 dark:hover:border-neutral-600 disabled:opacity-50 transition-colors">
                 {busy === 'refresh' ? t('sap.systems.refreshing') : t('sap.systems.refresh')}
               </button>
+              {/* Show Connect when graph token is expired so user can re-authenticate */}
+              {status?.graph?.cached && !status.graph.valid && (
+                <button
+                  type="button"
+                  onClick={() => void handleLogin()}
+                  disabled={!!busy || waitingLogin}
+                  className="rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-600 disabled:opacity-50 transition-colors">
+                  {busy === 'login' ? t('sap.systems.connecting') : t('sap.systems.connect')}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => void handleLogout()}

@@ -748,26 +748,45 @@ def ensure_chat_graph_token(force=False):
     if tok:
         return tok
 
-    # Token is expired — open a new Outlook tab to force MSAL to issue a fresh
-    # token (existing tab's cached token is too stale for silent refresh).
-    # Wait for the page to load and MSAL to exchange, then close the new tab.
-    dlog(f'ensure_chat_graph_token: token expired, opening new Outlook tab to force MSAL refresh')
+    # Token is expired — open a new Outlook tab and trigger MSAL silent acquire
+    # via JS to force a fresh token. After MSAL completes, extract and close.
+    dlog(f'ensure_chat_graph_token: token expired, opening new Outlook tab with MSAL trigger')
     new_sid = None
     try:
         new_sid = open_outlook_tab()
-        time.sleep(10)  # Wait for page load + MSAL silent token exchange
+        time.sleep(8)  # Wait for page load
+
+        # Trigger MSAL silent acquire via JS — this forces Outlook's MSAL instance
+        # to request a new token from Azure AD in the background.
+        MSAL_TRIGGER_JS = r"""
+(function() {
+    try {
+        var w = window;
+        // Try accessing MSAL through common Outlook globals
+        var msalApp = w.__msal || w.msalApp || (w.osfMsal && w.osfMsal.instance);
+        if (!msalApp && w.commonjs && w.commonjs.getMSAL) msalApp = w.commonjs.getMSAL();
+        if (msalApp && msalApp.acquireTokenSilent) {
+            msalApp.acquireTokenSilent({scopes: ['https://graph.microsoft.com/.default']}).catch(function(){});
+        }
+    } catch(e) {}
+    return 'triggered';
+})()
+""".strip().replace('\n', ' ')
+        mcp_browser_cmd({'command': 'exec', 'sessionId': new_sid,
+                         'code': MSAL_TRIGGER_JS, 'timeout': 5}, 8000)
+        time.sleep(8)  # Wait for MSAL silent acquire to complete
+
         tok = _try_extract_from(new_sid)
         if tok:
             close_tab(new_sid)
             return tok
-        # Also try the original tab after the new one has triggered MSAL refresh
         tok = _try_extract()
         if tok:
             close_tab(new_sid)
             return tok
         close_tab(new_sid)
     except Exception as e:
-        dlog(f'ensure_chat_graph_token: new tab approach failed: {e}')
+        dlog(f'ensure_chat_graph_token: MSAL trigger approach failed: {e}')
         if new_sid:
             close_tab(new_sid)
 
