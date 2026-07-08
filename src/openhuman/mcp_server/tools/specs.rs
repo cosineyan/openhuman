@@ -73,7 +73,24 @@ pub fn base_tool_specs() -> Vec<McpToolSpec> {
             title: "Search Memory",
             description: "Keyword-search OpenHuman's local memory tree and return matching chunks ordered by recency.",
             rpc_method: Some("openhuman.memory_search"),
-            input_schema: query_schema("Substring to match against stored memory chunks."),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Substring to match against stored memory chunks.",
+                        "minLength": 1
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": format!("Maximum chunks to return. Defaults to {DEFAULT_LIMIT}; capped at {MAX_LIMIT}."),
+                        "minimum": 1,
+                        "maximum": MAX_LIMIT
+                    }
+                },
+                "required": ["query"],
+                "additionalProperties": false
+            }),
             annotations: read_only_local_annotations(),
         },
         McpToolSpec {
