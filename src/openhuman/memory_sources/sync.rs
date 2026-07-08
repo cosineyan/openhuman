@@ -375,9 +375,9 @@ async fn sync_items_individually(
                         SourceKind::OutlookMail | SourceKind::TeamsMessages => {
                             Some(crate::openhuman::memory_store::chunks::types::SourceKind::Email)
                         }
-                        SourceKind::OutlookCalendar => {
-                            Some(crate::openhuman::memory_store::chunks::types::SourceKind::Document)
-                        }
+                        SourceKind::OutlookCalendar => Some(
+                            crate::openhuman::memory_store::chunks::types::SourceKind::Document,
+                        ),
                         _ => None,
                     },
                 };
