@@ -395,14 +395,21 @@ async fn run_claude_code_direct(
         ChatMessage, ChatRequest, Provider, ProviderDelta,
     };
 
-    let model = model_override
-        .or_else(|| {
-            config
+    // Filter hint:* model overrides (these are provider role hints, not model IDs)
+    // and fall back to the model from config.chat_provider.
+    let model_from_config;
+    let model: &str = match model_override.filter(|m| !m.starts_with("hint:")) {
+        Some(m) => m,
+        None => {
+            model_from_config = config
                 .chat_provider
                 .as_deref()
                 .and_then(|p| p.strip_prefix("claude-code:"))
-        })
-        .unwrap_or("claude-sonnet-latest");
+                .unwrap_or("claude-sonnet-latest")
+                .to_string();
+            &model_from_config
+        }
+    };
 
     let workspace = workspace_dir_from_config(config);
     let provider = ClaudeCodeProvider::from_env(model, workspace, config.action_dir.clone())
