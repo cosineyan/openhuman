@@ -388,7 +388,9 @@ async fn run_claude_code_direct(
     use crate::openhuman::inference::provider::claude_code::{
         workspace_dir_from_config, ClaudeCodeProvider,
     };
-    use crate::openhuman::inference::provider::{ChatMessage, ChatRequest, Provider, ProviderDelta};
+    use crate::openhuman::inference::provider::{
+        ChatMessage, ChatRequest, Provider, ProviderDelta,
+    };
 
     let model = model_override
         .or_else(|| {
@@ -400,22 +402,22 @@ async fn run_claude_code_direct(
         .unwrap_or("claude-sonnet-latest");
 
     let workspace = workspace_dir_from_config(config);
-    let provider =
-        ClaudeCodeProvider::from_env(model, workspace, config.action_dir.clone())
-            .map_err(|e| e.to_string())?;
+    let provider = ClaudeCodeProvider::from_env(model, workspace, config.action_dir.clone())
+        .map_err(|e| e.to_string())?;
 
     // Bridge ProviderDelta → AgentProgress for the existing progress_bridge.
-    let (delta_tx, mut delta_rx) =
-        tokio::sync::mpsc::channel::<ProviderDelta>(64);
+    let (delta_tx, mut delta_rx) = tokio::sync::mpsc::channel::<ProviderDelta>(64);
     tokio::spawn(async move {
         while let Some(delta) = delta_rx.recv().await {
             let progress = match delta {
-                ProviderDelta::TextDelta { delta } => {
-                    AgentProgress::TextDelta { delta, iteration: 1 }
-                }
-                ProviderDelta::ThinkingDelta { delta } => {
-                    AgentProgress::ThinkingDelta { delta, iteration: 1 }
-                }
+                ProviderDelta::TextDelta { delta } => AgentProgress::TextDelta {
+                    delta,
+                    iteration: 1,
+                },
+                ProviderDelta::ThinkingDelta { delta } => AgentProgress::ThinkingDelta {
+                    delta,
+                    iteration: 1,
+                },
                 // Tool calls are handled inside the claude CLI process; nothing to
                 // forward to the harness here.
                 _ => continue,
