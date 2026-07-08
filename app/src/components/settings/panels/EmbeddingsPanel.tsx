@@ -668,9 +668,7 @@ const EmbeddingsPanel = ({ embedded = false }: EmbeddingsPanelProps = {}) => {
                 disabled={
                   setupTesting ||
                   setupSaving ||
-                  (setupProvider.slug === 'custom'
-                    ? !customEndpoint.trim()
-                    : !setupKey.trim())
+                  (setupProvider.slug === 'custom' ? !customEndpoint.trim() : !setupKey.trim())
                 }>
                 {setupTesting
                   ? t('settings.embeddings.testing')
