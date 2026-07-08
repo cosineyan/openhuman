@@ -710,6 +710,9 @@ def ensure_chat_graph_token(force=False):
 
     We cache it under the 'graph_chat' key to avoid overwriting the regular
     graph token used for mail/calendar calls.
+
+    If the cached token is expired or missing, we navigate the Outlook tab to
+    trigger MSAL to silently refresh the token, then re-extract.
     """
     tokens = load_tokens()
     entry = tokens.get('graph_chat')
@@ -722,14 +725,35 @@ def ensure_chat_graph_token(force=False):
         raise RuntimeError(
             'No Outlook tab found. Please open Outlook Web to enable Teams chat sync.'
         )
-    data = extract_from_session(sid)
-    now = int(time.time())
-    graph_entry = (data or {}).get('graph') or {}
-    if graph_entry.get('token') and graph_entry.get('expiresOn', 0) > now:
-        t = load_tokens()
-        t['graph_chat'] = {'token': graph_entry['token'], 'expiresOn': graph_entry['expiresOn']}
-        save_tokens(t)
-        return graph_entry['token']
+
+    def _try_extract():
+        data = extract_from_session(sid)
+        now = int(time.time())
+        graph_entry = (data or {}).get('graph') or {}
+        if graph_entry.get('token') and graph_entry.get('expiresOn', 0) > now:
+            t = load_tokens()
+            t['graph_chat'] = {'token': graph_entry['token'], 'expiresOn': graph_entry['expiresOn']}
+            save_tokens(t)
+            return graph_entry['token']
+        return None
+
+    # First try: extract current token from the tab.
+    tok = _try_extract()
+    if tok:
+        return tok
+
+    # Token is expired or absent in MSAL cache — navigate the tab to trigger
+    # a silent MSAL refresh, then try again.
+    dlog(f'ensure_chat_graph_token: token expired in tab {sid}, navigating to refresh MSAL')
+    try:
+        navigate_tab(sid, 'https://outlook.cloud.microsoft/mail/')
+        time.sleep(5)  # Allow MSAL to silently refresh
+    except Exception:
+        pass
+
+    tok = _try_extract()
+    if tok:
+        return tok
 
     raise RuntimeError(
         'Could not obtain a Chat.Read graph token from Outlook tab. '

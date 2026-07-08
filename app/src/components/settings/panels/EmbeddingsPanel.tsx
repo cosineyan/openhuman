@@ -112,16 +112,24 @@ const EmbeddingsPanel = ({ embedded = false }: EmbeddingsPanelProps = {}) => {
   const allowedDims = currentModel?.allowed_dimensions ?? [];
 
   function handleProviderClick(entry: EmbeddingProviderEntry) {
-    if (entry.slug === selectedProvider) return;
-
+    // Custom provider always opens the setup popup so the user can update
+    // endpoint/key/model even when it is already the selected provider.
     if (entry.slug === 'custom') {
-      // For custom, open setup popup to enter endpoint
+      // Pre-fill with existing values from current provider setting
+      const existingEndpoint = settings?.provider?.startsWith('custom:')
+        ? settings.provider.slice('custom:'.length)
+        : '';
+      setCustomEndpoint(existingEndpoint);
+      setCustomModel(settings?.model ?? '');
+      setCustomDims(String(settings?.dimensions ?? '1024'));
       setSetupProvider(entry);
       setSetupKey('');
       setSetupTestResult(null);
       setSetupError('');
       return;
     }
+
+    if (entry.slug === selectedProvider) return;
 
     if (entry.requires_api_key && !entry.has_api_key) {
       // Open the setup popup for API key entry + test
@@ -227,15 +235,22 @@ const EmbeddingsPanel = ({ embedded = false }: EmbeddingsPanelProps = {}) => {
       if (setupKey.trim()) {
         await setEmbeddingsApiKey(setupProvider.slug, setupKey.trim());
       }
-      const defaultModel = setupProvider.models[0];
-      const result = await testEmbeddingsConnection({
-        provider: setupProvider.slug,
-        model: defaultModel?.id,
-        dimensions: defaultModel?.default_dimensions,
-      });
+      const isCustom = setupProvider.slug === 'custom';
+      const result = await testEmbeddingsConnection(
+        isCustom
+          ? {
+              provider: `custom:${customEndpoint.trim()}`,
+              model: customModel.trim() || 'embedding',
+              dimensions: Number(customDims) || 1024,
+            }
+          : {
+              provider: setupProvider.slug,
+              model: setupProvider.models[0]?.id,
+              dimensions: setupProvider.models[0]?.default_dimensions,
+            }
+      );
       setSetupTestResult(result);
       if (result.success) {
-        // Refresh settings to pick up the stored key
         await reload();
       }
     } catch (err) {
@@ -648,14 +663,14 @@ const EmbeddingsPanel = ({ embedded = false }: EmbeddingsPanelProps = {}) => {
                 variant="secondary"
                 size="xs"
                 onClick={() => {
-                  if (setupProvider.slug !== 'custom') {
-                    void setupTest();
-                  }
+                  void setupTest();
                 }}
                 disabled={
                   setupTesting ||
                   setupSaving ||
-                  (setupProvider.slug !== 'custom' && !setupKey.trim())
+                  (setupProvider.slug === 'custom'
+                    ? !customEndpoint.trim()
+                    : !setupKey.trim())
                 }>
                 {setupTesting
                   ? t('settings.embeddings.testing')
