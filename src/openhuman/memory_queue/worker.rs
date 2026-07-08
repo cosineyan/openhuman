@@ -165,6 +165,14 @@ pub fn start(config: Config) {
 /// Claim and run a single job. Returns `true` when work was processed,
 /// `false` when no eligible row was available.
 pub async fn run_once(config: &Config) -> Result<bool> {
+    // Recover stale locks on every poll cycle, not just startup.
+    // Workers can be hard-killed (e.g. process crash, OOM) leaving jobs
+    // stuck in 'running' indefinitely. Recovering here ensures the queue
+    // self-heals within one poll interval without manual intervention.
+    if let Err(err) = recover_stale_locks(config) {
+        log::warn!("[memory::jobs] recover_stale_locks failed: {err:#}");
+    }
+
     // Cooperative throttle BEFORE `claim_next()`. Holding the DB claim
     // across an awaited `wait_for_capacity()` would let `Paused` mode
     // sit on the row past `DEFAULT_LOCK_DURATION_MS`, after which
