@@ -726,30 +726,50 @@ def ensure_chat_graph_token(force=False):
             'No Outlook tab found. Please open Outlook Web to enable Teams chat sync.'
         )
 
-    def _try_extract():
-        data = extract_from_session(sid)
+    def _save_graph_chat(graph_entry):
+        t = load_tokens()
+        t['graph_chat'] = {'token': graph_entry['token'], 'expiresOn': graph_entry['expiresOn']}
+        save_tokens(t)
+        return graph_entry['token']
+
+    def _try_extract_from(session_id):
+        data = extract_from_session(session_id)
         now = int(time.time())
         graph_entry = (data or {}).get('graph') or {}
         if graph_entry.get('token') and graph_entry.get('expiresOn', 0) > now:
-            t = load_tokens()
-            t['graph_chat'] = {'token': graph_entry['token'], 'expiresOn': graph_entry['expiresOn']}
-            save_tokens(t)
-            return graph_entry['token']
+            return _save_graph_chat(graph_entry)
         return None
+
+    def _try_extract():
+        return _try_extract_from(sid)
 
     # First try: extract current token from the tab.
     tok = _try_extract()
     if tok:
         return tok
 
-    # Token is expired or absent in MSAL cache — navigate the tab to trigger
-    # a silent MSAL refresh, then try again.
-    dlog(f'ensure_chat_graph_token: token expired in tab {sid}, navigating to refresh MSAL')
+    # Token is expired — open a new Outlook tab to force MSAL to issue a fresh
+    # token (existing tab's cached token is too stale for silent refresh).
+    # Wait for the page to load and MSAL to exchange, then close the new tab.
+    dlog(f'ensure_chat_graph_token: token expired, opening new Outlook tab to force MSAL refresh')
+    new_sid = None
     try:
-        navigate_tab(sid, 'https://outlook.cloud.microsoft/mail/')
-        time.sleep(5)  # Allow MSAL to silently refresh
-    except Exception:
-        pass
+        new_sid = open_outlook_tab()
+        time.sleep(10)  # Wait for page load + MSAL silent token exchange
+        tok = _try_extract_from(new_sid)
+        if tok:
+            close_tab(new_sid)
+            return tok
+        # Also try the original tab after the new one has triggered MSAL refresh
+        tok = _try_extract()
+        if tok:
+            close_tab(new_sid)
+            return tok
+        close_tab(new_sid)
+    except Exception as e:
+        dlog(f'ensure_chat_graph_token: new tab approach failed: {e}')
+        if new_sid:
+            close_tab(new_sid)
 
     tok = _try_extract()
     if tok:
