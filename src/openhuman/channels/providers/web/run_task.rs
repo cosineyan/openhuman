@@ -200,9 +200,41 @@ pub(crate) async fn run_chat_task(
     }
 
     let (progress_tx, progress_rx) = tokio::sync::mpsc::channel(64);
+    let turn_state_store = TurnStateStore::new(config.workspace_dir.clone());
+
+    // Detect claude-code direct mode: when chat_provider is "claude-code:*", bypass
+    // the agent harness tool intercept so the claude CLI process can use MCP tools
+    // (tree_browse, memory_search, installed skills) without hitting visible_tool_names
+    // restrictions.
+    let is_claude_code_direct = config
+        .chat_provider
+        .as_deref()
+        .map(|p| p.starts_with("claude-code:"))
+        .unwrap_or(false);
+
+    if is_claude_code_direct {
+        // Direct path: spawn progress bridge with our channel, then call provider directly.
+        spawn_progress_bridge(
+            progress_rx,
+            client_id.to_string(),
+            thread_id.to_string(),
+            request_id.to_string(),
+            turn_state_store,
+            metadata.clone(),
+            config.clone(),
+        );
+        return run_claude_code_direct(
+            &config,
+            thread_id,
+            message,
+            model_override.as_deref(),
+            progress_tx,
+        )
+        .await;
+    }
+
     agent.set_on_progress(Some(progress_tx));
     agent.set_run_queue(Some(run_queue));
-    let turn_state_store = TurnStateStore::new(config.workspace_dir.clone());
     spawn_progress_bridge(
         progress_rx,
         client_id.to_string(),
@@ -339,6 +371,80 @@ pub(crate) async fn run_chat_task(
     }
 
     result
+}
+
+/// Direct claude-code path: bypass the agent harness so the claude CLI process
+/// handles all tool calls (MCP tools + installed skills) without hitting the
+/// harness `visible_tool_names` whitelist. The progress channel is already
+/// wired to the progress bridge before this is called.
+async fn run_claude_code_direct(
+    config: &crate::openhuman::config::Config,
+    thread_id: &str,
+    message: &str,
+    model_override: Option<&str>,
+    progress_tx: tokio::sync::mpsc::Sender<crate::openhuman::agent::progress::AgentProgress>,
+) -> Result<super::types::WebChatTaskResult, String> {
+    use crate::openhuman::agent::progress::AgentProgress;
+    use crate::openhuman::inference::provider::claude_code::{
+        workspace_dir_from_config, ClaudeCodeProvider,
+    };
+    use crate::openhuman::inference::provider::{ChatMessage, ChatRequest, Provider, ProviderDelta};
+
+    let model = model_override
+        .or_else(|| {
+            config
+                .chat_provider
+                .as_deref()
+                .and_then(|p| p.strip_prefix("claude-code:"))
+        })
+        .unwrap_or("claude-sonnet-latest");
+
+    let workspace = workspace_dir_from_config(config);
+    let provider =
+        ClaudeCodeProvider::from_env(model, workspace, config.action_dir.clone())
+            .map_err(|e| e.to_string())?;
+
+    // Bridge ProviderDelta → AgentProgress for the existing progress_bridge.
+    let (delta_tx, mut delta_rx) =
+        tokio::sync::mpsc::channel::<ProviderDelta>(64);
+    tokio::spawn(async move {
+        while let Some(delta) = delta_rx.recv().await {
+            let progress = match delta {
+                ProviderDelta::TextDelta { delta } => {
+                    AgentProgress::TextDelta { delta, iteration: 1 }
+                }
+                ProviderDelta::ThinkingDelta { delta } => {
+                    AgentProgress::ThinkingDelta { delta, iteration: 1 }
+                }
+                // Tool calls are handled inside the claude CLI process; nothing to
+                // forward to the harness here.
+                _ => continue,
+            };
+            let _ = progress_tx.send(progress).await;
+        }
+    });
+
+    let messages = vec![ChatMessage::user(message)];
+    let request = ChatRequest {
+        messages: &messages,
+        tools: None,
+        stream: Some(&delta_tx),
+        max_tokens: None,
+        hint_thread_id: Some(thread_id),
+    };
+
+    let resp = provider
+        .chat(request, model, 0.0)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Drop delta_tx so the bridge task exits cleanly.
+    drop(delta_tx);
+
+    Ok(super::types::WebChatTaskResult {
+        full_response: resp.text.unwrap_or_default(),
+        citations: vec![],
+    })
 }
 
 /// Whether a completed turn's session agent must be **dropped** rather than
