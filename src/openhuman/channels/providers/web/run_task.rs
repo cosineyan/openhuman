@@ -164,7 +164,15 @@ pub(crate) async fn run_chat_task(
     };
 
     // Cold-boot resume from the conversation JSONL.
-    if was_built_fresh {
+    // Skip for claude-code direct mode: the CLI manages history itself via
+    // --resume using the session UUID stored against the thread_id.
+    let is_claude_code_direct = config
+        .chat_provider
+        .as_deref()
+        .map(|p| p.starts_with("claude-code:"))
+        .unwrap_or(false);
+
+    if was_built_fresh && !is_claude_code_direct {
         match crate::openhuman::memory_conversations::get_messages(
             config.workspace_dir.clone(),
             thread_id,
@@ -206,11 +214,6 @@ pub(crate) async fn run_chat_task(
     // the agent harness tool intercept so the claude CLI process can use MCP tools
     // (tree_browse, memory_search, installed skills) without hitting visible_tool_names
     // restrictions.
-    let is_claude_code_direct = config
-        .chat_provider
-        .as_deref()
-        .map(|p| p.starts_with("claude-code:"))
-        .unwrap_or(false);
 
     if is_claude_code_direct {
         // Direct path: spawn progress bridge with our channel, then call provider directly.
