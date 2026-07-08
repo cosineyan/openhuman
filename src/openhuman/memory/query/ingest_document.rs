@@ -107,6 +107,7 @@ impl Tool for MemoryTreeIngestDocumentTool {
             body: body.trim().to_string(),
             modified_at: Utc::now(),
             source_ref,
+            source_kind_override: None,
         };
 
         let req = rpc::IngestRequest {

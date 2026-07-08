@@ -46,6 +46,11 @@ pub struct DocumentInput {
     /// Optional pointer back to source (URL, file path, Notion page id).
     #[serde(default)]
     pub source_ref: Option<String>,
+    /// Override the storage `source_kind`. When `None`, defaults to
+    /// `SourceKind::Document`. Set to `Email` for mail sources so the
+    /// memory tree correctly categorises and surfaces the content.
+    #[serde(default)]
+    pub source_kind_override: Option<SourceKind>,
 }
 
 /// Canonicalise a single document into a [`CanonicalisedSource`]. Returns
@@ -71,7 +76,7 @@ pub fn canonicalise(
     Ok(Some(CanonicalisedSource {
         markdown: md,
         metadata: Metadata {
-            source_kind: SourceKind::Document,
+            source_kind: doc.source_kind_override.unwrap_or(SourceKind::Document),
             source_id: source_id.to_string(),
             owner: owner.to_string(),
             timestamp: doc.modified_at,

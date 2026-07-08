@@ -102,7 +102,8 @@ pub async fn ingest_task_into_memory_tree(
         body,
         modified_at,
         source_ref,
-    };
+            source_kind_override: None,
+        };
     let tags: Vec<String> = DEFAULT_TAGS.iter().map(|s| s.to_string()).collect();
     let owner = clickup_source_scope(connection_id);
     let path_scope = Some(owner.clone());

@@ -371,6 +371,15 @@ async fn sync_items_individually(
                     body: content.body.clone(),
                     modified_at: chrono::Utc::now(),
                     source_ref: Some(format!("{source_id}:{}", item.id)),
+                    source_kind_override: match source_kind {
+                        SourceKind::OutlookMail | SourceKind::TeamsMessages => {
+                            Some(crate::openhuman::memory_store::chunks::types::SourceKind::Email)
+                        }
+                        SourceKind::OutlookCalendar => {
+                            Some(crate::openhuman::memory_store::chunks::types::SourceKind::Document)
+                        }
+                        _ => None,
+                    },
                 };
 
                 let composite_source_id = format!("mem_src:{source_id}:{}", item.id);
