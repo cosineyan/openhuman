@@ -524,10 +524,14 @@ export function MemoryTreeStatusPanel({ onToast }: MemoryTreeStatusPanelProps) {
       ) : null}
 
       {/* Embedding progress — shown when backend provides the counts */}
-      {!loading && status && (status.embedded_chunks != null || status.pending_embed_chunks != null) ? (
+      {!loading &&
+      status &&
+      (status.embedded_chunks != null || status.pending_embed_chunks != null) ? (
         <div className="rounded-lg border border-stone-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-3 py-2 space-y-1.5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-stone-700 dark:text-neutral-300">{t('memoryTree.status.embeddingProgressTitle')}</span>
+            <span className="text-xs font-medium text-stone-700 dark:text-neutral-300">
+              {t('memoryTree.status.embeddingProgressTitle')}
+            </span>
             <button
               type="button"
               onClick={() => void refresh()}
@@ -545,11 +549,19 @@ export function MemoryTreeStatusPanel({ onToast }: MemoryTreeStatusPanelProps) {
             return (
               <>
                 <div className="flex items-center gap-2 text-xs text-stone-500 dark:text-neutral-400">
-                  <span>{t('memoryTree.status.embeddedCount').replace('{count}', new Intl.NumberFormat().format(embedded))}</span>
+                  <span>
+                    {t('memoryTree.status.embeddedCount').replace(
+                      '{count}',
+                      new Intl.NumberFormat().format(embedded)
+                    )}
+                  </span>
                   <span>·</span>
                   <span className={pending > 0 ? 'text-amber-500' : 'text-emerald-500'}>
                     {pending > 0
-                      ? t('memoryTree.status.pendingCount').replace('{count}', new Intl.NumberFormat().format(pending))
+                      ? t('memoryTree.status.pendingCount').replace(
+                          '{count}',
+                          new Intl.NumberFormat().format(pending)
+                        )
                       : t('memoryTree.status.embeddingComplete')}
                   </span>
                 </div>
@@ -566,11 +578,20 @@ export function MemoryTreeStatusPanel({ onToast }: MemoryTreeStatusPanelProps) {
                 {status.pipeline_jobs && (
                   <div className="text-xs text-stone-400 dark:text-neutral-500">
                     {t('memoryTree.status.extractionJobs')
-                      .replace('{ready}', new Intl.NumberFormat().format(status.pipeline_jobs.ready))
-                      .replace('{running}', new Intl.NumberFormat().format(status.pipeline_jobs.running))}
+                      .replace(
+                        '{ready}',
+                        new Intl.NumberFormat().format(status.pipeline_jobs.ready)
+                      )
+                      .replace(
+                        '{running}',
+                        new Intl.NumberFormat().format(status.pipeline_jobs.running)
+                      )}
                     {status.pipeline_jobs.failed > 0 && (
                       <span className="text-red-500">
-                        {t('memoryTree.status.extractionJobsFailed').replace('{failed}', new Intl.NumberFormat().format(status.pipeline_jobs.failed))}
+                        {t('memoryTree.status.extractionJobsFailed').replace(
+                          '{failed}',
+                          new Intl.NumberFormat().format(status.pipeline_jobs.failed)
+                        )}
                       </span>
                     )}
                   </div>

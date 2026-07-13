@@ -276,10 +276,15 @@ fn extract_profile_person_name(query: &str) -> Option<String> {
             let name = rest.trim().trim_end_matches('?').trim().to_string();
             if name.len() >= 3 && !name.contains('\n') {
                 // Reconstruct original casing from query
-                let start = query.to_lowercase().find(rest).unwrap_or(0) + (query.len() - query.trim_start().len());
+                let start = query.to_lowercase().find(rest).unwrap_or(0)
+                    + (query.len() - query.trim_start().len());
                 let original = &query[query.to_lowercase().find(rest).unwrap_or(0)..];
                 let name_original = original.trim().trim_end_matches('?').trim().to_string();
-                return Some(if name_original.is_empty() { name } else { name_original });
+                return Some(if name_original.is_empty() {
+                    name
+                } else {
+                    name_original
+                });
             }
         }
     }

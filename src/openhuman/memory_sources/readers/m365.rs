@@ -326,7 +326,9 @@ impl SourceReader for TeamsMessagesReader {
         ));
         let mut pages = 0usize;
         while let Some(url) = chats_url {
-            if pages >= 10 { break; } // safety cap at 500 chats
+            if pages >= 10 {
+                break;
+            } // safety cap at 500 chats
             let chats_data = graph_get(&token, &url).await?;
             if let Some(arr) = chats_data.get("value").and_then(|v| v.as_array()) {
                 all_chats.extend(arr.iter().cloned());
@@ -352,11 +354,13 @@ impl SourceReader for TeamsMessagesReader {
             // Build a human-readable label for the chat based on type and members.
             let chat_label = if chat_type == "oneOnOne" {
                 // Pick the member who is not the current user (any non-empty name)
-                let members = chat.get("members")
+                let members = chat
+                    .get("members")
                     .and_then(|v| v.as_array())
                     .cloned()
                     .unwrap_or_default();
-                let other = members.iter()
+                let other = members
+                    .iter()
                     .filter_map(|m| m.get("displayName").and_then(|v| v.as_str()))
                     .find(|name| !name.is_empty())
                     .unwrap_or("Unknown");
@@ -364,16 +368,22 @@ impl SourceReader for TeamsMessagesReader {
             } else {
                 let topic = chat["topic"].as_str().unwrap_or("").to_string();
                 if topic.is_empty() {
-                    let members = chat.get("members")
+                    let members = chat
+                        .get("members")
                         .and_then(|v| v.as_array())
                         .cloned()
                         .unwrap_or_default();
-                    let names: Vec<&str> = members.iter()
+                    let names: Vec<&str> = members
+                        .iter()
                         .filter_map(|m| m.get("displayName").and_then(|v| v.as_str()))
                         .filter(|n| !n.is_empty())
                         .take(3)
                         .collect();
-                    if names.is_empty() { "Group Chat".to_string() } else { names.join(", ") }
+                    if names.is_empty() {
+                        "Group Chat".to_string()
+                    } else {
+                        names.join(", ")
+                    }
                 } else {
                     topic
                 }
@@ -444,27 +454,31 @@ impl SourceReader for TeamsMessagesReader {
             let members_url = format!("{GRAPH_BASE}/me/chats/{chat_id}?$select=id,topic,chatType&$expand=members($select=displayName,userId)");
             graph_get(&token, &members_url).await.ok()
         };
-        let chat_type = chat_info.as_ref()
+        let chat_type = chat_info
+            .as_ref()
             .and_then(|c| c.get("chatType"))
             .and_then(|v| v.as_str())
             .unwrap_or("unknown")
             .to_string();
         let chat_context = if chat_type == "oneOnOne" {
             // Find the other participant (not the current user)
-            let members = chat_info.as_ref()
+            let members = chat_info
+                .as_ref()
                 .and_then(|c| c.get("members"))
                 .and_then(|v| v.as_array())
                 .cloned()
                 .unwrap_or_default();
             // Pick first member whose name differs (the "other" person)
-            let other = members.iter()
+            let other = members
+                .iter()
                 .filter_map(|m| m.get("displayName").and_then(|v| v.as_str()))
                 .find(|name| !name.is_empty())
                 .unwrap_or("1:1 chat")
                 .to_string();
             format!("[1:1 Chat with {other}]")
         } else {
-            let topic = chat_info.as_ref()
+            let topic = chat_info
+                .as_ref()
                 .and_then(|c| c.get("topic"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("Group Chat")

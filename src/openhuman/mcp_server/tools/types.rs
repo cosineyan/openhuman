@@ -22,7 +22,13 @@ pub const MEMORY_STORE_ARGUMENTS: &[&str] = &["title", "content", "namespace", "
 pub const MEMORY_NOTE_ARGUMENTS: &[&str] = &["chunk_id", "note_text"];
 pub const TREE_TAG_ARGUMENTS: &[&str] = &["chunk_id", "tags"];
 pub const MEMORY_SMART_WALK_ARGUMENTS: &[&str] = &["query", "namespace", "max_turns"];
-pub const MEMORY_QUERY_SOURCE_ARGUMENTS: &[&str] = &["source_id", "source_kind", "time_window_days", "query", "limit"];
+pub const MEMORY_QUERY_SOURCE_ARGUMENTS: &[&str] = &[
+    "source_id",
+    "source_kind",
+    "time_window_days",
+    "query",
+    "limit",
+];
 /// Upper bound on the number of tags `tree.tag` accepts per call.
 /// Matches the "explicit rejection over silent clamping" pattern used
 /// elsewhere in the MCP layer; prevents a misbehaving client from

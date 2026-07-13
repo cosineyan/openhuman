@@ -40,9 +40,13 @@ async fn fetch_org_info(token: &str, name: &str, email: &str) -> Result<OrgInfo,
              $select=id,displayName,jobTitle,department,mail,officeLocation,city&$top=1",
             urlencoding::encode(&filter)
         );
-        let data = graph_get(token, &url).await
+        let data = graph_get(token, &url)
+            .await
             .map_err(|e| format!("Graph /users filter failed: {e}"))?;
-        data.get("value").and_then(|v| v.as_array()).and_then(|a| a.first()).cloned()
+        data.get("value")
+            .and_then(|v| v.as_array())
+            .and_then(|a| a.first())
+            .cloned()
             .ok_or_else(|| format!("No user found with email={email}"))?
     } else {
         // SAP (and many enterprises) store names as "Last, First" in displayName.
@@ -62,12 +66,18 @@ async fn fetch_org_info(token: &str, name: &str, email: &str) -> Result<OrgInfo,
         let mut filters: Vec<String> = Vec::new();
         if parts.len() >= 2 {
             // "Last, First" format (SAP standard)
-            filters.push(format!("startswith(displayName,'{last_name}, {first_name}')"));
+            filters.push(format!(
+                "startswith(displayName,'{last_name}, {first_name}')"
+            ));
         }
         filters.push(format!("startswith(displayName,'{last_name}')"));
         if parts.len() == 2 {
             // email guess fallback
-            filters.push(format!("startswith(mail,'{}.{}@')", first_name.to_lowercase(), last_name.to_lowercase()));
+            filters.push(format!(
+                "startswith(mail,'{}.{}@')",
+                first_name.to_lowercase(),
+                last_name.to_lowercase()
+            ));
         }
         let mut found_user: Option<serde_json::Value> = None;
         for (i, filter) in filters.iter().enumerate() {
@@ -85,13 +95,19 @@ async fn fetch_org_info(token: &str, name: &str, email: &str) -> Result<OrgInfo,
                             true
                         } else {
                             // Only accept if displayName contains ALL parts of the input name
-                            let dn = u.get("displayName").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
+                            let dn = u
+                                .get("displayName")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_lowercase();
                             parts.iter().all(|p| dn.contains(&p.to_lowercase()))
                         }
                     });
                     if let Some(u) = best {
-                        log::info!("[profile_person] found user via filter={filter:?} display_name={:?}",
-                            u.get("displayName").and_then(|v| v.as_str()).unwrap_or("?"));
+                        log::info!(
+                            "[profile_person] found user via filter={filter:?} display_name={:?}",
+                            u.get("displayName").and_then(|v| v.as_str()).unwrap_or("?")
+                        );
                         found_user = Some(u.clone());
                         break;
                     }
@@ -99,23 +115,51 @@ async fn fetch_org_info(token: &str, name: &str, email: &str) -> Result<OrgInfo,
             }
         }
 
-        found_user.ok_or_else(|| format!(
-            "No user found matching name='{name}' in Microsoft Graph \
+        found_user.ok_or_else(|| {
+            format!(
+                "No user found matching name='{name}' in Microsoft Graph \
              (tried filters: {}). The name may not exist in your organization's directory, \
              or may be stored under a different format.",
-            filters.join(", ")
-        ))?
+                filters.join(", ")
+            )
+        })?
     };
 
-    let user_id = user.get("id").and_then(|v| v.as_str())
+    let user_id = user
+        .get("id")
+        .and_then(|v| v.as_str())
         .ok_or_else(|| "User object missing 'id' field".to_string())?
         .to_string();
-    let display_name = user.get("displayName").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    let job_title = user.get("jobTitle").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    let department = user.get("department").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    let mail = user.get("mail").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    let office = user.get("officeLocation").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    let city = user.get("city").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let display_name = user
+        .get("displayName")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let job_title = user
+        .get("jobTitle")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let department = user
+        .get("department")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let mail = user
+        .get("mail")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let office = user
+        .get("officeLocation")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let city = user
+        .get("city")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
 
     // 2. Get manager
     let mgr_url = format!(
@@ -127,9 +171,18 @@ async fn fetch_org_info(token: &str, name: &str, email: &str) -> Result<OrgInfo,
         .ok()
         .map(|m| {
             (
-                m.get("displayName").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                m.get("jobTitle").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                m.get("mail").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                m.get("displayName")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                m.get("jobTitle")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                m.get("mail")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
             )
         })
         .unwrap_or_default();
@@ -147,9 +200,18 @@ async fn fetch_org_info(token: &str, name: &str, email: &str) -> Result<OrgInfo,
         .into_iter()
         .map(|r| {
             (
-                r.get("displayName").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                r.get("jobTitle").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                r.get("mail").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                r.get("displayName")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                r.get("jobTitle")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                r.get("mail")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
             )
         })
         .collect();
@@ -217,14 +279,29 @@ impl Tool for ProfilePersonTool {
             .await
             .map_err(|e| anyhow::anyhow!("profile_person: load config failed: {e}"))?;
 
-        let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let email = args.get("email").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let since_days = args.get("since_days").and_then(|v| v.as_u64()).unwrap_or(90);
+        let name = args
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let email = args
+            .get("email")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let since_days = args
+            .get("since_days")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(90);
         let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(20) as usize;
         let source_kinds: Vec<String> = args
             .get("source_kinds")
             .and_then(|v| v.as_array())
-            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
             .unwrap_or_default();
 
         if name.is_empty() && email.is_empty() {
@@ -247,7 +324,11 @@ impl Tool for ProfilePersonTool {
             if email_c.is_empty() && !name_c.is_empty() {
                 if let Ok(contact) = lookup_contact_by_name(&config, &name_c) {
                     if !contact.email.is_empty() {
-                        log::info!("[profile_person] found email from contacts table: {} for name={}", contact.email, name_c);
+                        log::info!(
+                            "[profile_person] found email from contacts table: {} for name={}",
+                            contact.email,
+                            name_c
+                        );
                         email_c = contact.email;
                     }
                 }
@@ -272,9 +353,15 @@ impl Tool for ProfilePersonTool {
         };
 
         let (org_result, memory_result) = tokio::join!(org_future, memory_future);
-        log::info!("[profile_person] org_result={}", match &org_result { Ok(o) => format!("OK display_name={}", o.display_name), Err(e) => format!("ERR: {e}") });
-        let memory_text = memory_result
-            .map_err(|e| anyhow::anyhow!("profile_person join error: {e}"))??;
+        log::info!(
+            "[profile_person] org_result={}",
+            match &org_result {
+                Ok(o) => format!("OK display_name={}", o.display_name),
+                Err(e) => format!("ERR: {e}"),
+            }
+        );
+        let memory_text =
+            memory_result.map_err(|e| anyhow::anyhow!("profile_person join error: {e}"))??;
 
         // Build org chart section
         let org_section = match org_result {
@@ -283,7 +370,11 @@ impl Tool for ProfilePersonTool {
                 s.push_str("## Org Chart (Live from Microsoft Graph)\n\n");
                 s.push_str(&format!(
                     "**{}**",
-                    if org.display_name.is_empty() { name.as_str() } else { &org.display_name }
+                    if org.display_name.is_empty() {
+                        name.as_str()
+                    } else {
+                        &org.display_name
+                    }
                 ));
                 if !org.job_title.is_empty() {
                     s.push_str(&format!(" — {}", org.job_title));
@@ -302,7 +393,11 @@ impl Tool for ProfilePersonTool {
                     s.push_str(&format!(
                         "\n**Manager:** {} ({}) {}\n",
                         org.manager_name,
-                        if org.manager_title.is_empty() { "—" } else { &org.manager_title },
+                        if org.manager_title.is_empty() {
+                            "—"
+                        } else {
+                            &org.manager_title
+                        },
                         org.manager_mail
                     ));
                 }
@@ -367,7 +462,10 @@ fn profile_person_blocking(
         }
         if !email_lower.is_empty() {
             entity_patterns.push(format!("email:{email_lower}"));
-            entity_patterns.push(format!("person:%{}%", email_lower.split('@').next().unwrap_or("")));
+            entity_patterns.push(format!(
+                "person:%{}%",
+                email_lower.split('@').next().unwrap_or("")
+            ));
         }
 
         // 2. Find chunk_ids via entity index
@@ -430,9 +528,14 @@ fn profile_person_blocking(
                  LIMIT ?3"
             ))?;
             let rows: Vec<(String, String, String, String, i64)> = sent_stmt
-                .query_map([from_pattern, &since_ms.to_string(), &(limit * 2).to_string()], |r| {
-                    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
-                })?
+                .query_map(
+                    [
+                        from_pattern,
+                        &since_ms.to_string(),
+                        &(limit * 2).to_string(),
+                    ],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+                )?
                 .filter_map(|r| r.ok())
                 .collect();
             for row in rows {
@@ -557,9 +660,9 @@ struct ContactEntry {
 fn lookup_contact_by_name(config: &Config, name: &str) -> anyhow::Result<ContactEntry> {
     with_connection(config, |conn| {
         // Rebuild contacts if empty
-        let count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM mem_tree_contacts", [], |r| r.get(0)
-        ).unwrap_or(0);
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM mem_tree_contacts", [], |r| r.get(0))
+            .unwrap_or(0);
         if count == 0 {
             rebuild_contacts(conn)?;
         }
@@ -578,7 +681,10 @@ fn lookup_contact_by_name(config: &Config, name: &str) -> anyhow::Result<Contact
                 [&pattern],
                 |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
             ) {
-                return Ok(ContactEntry { display_name: row.0, email: row.1 });
+                return Ok(ContactEntry {
+                    display_name: row.0,
+                    email: row.1,
+                });
             }
         }
 
@@ -590,7 +696,10 @@ fn lookup_contact_by_name(config: &Config, name: &str) -> anyhow::Result<Contact
             [&pattern],
             |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
         ) {
-            return Ok(ContactEntry { display_name: row.0, email: row.1 });
+            return Ok(ContactEntry {
+                display_name: row.0,
+                email: row.1,
+            });
         }
 
         Err(anyhow::anyhow!("no contact found for name={name}"))
@@ -610,11 +719,13 @@ fn rebuild_contacts(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
 
     let mut stmt = conn.prepare(
         "SELECT content, source_kind, timestamp_ms FROM mem_tree_chunks \
-         WHERE source_kind IN ('chat','email') AND content LIKE '%[From: %'"
+         WHERE source_kind IN ('chat','email') AND content LIKE '%[From: %'",
     )?;
 
     let rows: Vec<(String, String, i64)> = stmt
-        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get::<_, i64>(2).unwrap_or(0))))?
+        .query_map([], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get::<_, i64>(2).unwrap_or(0)))
+        })?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -626,9 +737,14 @@ fn rebuild_contacts(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
             if let Some(end) = content[abs_start..].find(']') {
                 let candidate = content[abs_start..abs_start + end].trim();
                 if !candidate.contains('@') && candidate.len() > 3 && candidate.len() < 60 {
-                    let entry = contacts.entry(candidate.to_string()).or_insert(("".to_string(), 0, 0));
+                    let entry =
+                        contacts
+                            .entry(candidate.to_string())
+                            .or_insert(("".to_string(), 0, 0));
                     entry.1 += 1;
-                    if *ts_ms > entry.2 { entry.2 = *ts_ms; }
+                    if *ts_ms > entry.2 {
+                        entry.2 = *ts_ms;
+                    }
                 }
                 pos = abs_start + end + 1;
             } else {
@@ -657,6 +773,9 @@ fn rebuild_contacts(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
     }
     tx.commit()?;
 
-    log::info!("[profile_person] rebuilt mem_tree_contacts: {} entries", contacts.len());
+    log::info!(
+        "[profile_person] rebuilt mem_tree_contacts: {} entries",
+        contacts.len()
+    );
     Ok(())
 }

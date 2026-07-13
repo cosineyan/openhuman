@@ -90,8 +90,13 @@ fn index_last_success_by_source_id(entries: &[SyncAuditEntry]) -> HashMap<String
         }
         let is_workspace_kind = matches!(
             e.source_kind.as_str(),
-            "github_repo" | "folder" | "rss_feed" | "web_page"
-            | "outlook_mail" | "outlook_calendar" | "teams_messages"
+            "github_repo"
+                | "folder"
+                | "rss_feed"
+                | "web_page"
+                | "outlook_mail"
+                | "outlook_calendar"
+                | "teams_messages"
         );
         if !is_workspace_kind {
             continue;
@@ -196,9 +201,7 @@ pub(crate) async fn run_one_tick() -> Result<(), String> {
     // (24h) as provider_default because Composio sources have an independent
     // 24h floor; workspace sources (folder, M365, etc.) should honour the
     // user's setting directly.
-    let Some(interval_secs) =
-        effective_interval_secs(0, global_interval)
-    else {
+    let Some(interval_secs) = effective_interval_secs(0, global_interval) else {
         tracing::debug!(
             "[memory_sync:workspace:periodic] manual-only mode — skipping all workspace sources"
         );
@@ -243,7 +246,8 @@ pub(crate) async fn run_one_tick() -> Result<(), String> {
             SourceKind::OutlookMail | SourceKind::OutlookCalendar | SourceKind::TeamsMessages
         );
         if is_m365 {
-            let token_ok = crate::openhuman::m365::ops::m365_token_usable_for(&config, source.kind.as_str());
+            let token_ok =
+                crate::openhuman::m365::ops::m365_token_usable_for(&config, source.kind.as_str());
             if !token_ok {
                 tracing::warn!(
                     source_id = %source_id,
@@ -264,7 +268,10 @@ pub(crate) async fn run_one_tick() -> Result<(), String> {
                         // the Python subprocess may still be writing tokens.json.
                         tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
                         // Re-check token after refresh to confirm it's actually valid.
-                        if !crate::openhuman::m365::ops::m365_token_usable_for(&config, source.kind.as_str()) {
+                        if !crate::openhuman::m365::ops::m365_token_usable_for(
+                            &config,
+                            source.kind.as_str(),
+                        ) {
                             tracing::warn!(
                                 source_id = %source_id,
                                 kind = %kind,

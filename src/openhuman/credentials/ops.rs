@@ -476,8 +476,13 @@ pub async fn auth_get_me(config: &Config) -> Result<RpcOutcome<serde_json::Value
         let user = build_session_state(config)
             .map_err(|e| e.to_string())?
             .user
-            .unwrap_or_else(|| serde_json::json!({"id": "local", "email": "local@openhuman.local"}));
-        return Ok(RpcOutcome::single_log(user, "local session — user from stored profile"));
+            .unwrap_or_else(
+                || serde_json::json!({"id": "local", "email": "local@openhuman.local"}),
+            );
+        return Ok(RpcOutcome::single_log(
+            user,
+            "local session — user from stored profile",
+        ));
     }
 
     let client = BackendOAuthClient::new(&api_url).map_err(|e| e.to_string())?;

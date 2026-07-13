@@ -372,7 +372,10 @@ async fn sync_items_individually(
                     // of raw HTML markup. Outlook emails and Teams messages arrive
                     // as HTML; without stripping, chunks are full of <p>, <span>,
                     // style="" noise that obscures the actual content.
-                    body: if matches!(content.content_type, crate::openhuman::memory_sources::types::ContentType::Html) {
+                    body: if matches!(
+                        content.content_type,
+                        crate::openhuman::memory_sources::types::ContentType::Html
+                    ) {
                         strip_html(content.body.as_str())
                     } else {
                         content.body.clone()
@@ -580,17 +583,21 @@ fn strip_html(html: &str) -> String {
     // 1. Emoji: extract the alt attribute (the actual emoji character or name)
     // <emoji id="..." alt="🤐" title="Zipper mouth face"> → 🤐
     let emoji_re = Regex::new(r#"(?i)<emoji[^>]*\balt="([^"]*)"[^>]*>"#).unwrap();
-    text = emoji_re.replace_all(&text, |caps: &regex::Captures| {
-        caps.get(1).map(|m| m.as_str()).unwrap_or("").to_string()
-    }).to_string();
+    text = emoji_re
+        .replace_all(&text, |caps: &regex::Captures| {
+            caps.get(1).map(|m| m.as_str()).unwrap_or("").to_string()
+        })
+        .to_string();
 
     // 2. Inline images hosted by Graph API — mark with [Image] placeholder.
     // We can't download & describe them here (no async context); callers that
     // want vision descriptions should do so in read_item before strip_html.
     let img_alt_re = Regex::new(r#"(?i)<img[^>]*\balt="([^"]+)"[^>]*/?>"#).unwrap();
-    text = img_alt_re.replace_all(&text, |caps: &regex::Captures| {
-        format!("[Image: {}]", caps.get(1).map(|m| m.as_str()).unwrap_or(""))
-    }).to_string();
+    text = img_alt_re
+        .replace_all(&text, |caps: &regex::Captures| {
+            format!("[Image: {}]", caps.get(1).map(|m| m.as_str()).unwrap_or(""))
+        })
+        .to_string();
     // Images without alt — just mark as [Image]
     let img_re = Regex::new(r#"(?i)<img[^>]*/?>|<img[^>]*>"#).unwrap();
     text = img_re.replace_all(&text, "[Image]").to_string();
@@ -599,7 +606,9 @@ fn strip_html(html: &str) -> String {
     let attach_re = Regex::new(r#"(?i)<attachment[^>]*>.*?</attachment>"#).unwrap();
     text = attach_re.replace_all(&text, "[Attachment]").to_string();
     let attach_self_re = Regex::new(r#"(?i)<attachment[^>]*/?>|<attachment[^>]*>"#).unwrap();
-    text = attach_self_re.replace_all(&text, "[Attachment]").to_string();
+    text = attach_self_re
+        .replace_all(&text, "[Attachment]")
+        .to_string();
 
     // 4. Strip remaining HTML tags, collapse whitespace
     let mut result = String::with_capacity(text.len());
@@ -632,7 +641,9 @@ fn strip_html(html: &str) -> String {
     }
 
     // Decode common HTML entities
-    result.trim().to_string()
+    result
+        .trim()
+        .to_string()
         .replace("&amp;", "&")
         .replace("&lt;", "<")
         .replace("&gt;", ">")

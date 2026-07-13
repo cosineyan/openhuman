@@ -229,14 +229,23 @@ pub(crate) async fn run_chat_task(
 
         // Profile-person intercept for claude-code direct path:
         // Execute profile_person directly and prepend result to message.
-        let effective_msg_cc: std::borrow::Cow<str> = if let Some(name) = extract_profile_name(message) {
-            log::warn!("[web-channel] PROFILE INTERCEPT (claude-code) name={name:?} thread={thread_id}");
+        let effective_msg_cc: std::borrow::Cow<str> = if let Some(name) =
+            extract_profile_name(message)
+        {
+            log::warn!(
+                "[web-channel] PROFILE INTERCEPT (claude-code) name={name:?} thread={thread_id}"
+            );
             match crate::openhuman::tools::traits::Tool::execute(
                 &crate::openhuman::memory::query::MemoryTreeTool,
                 serde_json::json!({"mode": "profile_person", "name": name, "since_days": 90}),
-            ).await {
+            )
+            .await
+            {
                 Ok(result) => {
-                    log::warn!("[web-channel] profile_person result len={}", result.text().len());
+                    log::warn!(
+                        "[web-channel] profile_person result len={}",
+                        result.text().len()
+                    );
                     std::borrow::Cow::Owned(format!(
                         "[Profile data from Microsoft Graph + Memory]\n\n{}\n\n---\n\nUser question: {message}",
                         result.text()
@@ -280,7 +289,8 @@ pub(crate) async fn run_chat_task(
     // Profile-person intercept: if the user message is a person profile request,
     // rewrite it to explicitly instruct the orchestrator to call retrieve_memory
     // with profile_person mode. This prevents the LLM from answering from context.
-    let effective_message: std::borrow::Cow<str> = if let Some(name) = extract_profile_name(message) {
+    let effective_message: std::borrow::Cow<str> = if let Some(name) = extract_profile_name(message)
+    {
         log::warn!("[web-channel] PROFILE INTERCEPT name={name:?} thread={thread_id}");
         std::borrow::Cow::Owned(format!(
             "{message}\n\n[SYSTEM: This is a person profile request. You MUST call retrieve_memory \
@@ -622,7 +632,11 @@ fn extract_profile_name(message: &str) -> Option<String> {
                 // Get original casing
                 let lower_msg = message.to_lowercase();
                 if let Some(pos) = lower_msg.find(rest.trim()) {
-                    let original = message[pos..].trim().trim_end_matches('?').trim().to_string();
+                    let original = message[pos..]
+                        .trim()
+                        .trim_end_matches('?')
+                        .trim()
+                        .to_string();
                     if !original.is_empty() {
                         return Some(original);
                     }
@@ -633,4 +647,3 @@ fn extract_profile_name(message: &str) -> Option<String> {
     }
     None
 }
-

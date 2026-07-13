@@ -288,11 +288,10 @@ async fn prepare_extract(config: &Config, job: &Job) -> Result<Option<PreparedEx
             // of burning the retry budget and appearing as Degraded in the UI.
             let msg = e.to_string();
             if msg.contains("empty content_path") || msg.contains("no raw_refs") {
-                anyhow::Error::new(
-                    crate::openhuman::memory_tree::health::PipelineFailure::new(
-                        crate::openhuman::memory_tree::health::FailureCode::EmptyInputRefused,
-                    )
-                ).context(msg)
+                anyhow::Error::new(crate::openhuman::memory_tree::health::PipelineFailure::new(
+                    crate::openhuman::memory_tree::health::FailureCode::EmptyInputRefused,
+                ))
+                .context(msg)
             } else {
                 e
             }

@@ -297,7 +297,6 @@ pub async fn ensure_graph_token(config: &Config) -> Result<String> {
     read_graph_token_public(config).map_err(|e| anyhow::anyhow!(e))
 }
 
-
 /// Returns `{ ok: bool, port: number, error?: string }`.
 pub async fn mcp_chrome_status() -> Value {
     let port = std::env::var("MCP_CHROME_PORT")

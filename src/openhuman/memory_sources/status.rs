@@ -68,7 +68,11 @@ pub async fn source_status(
             .filter(|e| e.success && e.source_id == *source_id)
             .filter_map(|e| {
                 let ms = e.timestamp.timestamp_millis();
-                if ms > 0 { Some(ms) } else { None }
+                if ms > 0 {
+                    Some(ms)
+                } else {
+                    None
+                }
             })
             .max()
     };
