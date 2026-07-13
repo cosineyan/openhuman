@@ -198,7 +198,10 @@ def find_outlook_session():
 
 
 def open_outlook_tab():
-    resp = mcp_browser_cmd({'command': 'new-tab', 'url': 'https://outlook.cloud.microsoft/mail/'})
+    # background=False: open as foreground tab so SAP SSO fully loads the page
+    # and MSAL silently acquires a fresh token into localStorage.
+    # Background tabs are throttled by Chrome and SSO doesn't trigger.
+    resp = mcp_browser_cmd({'command': 'new-tab', 'url': 'https://outlook.cloud.microsoft/mail/', 'background': False})
     if not resp.get('ok') or not resp.get('data'):
         raise RuntimeError('Failed to open Outlook tab')
     return resp['data']['sessionId']
@@ -240,24 +243,25 @@ def close_tab(sid):
 
 
 def navigate_tab(sid, url):
+    """Navigate an existing tab to url using exec + chrome_navigate.
+    The /browser endpoint has no 'navigate' command — only 'exec', 'sessions',
+    'new-tab', and 'close-tab' are supported.
+    """
     dlog(f'navigate_tab sid={sid} url={url}')
+    # Primary: use chrome_navigate helper injected by the extension
     try:
-        mcp_browser_cmd({'command': 'navigate', 'url': url, 'sessionId': sid}, 15000)
+        mcp_browser_cmd({'command': 'exec', 'sessionId': sid,
+                         'code': f'chrome_navigate("{url}")', 'timeout': 5}, 10000)
+        return
     except Exception as e:
-        dlog(f'navigate_tab: /browser navigate failed ({e}), falling back to chrome_navigate exec')
-        # Fallback: use JS exec with chrome_navigate helper injected by the extension
-        try:
-            mcp_browser_cmd({'command': 'exec', 'sessionId': sid,
-                             'code': f'chrome_navigate("{url}")', 'timeout': 5}, 10000)
-        except Exception as e2:
-            dlog(f'navigate_tab: chrome_navigate exec also failed: {e2}')
-            # Last resort: window.location assignment
-            try:
-                mcp_browser_cmd({'command': 'exec', 'sessionId': sid,
-                                 'code': f'window.location.href = "{url}"; "navigated"',
-                                 'timeout': 3}, 8000)
-            except Exception as e3:
-                dlog(f'navigate_tab: window.location also failed: {e3}')
+        dlog(f'navigate_tab: chrome_navigate exec failed: {e}')
+    # Fallback: window.location assignment
+    try:
+        mcp_browser_cmd({'command': 'exec', 'sessionId': sid,
+                         'code': f'window.location.href = "{url}"; "navigated"',
+                         'timeout': 3}, 8000)
+    except Exception as e2:
+        dlog(f'navigate_tab: window.location also failed: {e2}')
 
 
 def _reconnect_extension():
@@ -774,60 +778,36 @@ def ensure_chat_graph_token(force=False):
     if tok:
         return tok
 
-    # Token is expired — open a new Outlook tab and trigger MSAL silent acquire
-    # via JS to force a fresh token. After MSAL completes, extract and close.
-    dlog(f'ensure_chat_graph_token: token expired, opening new Outlook tab with MSAL trigger')
+    # Token is expired — open a fresh foreground Outlook tab.
+    # background=False ensures SAP SSO fully loads the page and MSAL
+    # acquires a new token into localStorage. Background tabs are throttled
+    # by Chrome and SSO silent re-auth does not trigger.
+    dlog(f'ensure_chat_graph_token: token expired, opening foreground Outlook tab')
     new_sid = None
     try:
-        # First try: reload the existing Outlook tab. On SSO environments this
-        # re-authenticates silently without any user interaction — the SSO session
-        # cookie is still valid even when the MSAL in-page token has expired.
-        dlog(f'ensure_chat_graph_token: reloading existing Outlook tab (SSO re-auth) sid={sid}')
-        try:
-            navigate_tab(sid, 'https://outlook.cloud.microsoft/mail/')
-        except Exception as nav_err:
-            dlog(f'ensure_chat_graph_token: navigate_tab raised (non-fatal): {nav_err}')
-        time.sleep(10)  # Wait for SSO reload + MSAL token acquisition
-        tok = _try_extract()
-        if tok:
-            dlog(f'ensure_chat_graph_token: got fresh token via SSO reload of existing tab')
-            return tok
+        new_sid = open_outlook_tab()  # opens with background=False
 
-        dlog(f'ensure_chat_graph_token: SSO reload did not yield token, trying new tab + MSAL trigger')
-        new_sid = open_outlook_tab()
-        time.sleep(8)  # Wait for page load
+        # Poll up to 40s for page load + MSAL token acquisition
+        dlog(f'ensure_chat_graph_token: polling new foreground tab {new_sid} up to 40s')
+        deadline = time.time() + 40
+        time.sleep(5)
+        while time.time() < deadline:
+            tok = _try_extract_from(new_sid)
+            if tok:
+                dlog(f'ensure_chat_graph_token: got fresh token from foreground tab')
+                close_tab(new_sid)
+                return tok
+            tok = _try_extract()
+            if tok:
+                dlog(f'ensure_chat_graph_token: got fresh token from existing tab')
+                close_tab(new_sid)
+                return tok
+            time.sleep(3)
 
-        # Trigger MSAL silent acquire via JS — this forces Outlook's MSAL instance
-        # to request a new token from Azure AD in the background.
-        MSAL_TRIGGER_JS = r"""
-(function() {
-    try {
-        var w = window;
-        // Try accessing MSAL through common Outlook globals
-        var msalApp = w.__msal || w.msalApp || (w.osfMsal && w.osfMsal.instance);
-        if (!msalApp && w.commonjs && w.commonjs.getMSAL) msalApp = w.commonjs.getMSAL();
-        if (msalApp && msalApp.acquireTokenSilent) {
-            msalApp.acquireTokenSilent({scopes: ['https://graph.microsoft.com/.default']}).catch(function(){});
-        }
-    } catch(e) {}
-    return 'triggered';
-})()
-""".strip().replace('\n', ' ')
-        mcp_browser_cmd({'command': 'exec', 'sessionId': new_sid,
-                         'code': MSAL_TRIGGER_JS, 'timeout': 5}, 8000)
-        time.sleep(8)  # Wait for MSAL silent acquire to complete
-
-        tok = _try_extract_from(new_sid)
-        if tok:
-            close_tab(new_sid)
-            return tok
-        tok = _try_extract()
-        if tok:
-            close_tab(new_sid)
-            return tok
         close_tab(new_sid)
+        new_sid = None
     except Exception as e:
-        dlog(f'ensure_chat_graph_token: MSAL trigger approach failed: {e}')
+        dlog(f'ensure_chat_graph_token: approach failed: {e}')
         if new_sid:
             close_tab(new_sid)
 
