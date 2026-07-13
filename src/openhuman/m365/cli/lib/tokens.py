@@ -241,7 +241,23 @@ def close_tab(sid):
 
 def navigate_tab(sid, url):
     dlog(f'navigate_tab sid={sid} url={url}')
-    mcp_browser_cmd({'command': 'navigate', 'url': url, 'sessionId': sid}, 15000)
+    try:
+        mcp_browser_cmd({'command': 'navigate', 'url': url, 'sessionId': sid}, 15000)
+    except Exception as e:
+        dlog(f'navigate_tab: /browser navigate failed ({e}), falling back to chrome_navigate exec')
+        # Fallback: use JS exec with chrome_navigate helper injected by the extension
+        try:
+            mcp_browser_cmd({'command': 'exec', 'sessionId': sid,
+                             'code': f'chrome_navigate("{url}")', 'timeout': 5}, 10000)
+        except Exception as e2:
+            dlog(f'navigate_tab: chrome_navigate exec also failed: {e2}')
+            # Last resort: window.location assignment
+            try:
+                mcp_browser_cmd({'command': 'exec', 'sessionId': sid,
+                                 'code': f'window.location.href = "{url}"; "navigated"',
+                                 'timeout': 3}, 8000)
+            except Exception as e3:
+                dlog(f'navigate_tab: window.location also failed: {e3}')
 
 
 def _reconnect_extension():
@@ -767,7 +783,10 @@ def ensure_chat_graph_token(force=False):
         # re-authenticates silently without any user interaction — the SSO session
         # cookie is still valid even when the MSAL in-page token has expired.
         dlog(f'ensure_chat_graph_token: reloading existing Outlook tab (SSO re-auth) sid={sid}')
-        navigate_tab(sid, 'https://outlook.cloud.microsoft/mail/')
+        try:
+            navigate_tab(sid, 'https://outlook.cloud.microsoft/mail/')
+        except Exception as nav_err:
+            dlog(f'ensure_chat_graph_token: navigate_tab raised (non-fatal): {nav_err}')
         time.sleep(10)  # Wait for SSO reload + MSAL token acquisition
         tok = _try_extract()
         if tok:
