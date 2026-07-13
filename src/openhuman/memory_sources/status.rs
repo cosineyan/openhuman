@@ -12,6 +12,7 @@ use serde::Serialize;
 use crate::openhuman::config::Config;
 use crate::openhuman::memory_sources::types::{MemorySourceEntry, SourceKind};
 use crate::openhuman::memory_store::chunks::store::with_connection;
+use crate::openhuman::memory_sync::sources::audit::read_audit_log;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -56,18 +57,44 @@ pub async fn source_status(
     let cfg = config.clone();
     let source_clone = source.clone();
 
+    // Read last successful sync time from audit log — this is more accurate
+    // than last chunk timestamp when a source synced successfully but found
+    // no new items (e.g. calendar with no new events today).
+    let last_sync_ms: Option<i64> = {
+        let entries = read_audit_log(config);
+        let source_id = &source.id;
+        entries
+            .iter()
+            .filter(|e| e.success && e.source_id == *source_id)
+            .filter_map(|e| {
+                let ms = e.timestamp.timestamp_millis();
+                if ms > 0 { Some(ms) } else { None }
+            })
+            .max()
+    };
+
     tokio::task::spawn_blocking(move || {
         with_connection(&cfg, |conn| {
             let prefix = source_id_prefix(&source_clone);
 
             // Surface real query errors so status telemetry doesn't lie about
             // a healthy zero-row state when the DB is actually broken.
+            // NOTE: pending uses the sidecar `mem_tree_chunk_embeddings` table
+            // (not the legacy inline `embedding` column which is always NULL
+            // since the #1574 migration moved vectors to the sidecar).
             let (synced, pending, last_ts): (i64, i64, Option<i64>) = conn.query_row(
                 "SELECT \
                        COUNT(*), \
-                       SUM(CASE WHEN embedding IS NULL THEN 1 ELSE 0 END), \
+                       SUM(CASE WHEN NOT EXISTS ( \
+                               SELECT 1 FROM mem_tree_chunk_embeddings e \
+                               WHERE e.chunk_id = c.id \
+                           ) AND c.lifecycle_status != 'dropped' \
+                           AND NOT EXISTS ( \
+                               SELECT 1 FROM mem_tree_chunk_reembed_skipped s \
+                               WHERE s.chunk_id = c.id \
+                           ) THEN 1 ELSE 0 END), \
                        MAX(timestamp_ms) \
-                     FROM mem_tree_chunks \
+                     FROM mem_tree_chunks c \
                      WHERE source_id LIKE ?1",
                 [&prefix],
                 |r| {
@@ -80,12 +107,19 @@ pub async fn source_status(
             )?;
 
             let now_ms = chrono::Utc::now().timestamp_millis();
+
+            // Prefer the last successful sync time from the audit log over the
+            // last chunk timestamp. When a source syncs successfully but finds
+            // no new items (e.g. calendar with no new events), the chunk
+            // timestamp stays old but the sync itself just ran — show the sync
+            // time so the UI doesn't mislead users into thinking sync is stale.
+            let display_ts = last_sync_ms.or(last_ts);
             Ok(SourceStatus {
                 source_id: source_clone.id.clone(),
                 chunks_synced: synced.max(0) as u64,
                 chunks_pending: pending.max(0) as u64,
-                last_chunk_at_ms: last_ts,
-                freshness: FreshnessLabel::from_age_ms(last_ts, now_ms),
+                last_chunk_at_ms: display_ts,
+                freshness: FreshnessLabel::from_age_ms(display_ts, now_ms),
             })
         })
         .map_err(|e| format!("source_status: {e}"))

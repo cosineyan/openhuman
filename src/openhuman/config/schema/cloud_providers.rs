@@ -209,6 +209,9 @@ pub enum AuthStyle {
     OpenhumanJwt,
     /// No auth header — e.g. local Ollama.
     None,
+    /// Azure OpenAI: `api-key: <key>` header (instead of `Authorization: Bearer`).
+    #[serde(rename = "azureapikey")]
+    AzureApiKey,
 }
 
 impl AuthStyle {
@@ -218,6 +221,7 @@ impl AuthStyle {
             Self::Anthropic => "anthropic",
             Self::OpenhumanJwt => "openhuman_jwt",
             Self::None => "none",
+            Self::AzureApiKey => "azureapikey",
         }
     }
 }

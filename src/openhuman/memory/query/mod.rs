@@ -11,6 +11,7 @@ mod cover_window;
 mod drill_down;
 mod fetch_leaves;
 mod ingest_document;
+mod profile_person;
 mod query_source;
 mod search_entities;
 pub mod smart_walk;
@@ -22,6 +23,7 @@ pub use cover_window::MemoryTreeCoverWindowTool;
 pub use drill_down::MemoryTreeDrillDownTool;
 pub use fetch_leaves::MemoryTreeFetchLeavesTool;
 pub use ingest_document::MemoryTreeIngestDocumentTool;
+pub use profile_person::ProfilePersonTool;
 pub use query_source::MemoryTreeQuerySourceTool;
 pub use search_entities::MemoryTreeSearchEntitiesTool;
 pub use smart_walk::{
@@ -57,7 +59,9 @@ impl Tool for MemoryTreeTool {
          `fetch_leaves` (pull raw chunks for citation), `ingest_document` (write a document into the tree for future retrieval), \
          `walk` (agentic multi-turn walk — LLM navigates summaries and returns a synthesized answer for a natural-language query), \
          `smart_walk` (multi-strategy retrieval — combines vector search, keyword search, entity lookup, \
-         and tree browsing across raw files, wiki summaries, documents, and episodic memories)."
+         and tree browsing across raw files, wiki summaries, documents, and episodic memories), \
+         `profile_person` (aggregate everything known about a person across chat/email/documents — \
+         use name or email param to identify them)."
     }
 
     fn parameters_schema(&self) -> serde_json::Value {
@@ -68,8 +72,17 @@ impl Tool for MemoryTreeTool {
                     "type": "string",
                     "enum": ["search_entities", "query_source",
                              "drill_down", "cover_window", "fetch_leaves", "ingest_document", "walk",
-                             "smart_walk"],
+                             "smart_walk", "profile_person"],
                     "description": "Which operation to run (retrieval or write)."
+                },
+                // profile_person params
+                "name": {
+                    "type": "string",
+                    "description": "profile_person: person's full or partial name (e.g. 'Robert Rabe')."
+                },
+                "email": {
+                    "type": "string",
+                    "description": "profile_person: person's email for precise matching."
                 },
                 // cover_window params (epoch-milliseconds)
                 "since_ms": {
@@ -160,10 +173,11 @@ impl Tool for MemoryTreeTool {
             "ingest_document" => MemoryTreeIngestDocumentTool.execute(args).await,
             "walk" => MemoryTreeWalkTool.execute(args).await,
             "smart_walk" => SmartMemoryWalkTool.execute(args).await,
+            "profile_person" => ProfilePersonTool.execute(args).await,
             other => {
                 log::debug!("[tool][memory_tree] unknown_mode mode={other}");
                 Err(anyhow::anyhow!(
-                    "memory_tree: unknown mode `{other}`. Valid: search_entities, query_source, drill_down, cover_window, fetch_leaves, ingest_document, walk, smart_walk"
+                    "memory_tree: unknown mode `{other}`. Valid: search_entities, query_source, drill_down, cover_window, fetch_leaves, ingest_document, walk, smart_walk, profile_person"
                 ))
             }
         }

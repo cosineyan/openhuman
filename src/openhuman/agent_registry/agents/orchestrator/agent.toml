@@ -172,6 +172,10 @@ hint = "chat"
 # the orchestrator never calls composio_authorize / composio_list_tools
 # / composio_execute directly.
 named = [
+    # Person profile — direct tool, bypasses subagent routing.
+    # When user asks to profile/describe a person, call this directly
+    # with mode="profile_person" — do NOT delegate to retrieve_memory.
+    "memory_tree",
     "read_workspace_state",
     "ask_user_clarification",
     "spawn_worker_thread",

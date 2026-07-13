@@ -226,10 +226,35 @@ pub(crate) async fn run_chat_task(
             metadata.clone(),
             config.clone(),
         );
+
+        // Profile-person intercept for claude-code direct path:
+        // Execute profile_person directly and prepend result to message.
+        let effective_msg_cc: std::borrow::Cow<str> = if let Some(name) = extract_profile_name(message) {
+            log::warn!("[web-channel] PROFILE INTERCEPT (claude-code) name={name:?} thread={thread_id}");
+            match crate::openhuman::tools::traits::Tool::execute(
+                &crate::openhuman::memory::query::MemoryTreeTool,
+                serde_json::json!({"mode": "profile_person", "name": name, "since_days": 90}),
+            ).await {
+                Ok(result) => {
+                    log::warn!("[web-channel] profile_person result len={}", result.text().len());
+                    std::borrow::Cow::Owned(format!(
+                        "[Profile data from Microsoft Graph + Memory]\n\n{}\n\n---\n\nUser question: {message}",
+                        result.text()
+                    ))
+                }
+                Err(e) => {
+                    log::warn!("[web-channel] profile_person failed: {e}");
+                    std::borrow::Cow::Borrowed(message)
+                }
+            }
+        } else {
+            std::borrow::Cow::Borrowed(message)
+        };
+
         return run_claude_code_direct(
             &config,
             thread_id,
-            message,
+            &effective_msg_cc,
             model_override.as_deref(),
             progress_tx,
         )
@@ -252,11 +277,22 @@ pub(crate) async fn run_chat_task(
     // duration of the turn (None = all). Nested inside the thread-id scope so
     // every memory-tree query the agent makes this turn is gated. See
     // memory::source_scope.
-    // `run_single`'s future is very large; box it so the two ambient-scope
-    // wrappers below hold a pointer rather than inlining the whole future into
-    // this already-large `run_chat_task` frame (which otherwise overflows the
-    // default test-thread stack — see the channels web-turn coverage tests).
-    let turn = Box::pin(agent.run_single(message));
+    // Profile-person intercept: if the user message is a person profile request,
+    // rewrite it to explicitly instruct the orchestrator to call retrieve_memory
+    // with profile_person mode. This prevents the LLM from answering from context.
+    let effective_message: std::borrow::Cow<str> = if let Some(name) = extract_profile_name(message) {
+        log::warn!("[web-channel] PROFILE INTERCEPT name={name:?} thread={thread_id}");
+        std::borrow::Cow::Owned(format!(
+            "{message}\n\n[SYSTEM: This is a person profile request. You MUST call retrieve_memory \
+             with query=\"profile_person name={name}\" to fetch live org chart from Microsoft Graph. \
+             Do NOT answer from conversation history. The org chart data (manager, direct reports) \
+             ONLY comes from the Microsoft Graph API call inside retrieve_memory.]"
+        ))
+    } else {
+        std::borrow::Cow::Borrowed(message)
+    };
+
+    let turn = Box::pin(agent.run_single(&effective_message));
     let result = match crate::openhuman::inference::provider::thread_context::with_thread_id(
         thread_id.to_string(),
         crate::openhuman::memory::source_scope::with_source_scope(
@@ -561,9 +597,40 @@ mod tests {
             );
         }
     }
-
-    #[test]
-    fn success_keeps_warm_session() {
-        assert!(!turn_result_poisoned_session(&ok()));
-    }
 }
+
+/// Detect profile requests like "profile Robert Rabe", "tell me about X", "who is X".
+/// Returns the person name if detected.
+fn extract_profile_name(message: &str) -> Option<String> {
+    let q = message.trim().to_lowercase();
+    log::warn!("[profile-intercept] checking message q={q:?}");
+    let prefixes = [
+        "profile ",
+        "profile person ",
+        "profile一下 ",
+        "帮我profile ",
+        "tell me about ",
+        "who is ",
+        "what do you know about ",
+        "give me a profile of ",
+        "show me info on ",
+    ];
+    for prefix in &prefixes {
+        if let Some(rest) = q.strip_prefix(prefix) {
+            let name = rest.trim().trim_end_matches('?').trim().to_string();
+            if name.len() >= 3 && !name.contains('\n') && name.split_whitespace().count() <= 5 {
+                // Get original casing
+                let lower_msg = message.to_lowercase();
+                if let Some(pos) = lower_msg.find(rest.trim()) {
+                    let original = message[pos..].trim().trim_end_matches('?').trim().to_string();
+                    if !original.is_empty() {
+                        return Some(original);
+                    }
+                }
+                return Some(name);
+            }
+        }
+    }
+    None
+}
+

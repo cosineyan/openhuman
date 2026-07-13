@@ -1,7 +1,7 @@
 id = "agent_memory"
 display_name = "Memory Agent"
 delegate_name = "retrieve_memory"
-when_to_use = "Memory retrieval and tree walking specialist — searches, navigates, and retrieves information from the user's memory tree using vector search, keyword matching, entity lookup, and hierarchical tree browsing. Use when the user asks to find, recall, search, or look up something from their memory, conversations, documents, or knowledge base."
+when_to_use = "Memory retrieval and tree walking specialist — searches, navigates, and retrieves information from the user's memory tree using vector search, keyword matching, entity lookup, and hierarchical tree browsing. Use when the user asks to find, recall, search, or look up something from their memory, conversations, documents, or knowledge base. Also use for 'profile person' requests — call memory_tree with mode='profile_person' to aggregate all known info about a person across chat/email/documents plus live org chart from Microsoft Graph."
 temperature = 0.2
 max_iterations = 15
 sandbox_mode = "read_only"

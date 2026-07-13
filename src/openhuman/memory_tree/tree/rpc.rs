@@ -329,6 +329,13 @@ pub struct PipelineStatusResponse {
     /// (`#[serde(default)]` → `None` for older clients).
     #[serde(default)]
     pub extraction_coverage: Option<f32>,
+    /// Number of chunks that have a vector embedding in `mem_tree_chunk_embeddings`.
+    #[serde(default)]
+    pub embedded_chunks: u64,
+    /// Number of chunks that still need embedding (no embedding row, not skipped,
+    /// not dropped). Zero means embedding is complete.
+    #[serde(default)]
+    pub pending_embed_chunks: u64,
 }
 
 /// `memory_tree_pipeline_status` RPC handler (#1856 Part 1).
@@ -449,13 +456,9 @@ pub async fn pipeline_status_rpc(
     //     live structure-degraded liveness signal).
     //     `None` (not `0.0`) on a read error, so a broken measurement path is
     //     never mistaken for a genuine 0% extraction rate.
-    let (latest_failure, extraction_coverage) = {
+    let (latest_failure, extraction_coverage, embedded_chunks, pending_embed_chunks) = {
         let cfg = config.clone();
         tokio::task::spawn_blocking(move || {
-            // Log-then-drop: keep the None fallback (these reads must not fail
-            // the polled status RPC) but emit a grep-friendly diagnostic so a
-            // DB/query failure is distinguishable from "no blocking cause" /
-            // "metric unavailable by design".
             let failure = latest_failed_job_failure(&cfg).unwrap_or_else(|e| {
                 log::warn!(
                     "[memory-tree][rpc] pipeline_status: latest_failed_job_failure read failed: {e:#}"
@@ -469,12 +472,33 @@ pub async fn pipeline_status_rpc(
                     );
                 })
                 .ok();
-            (failure, coverage)
+            // Embedding progress: count embedded vs pending chunks
+            let (embedded, pending) = crate::openhuman::memory_store::chunks::store::with_connection(
+                &cfg,
+                |conn| {
+                    let embedded: i64 = conn.query_row(
+                        "SELECT COUNT(*) FROM mem_tree_chunk_embeddings",
+                        [],
+                        |r| r.get(0),
+                    )?;
+                    let pending: i64 = conn.query_row(
+                        "SELECT COUNT(*) FROM mem_tree_chunks c \
+                         WHERE NOT EXISTS (SELECT 1 FROM mem_tree_chunk_embeddings e WHERE e.chunk_id = c.id) \
+                         AND NOT EXISTS (SELECT 1 FROM mem_tree_chunk_reembed_skipped s WHERE s.chunk_id = c.id) \
+                         AND c.lifecycle_status != 'dropped'",
+                        [],
+                        |r| r.get(0),
+                    )?;
+                    Ok((embedded.max(0) as u64, pending.max(0) as u64))
+                },
+            )
+            .unwrap_or((0, 0));
+            (failure, coverage, embedded, pending)
         })
         .await
         .unwrap_or_else(|e| {
             log::warn!("[memory-tree][rpc] pipeline_status: ancillary metrics join error: {e:#}");
-            (None, None)
+            (None, None, 0, 0)
         })
     };
 
@@ -494,6 +518,8 @@ pub async fn pipeline_status_rpc(
         degraded,
         first_blocking_cause,
         extraction_coverage,
+        embedded_chunks,
+        pending_embed_chunks,
     };
 
     log::debug!(

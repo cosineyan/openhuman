@@ -281,7 +281,22 @@ async fn prepare_extract(config: &Config, job: &Job) -> Result<Option<PreparedEx
     // than the full body, so a batch of N prepared items doesn't retain N full
     // bodies in memory before finalize.
     let body = content_read::read_chunk_body(config, &chunk.id)
-        .with_context(|| format!("read full body for extract chunk_id={}", chunk.id))?;
+        .with_context(|| format!("read full body for extract chunk_id={}", chunk.id))
+        .map_err(|e| {
+            // Chunks with no content_path and no raw_refs will never be readable.
+            // Wrap as unrecoverable so worker tombstones them immediately instead
+            // of burning the retry budget and appearing as Degraded in the UI.
+            let msg = e.to_string();
+            if msg.contains("empty content_path") || msg.contains("no raw_refs") {
+                anyhow::Error::new(
+                    crate::openhuman::memory_tree::health::PipelineFailure::new(
+                        crate::openhuman::memory_tree::health::FailureCode::EmptyInputRefused,
+                    )
+                ).context(msg)
+            } else {
+                e
+            }
+        })?;
     let preview = std::mem::replace(&mut chunk.content, body);
 
     emit_build_progress(

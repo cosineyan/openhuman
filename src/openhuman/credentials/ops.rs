@@ -467,6 +467,19 @@ pub async fn auth_get_session_token_json(
 pub async fn auth_get_me(config: &Config) -> Result<RpcOutcome<serde_json::Value>, String> {
     let api_url = effective_backend_api_url(&config.api_url);
     let token = get_session_token(config)?.ok_or_else(|| "session JWT required".to_string())?;
+
+    // Local offline sessions (JWT ending in ".local") cannot be validated against
+    // the OpenHuman backend — return the stored user payload directly instead of
+    // making a network call that will 401 and trigger a spurious session-expired
+    // event, which blocks the background memory worker via scheduler_gate.
+    if is_local_session_token(&token) {
+        let user = build_session_state(config)
+            .map_err(|e| e.to_string())?
+            .user
+            .unwrap_or_else(|| serde_json::json!({"id": "local", "email": "local@openhuman.local"}));
+        return Ok(RpcOutcome::single_log(user, "local session — user from stored profile"));
+    }
+
     let client = BackendOAuthClient::new(&api_url).map_err(|e| e.to_string())?;
     let user = client
         .fetch_current_user(&token)

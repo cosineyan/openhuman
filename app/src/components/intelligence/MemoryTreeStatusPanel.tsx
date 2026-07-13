@@ -40,6 +40,7 @@ type TFn = (key: string, fallback?: string) => string;
  */
 const FAST_POLL_MS = 1500;
 const DEFAULT_POLL_MS = 4000;
+const EMBED_POLL_MS = 60_000; // 1 min — embedding is slow, no need to spam
 
 /**
  * Public hook so unit tests (and any future caller) can subscribe to the
@@ -107,7 +108,9 @@ function useMemoryTreeStatus(): {
       if (cancelledRef.current) return;
       const live = statusRef.current;
       const fast = live?.is_syncing || (live?.pipeline_jobs?.running ?? 0) > 0;
-      timer = setTimeout(tick, fast ? FAST_POLL_MS : DEFAULT_POLL_MS);
+      const hasEmbedWork = (live?.pending_embed_chunks ?? 0) > 0;
+      const delay = fast ? FAST_POLL_MS : hasEmbedWork ? EMBED_POLL_MS : DEFAULT_POLL_MS;
+      timer = setTimeout(tick, delay);
     };
 
     void tick();
@@ -517,6 +520,64 @@ export function MemoryTreeStatusPanel({ onToast }: MemoryTreeStatusPanelProps) {
             '{pct}',
             String(Math.round((status.extraction_coverage ?? 0) * 100))
           )}
+        </div>
+      ) : null}
+
+      {/* Embedding progress — shown when backend provides the counts */}
+      {!loading && status && (status.embedded_chunks != null || status.pending_embed_chunks != null) ? (
+        <div className="rounded-lg border border-stone-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-3 py-2 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-stone-700 dark:text-neutral-300">{t('memoryTree.status.embeddingProgressTitle')}</span>
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              disabled={loading}
+              className="text-xs text-primary-500 hover:text-primary-600 disabled:opacity-40"
+              title={t('memoryTree.status.embeddingRefresh')}>
+              {t('memoryTree.status.embeddingRefresh')}
+            </button>
+          </div>
+          {(() => {
+            const embedded = status.embedded_chunks ?? 0;
+            const pending = status.pending_embed_chunks ?? 0;
+            const total = embedded + pending;
+            const pct = total > 0 ? Math.round((embedded / total) * 100) : 100;
+            return (
+              <>
+                <div className="flex items-center gap-2 text-xs text-stone-500 dark:text-neutral-400">
+                  <span>{t('memoryTree.status.embeddedCount').replace('{count}', new Intl.NumberFormat().format(embedded))}</span>
+                  <span>·</span>
+                  <span className={pending > 0 ? 'text-amber-500' : 'text-emerald-500'}>
+                    {pending > 0
+                      ? t('memoryTree.status.pendingCount').replace('{count}', new Intl.NumberFormat().format(pending))
+                      : t('memoryTree.status.embeddingComplete')}
+                  </span>
+                </div>
+                {total > 0 && (
+                  <div className="w-full bg-stone-100 dark:bg-neutral-800 rounded-full h-1.5">
+                    <div
+                      className={`h-1.5 rounded-full transition-all duration-500 ${
+                        pending > 0 ? 'bg-primary-500' : 'bg-emerald-500'
+                      }`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                )}
+                {status.pipeline_jobs && (
+                  <div className="text-xs text-stone-400 dark:text-neutral-500">
+                    {t('memoryTree.status.extractionJobs')
+                      .replace('{ready}', new Intl.NumberFormat().format(status.pipeline_jobs.ready))
+                      .replace('{running}', new Intl.NumberFormat().format(status.pipeline_jobs.running))}
+                    {status.pipeline_jobs.failed > 0 && (
+                      <span className="text-red-500">
+                        {t('memoryTree.status.extractionJobsFailed').replace('{failed}', new Intl.NumberFormat().format(status.pipeline_jobs.failed))}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       ) : null}
 

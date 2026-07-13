@@ -63,3 +63,4 @@ fn attach_parent_console() {
         AttachConsole(ATTACH_PARENT_PROCESS);
     }
 }
+

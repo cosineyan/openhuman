@@ -901,6 +901,13 @@ const en: TranslationMap = {
   'memoryTree.status.integrationActive': 'Active',
   'memoryTree.status.integrationStale': 'Stale',
   'memoryTree.status.integrationChunks': 'Chunks: {count}',
+  'memoryTree.status.embeddingProgressTitle': 'Embedding progress',
+  'memoryTree.status.embeddingRefresh': '↻ Refresh',
+  'memoryTree.status.embeddedCount': 'Embedded: {count}',
+  'memoryTree.status.pendingCount': 'Pending: {count}',
+  'memoryTree.status.embeddingComplete': '✓ Complete',
+  'memoryTree.status.extractionJobs': 'Extraction jobs: ready {ready} · running {running}',
+  'memoryTree.status.extractionJobsFailed': ' · failed {failed}',
 
   // Notifications / Alerts
   'alerts.title': 'Alerts',

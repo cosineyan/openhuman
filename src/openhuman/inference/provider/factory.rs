@@ -822,11 +822,18 @@ fn verify_session_active(config: &Config) -> anyhow::Result<()> {
                 .unwrap_or_else(|| std::path::PathBuf::from(".openhuman"))
         });
     let auth = AuthService::new(&state_dir, config.secrets.encrypt);
-    let has_session = auth
+    let token = auth
         .get_provider_bearer_token(crate::openhuman::credentials::APP_SESSION_PROVIDER, None)?
-        .filter(|s| !s.trim().is_empty())
-        .is_some();
-    if !has_session {
+        .filter(|s| !s.trim().is_empty());
+    let has_session = token.is_some();
+    // Local offline sessions (JWT ending in ".local") are allowed to use custom
+    // providers — the session gate exists to stop unregistered users from
+    // bypassing the managed backend, not to block local-mode deployments.
+    let is_local = token
+        .as_deref()
+        .map(crate::openhuman::credentials::session_support::is_local_session_token)
+        .unwrap_or(false);
+    if !has_session && !is_local {
         anyhow::bail!("SESSION_EXPIRED: no backend session — sign in to use OpenHuman")
     }
     Ok(())
@@ -1376,6 +1383,18 @@ fn make_cloud_provider_by_slug(
                     .with_responses_api_primary();
             }
             let p: Box<dyn Provider> = Box::new(provider);
+            Ok((p, effective_model))
+        }
+        AuthStyle::AzureApiKey => {
+            let p = make_openai_compatible_provider_with_config(
+                slug,
+                &entry.endpoint,
+                &key,
+                CompatAuthStyle::Custom("api-key".to_string()),
+                unsupported,
+                temperature_override,
+                true,
+            )?;
             Ok((p, effective_model))
         }
     }

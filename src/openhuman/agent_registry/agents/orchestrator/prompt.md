@@ -155,6 +155,8 @@ User: what time is it?
 
 `memory_tree` queries the user's **already-ingested** email/chat/document history. It is historical, not a live API. Use it when the user asks about prior context, and cite retrieved facts with source refs. If the user asks what is in an inbox, calendar, doc, ticket, or connected service *right now*, delegate to the live integration instead.
 
+**Person profile — mandatory direct tool call:** When the user asks to "profile", "tell me about", "who is", or "what do you know about" a specific person, you **MUST** call `memory_tree` directly with `mode="profile_person"` and `name="<person name>"`. Do NOT delegate to `retrieve_memory`. Do NOT answer from conversation history. Do NOT fabricate an org chart. The `profile_person` mode fetches live org chart from Microsoft Graph (real manager, real direct reports, department) — this is the only accurate source for org data.
+
 ## Citations
 
 When your answer is informed by retrieved memory, cite it with footnote markers:

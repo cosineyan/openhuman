@@ -2,7 +2,7 @@ use serde_json::Value;
 
 pub const DEFAULT_LIMIT: u64 = 10;
 pub const MAX_LIMIT: u64 = 50;
-pub const QUERY_ARGUMENTS: &[&str] = &["query", "k"];
+pub const QUERY_ARGUMENTS: &[&str] = &["query", "k", "limit"];
 pub const SEARXNG_SEARCH_ARGUMENTS: &[&str] = &["query", "categories", "language", "max_results"];
 pub const TREE_READ_CHUNK_ARGUMENTS: &[&str] = &["chunk_id"];
 pub const SUBAGENT_RUN_ARGUMENTS: &[&str] = &["agent_id", "prompt"];
@@ -21,6 +21,8 @@ pub const TREE_LIST_SOURCES_ARGUMENTS: &[&str] = &["user_email_hint"];
 pub const MEMORY_STORE_ARGUMENTS: &[&str] = &["title", "content", "namespace", "tags"];
 pub const MEMORY_NOTE_ARGUMENTS: &[&str] = &["chunk_id", "note_text"];
 pub const TREE_TAG_ARGUMENTS: &[&str] = &["chunk_id", "tags"];
+pub const MEMORY_SMART_WALK_ARGUMENTS: &[&str] = &["query", "namespace", "max_turns"];
+pub const MEMORY_QUERY_SOURCE_ARGUMENTS: &[&str] = &["source_id", "source_kind", "time_window_days", "query", "limit"];
 /// Upper bound on the number of tags `tree.tag` accepts per call.
 /// Matches the "explicit rejection over silent clamping" pattern used
 /// elsewhere in the MCP layer; prevents a misbehaving client from

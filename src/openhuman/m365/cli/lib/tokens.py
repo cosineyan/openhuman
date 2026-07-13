@@ -198,7 +198,7 @@ def find_outlook_session():
 
 
 def open_outlook_tab():
-    resp = mcp_browser_cmd({'command': 'new-tab', 'url': 'https://outlook.office.com/mail/'})
+    resp = mcp_browser_cmd({'command': 'new-tab', 'url': 'https://outlook.cloud.microsoft/mail/'})
     if not resp.get('ok') or not resp.get('data'):
         raise RuntimeError('Failed to open Outlook tab')
     return resp['data']['sessionId']
@@ -763,6 +763,18 @@ def ensure_chat_graph_token(force=False):
     dlog(f'ensure_chat_graph_token: token expired, opening new Outlook tab with MSAL trigger')
     new_sid = None
     try:
+        # First try: reload the existing Outlook tab. On SSO environments this
+        # re-authenticates silently without any user interaction — the SSO session
+        # cookie is still valid even when the MSAL in-page token has expired.
+        dlog(f'ensure_chat_graph_token: reloading existing Outlook tab (SSO re-auth) sid={sid}')
+        navigate_tab(sid, 'https://outlook.cloud.microsoft/mail/')
+        time.sleep(10)  # Wait for SSO reload + MSAL token acquisition
+        tok = _try_extract()
+        if tok:
+            dlog(f'ensure_chat_graph_token: got fresh token via SSO reload of existing tab')
+            return tok
+
+        dlog(f'ensure_chat_graph_token: SSO reload did not yield token, trying new tab + MSAL trigger')
         new_sid = open_outlook_tab()
         time.sleep(8)  # Wait for page load
 

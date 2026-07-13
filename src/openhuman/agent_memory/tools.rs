@@ -14,6 +14,7 @@ use crate::openhuman::agent::harness::fork_context::current_parent;
 use crate::openhuman::agent::harness::subagent_runner::{
     run_subagent, SubagentRunOptions, SubagentRunStatus,
 };
+use crate::openhuman::memory::query::MemoryTreeTool;
 use crate::openhuman::tools::traits::{PermissionLevel, Tool, ToolCategory, ToolResult, ToolScope};
 use async_trait::async_trait;
 use serde_json::json;
@@ -97,6 +98,23 @@ impl Tool for CallMemoryAgentTool {
             .get("query")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("call_memory_agent: `query` is required"))?;
+
+        // --- Person profile shortcut ---
+        // If the query is asking to profile a specific person, bypass the subagent
+        // and call profile_person directly to guarantee Graph API org chart is fetched.
+        if let Some(person_name) = extract_profile_person_name(query) {
+            log::info!(
+                "[call_memory_agent] detected profile request → calling profile_person directly name={person_name:?}"
+            );
+            let profile_args = serde_json::json!({
+                "mode": "profile_person",
+                "name": person_name,
+                "since_days": 90
+            });
+            return crate::openhuman::memory::query::MemoryTreeTool
+                .execute(profile_args)
+                .await;
+        }
 
         let context = args.get("context").and_then(|v| v.as_str());
 
@@ -234,4 +252,36 @@ impl Tool for CallMemoryAgentTool {
             }
         }
     }
+}
+
+/// Detect queries like "profile Robert Rabe", "tell me about Robert Rabe",
+/// "who is Robert Rabe", "what do you know about Robert Rabe".
+/// Returns the person's name if detected, otherwise None.
+fn extract_profile_person_name(query: &str) -> Option<String> {
+    let q = query.trim().to_lowercase();
+    let prefixes = [
+        "profile ",
+        "profile person ",
+        "tell me about ",
+        "who is ",
+        "what do you know about ",
+        "give me info on ",
+        "show me info on ",
+        "帮我profile ",
+        "profile一下 ",
+        "查一下 ",
+    ];
+    for prefix in &prefixes {
+        if let Some(rest) = q.strip_prefix(prefix) {
+            let name = rest.trim().trim_end_matches('?').trim().to_string();
+            if name.len() >= 3 && !name.contains('\n') {
+                // Reconstruct original casing from query
+                let start = query.to_lowercase().find(rest).unwrap_or(0) + (query.len() - query.trim_start().len());
+                let original = &query[query.to_lowercase().find(rest).unwrap_or(0)..];
+                let name_original = original.trim().trim_end_matches('?').trim().to_string();
+                return Some(if name_original.is_empty() { name } else { name_original });
+            }
+        }
+    }
+    None
 }

@@ -173,8 +173,15 @@ impl EmbeddingProvider for OpenAiEmbedding {
                 .json(&body);
 
             // Only set Authorization header when an API key is configured.
+            // Azure OpenAI uses `api-key` header instead of `Authorization: Bearer`.
             if !self.api_key.is_empty() {
-                req = req.header("Authorization", format!("Bearer {}", self.api_key));
+                let is_azure = self.base_url.contains(".cognitiveservices.azure.com")
+                    || self.base_url.contains(".openai.azure.com");
+                if is_azure {
+                    req = req.header("api-key", &self.api_key);
+                } else {
+                    req = req.header("Authorization", format!("Bearer {}", self.api_key));
+                }
             }
 
             // Proactively gate every outbound attempt (initial + retries) against

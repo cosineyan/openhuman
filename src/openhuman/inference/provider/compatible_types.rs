@@ -201,6 +201,10 @@ pub(crate) struct NativeChatRequest {
     /// Skipped when `None` so open-ended generations are unaffected.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) max_tokens: Option<u32>,
+    /// `max_completion_tokens` — used by gpt-5* models that reject `max_tokens`.
+    /// Mutually exclusive with `max_tokens`; set one or the other.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) max_completion_tokens: Option<u32>,
 }
 
 /// Ollama-specific request options passed in the `options` field.

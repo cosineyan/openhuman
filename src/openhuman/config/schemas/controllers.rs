@@ -330,9 +330,10 @@ fn handle_update_model_settings(params: Map<String, Value>) -> ControllerFuture 
                                 "anthropic" => AuthStyle::Anthropic,
                                 "openhuman_jwt" | "openhumanjwt" => AuthStyle::OpenhumanJwt,
                                 "none" => AuthStyle::None,
+                                "azureapikey" | "azure_api_key" => AuthStyle::AzureApiKey,
                                 other => {
                                     return Err(format!(
-                                        "unknown auth_style '{}'; valid: bearer, anthropic, openhuman_jwt, none",
+                                        "unknown auth_style '{}'; valid: bearer, anthropic, openhuman_jwt, none, azureapikey",
                                         other
                                     ))
                                 }

@@ -68,7 +68,13 @@ fn fired_map() -> FiredAtMap {
 fn is_workspace_synced_kind(kind: &SourceKind) -> bool {
     matches!(
         kind,
-        SourceKind::GithubRepo | SourceKind::Folder | SourceKind::RssFeed | SourceKind::WebPage
+        SourceKind::GithubRepo
+            | SourceKind::Folder
+            | SourceKind::RssFeed
+            | SourceKind::WebPage
+            | SourceKind::OutlookMail
+            | SourceKind::OutlookCalendar
+            | SourceKind::TeamsMessages
     )
 }
 
@@ -85,6 +91,7 @@ fn index_last_success_by_source_id(entries: &[SyncAuditEntry]) -> HashMap<String
         let is_workspace_kind = matches!(
             e.source_kind.as_str(),
             "github_repo" | "folder" | "rss_feed" | "web_page"
+            | "outlook_mail" | "outlook_calendar" | "teams_messages"
         );
         if !is_workspace_kind {
             continue;
@@ -138,6 +145,18 @@ async fn run_loop() {
     // Skip the immediate-fire tick so startup isn't slammed before sign-in.
     ticker.tick().await;
 
+    // Run one tick immediately on startup — this catches sources that are
+    // already overdue (e.g. last sync was yesterday, interval is 20 minutes).
+    // The per-source due-check inside run_one_tick handles the "not yet due"
+    // case, so this is safe to call even right after boot.
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    if let Err(e) = run_one_tick().await {
+        tracing::warn!(
+            error = %e,
+            "[memory_sync:workspace:periodic] startup tick failed (continuing)"
+        );
+    }
+
     loop {
         tokio::select! {
             _ = ticker.tick() => {}
@@ -172,8 +191,13 @@ pub(crate) async fn run_one_tick() -> Result<(), String> {
         .map_err(|e| format!("load_config: {e}"))?;
 
     let global_interval = config.memory_sync_interval_secs;
+    // Use 0 as provider_default so the user's global interval is respected
+    // as-is. The Composio scheduler uses DEFAULT_MEMORY_SYNC_INTERVAL_SECS
+    // (24h) as provider_default because Composio sources have an independent
+    // 24h floor; workspace sources (folder, M365, etc.) should honour the
+    // user's setting directly.
     let Some(interval_secs) =
-        effective_interval_secs(DEFAULT_MEMORY_SYNC_INTERVAL_SECS, global_interval)
+        effective_interval_secs(0, global_interval)
     else {
         tracing::debug!(
             "[memory_sync:workspace:periodic] manual-only mode — skipping all workspace sources"
@@ -209,6 +233,58 @@ pub(crate) async fn run_one_tick() -> Result<(), String> {
     for source in due_sources {
         let source_id = source.id.clone();
         let kind = source.kind.as_str();
+
+        // For M365 sources (OutlookMail, OutlookCalendar, TeamsMessages),
+        // check token validity before firing sync. If expired, attempt a
+        // background refresh first. If unavailable, skip with a warning so
+        // stale tokens don't produce repeated 401 failures during auto-sync.
+        let is_m365 = matches!(
+            source.kind,
+            SourceKind::OutlookMail | SourceKind::OutlookCalendar | SourceKind::TeamsMessages
+        );
+        if is_m365 {
+            let token_ok = crate::openhuman::m365::ops::m365_token_usable_for(&config, source.kind.as_str());
+            if !token_ok {
+                tracing::warn!(
+                    source_id = %source_id,
+                    kind = %kind,
+                    "[memory_sync:workspace:periodic] M365 token expired — attempting auto-refresh before sync"
+                );
+                // Attempt a non-blocking refresh (SSO reload of Outlook tab).
+                // If it fails, skip this source and retry on the next tick.
+                match crate::openhuman::m365::ops::auth_refresh(&config).await {
+                    Ok(_) => {
+                        tracing::info!(
+                            source_id = %source_id,
+                            kind = %kind,
+                            "[memory_sync:workspace:periodic] M365 token refreshed successfully"
+                        );
+                        // Wait briefly for the refreshed token to be written to disk
+                        // before the sync worker reads it. auth_refresh is async and
+                        // the Python subprocess may still be writing tokens.json.
+                        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+                        // Re-check token after refresh to confirm it's actually valid.
+                        if !crate::openhuman::m365::ops::m365_token_usable_for(&config, source.kind.as_str()) {
+                            tracing::warn!(
+                                source_id = %source_id,
+                                kind = %kind,
+                                "[memory_sync:workspace:periodic] M365 token still invalid after refresh — skipping sync"
+                            );
+                            continue;
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            source_id = %source_id,
+                            kind = %kind,
+                            error = %e,
+                            "[memory_sync:workspace:periodic] M365 token refresh failed — skipping sync (please open Outlook Web)"
+                        );
+                        continue;
+                    }
+                }
+            }
+        }
         tracing::info!(
             source_id = %source_id,
             kind = %kind,

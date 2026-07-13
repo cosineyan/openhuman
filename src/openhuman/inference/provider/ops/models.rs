@@ -120,6 +120,13 @@ pub async fn list_configured_models_from_config(
             }
         }
         AuthStyle::None => request,
+        AuthStyle::AzureApiKey => {
+            if !api_key.is_empty() {
+                request.header("api-key", &api_key)
+            } else {
+                request
+            }
+        }
     };
 
     let response = request

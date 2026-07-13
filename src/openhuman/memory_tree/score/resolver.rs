@@ -85,11 +85,30 @@ pub fn canonicalise(extracted: &ExtractedEntities) -> Vec<CanonicalEntity> {
 /// - Handle: `handle:lowercased` with leading `@` stripped
 /// - Hashtag: `hashtag:lowercased` with leading `#` stripped
 /// - URL: `url:trimmed` with case preserved for path/query exact matching
+/// - Person: `person:firstname-lastname` — normalises "Last, First" and
+///   "First Last" to the same canonical id so scattered references merge.
 /// - Semantic kinds: `kind:lowercased-surface` (V1; fuzzy merge deferred)
 pub fn canonical_id_for(kind: EntityKind, surface: &str) -> String {
     let trimmed = surface.trim();
     let clean = if kind == EntityKind::Url {
         trimmed.to_string()
+    } else if kind == EntityKind::Person {
+        // Normalise "Last, First" → "first-last" so "Rabe, Robert" and
+        // "Robert Rabe" both map to "person:robert-rabe".
+        let lower = trimmed.to_lowercase();
+        if let Some(comma_pos) = lower.find(',') {
+            let last = lower[..comma_pos].trim();
+            let first = lower[comma_pos + 1..].trim();
+            if !first.is_empty() && !last.is_empty() {
+                return format!("person:{first}-{last}");
+            }
+        }
+        // "First Last" (no comma) → "first-last"
+        let parts: Vec<&str> = lower.split_whitespace().collect();
+        if parts.len() >= 2 {
+            return format!("person:{}", parts.join("-"));
+        }
+        return format!("person:{lower}");
     } else {
         trimmed
             .to_lowercase()

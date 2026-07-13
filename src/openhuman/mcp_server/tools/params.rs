@@ -5,7 +5,8 @@ use crate::openhuman::tools::SEARXNG_MAX_RESULTS;
 
 use super::types::{
     McpToolSpec, ToolCallError, DEFAULT_LIMIT, MAX_LIMIT, MEMORY_NOTE_ARGUMENTS,
-    MEMORY_STORE_ARGUMENTS, QUERY_ARGUMENTS, SEARXNG_SEARCH_ARGUMENTS, SUBAGENT_RUN_ARGUMENTS,
+    MEMORY_QUERY_SOURCE_ARGUMENTS, MEMORY_SMART_WALK_ARGUMENTS, MEMORY_STORE_ARGUMENTS,
+    QUERY_ARGUMENTS, SEARXNG_SEARCH_ARGUMENTS, SUBAGENT_RUN_ARGUMENTS,
     TREE_BROWSE_ARGUMENTS, TREE_LIST_SOURCES_ARGUMENTS, TREE_READ_CHUNK_ARGUMENTS,
     TREE_TAG_ARGUMENTS, TREE_TAG_MAX_TAGS, TREE_TAG_MAX_TAG_LENGTH, TREE_TOP_ENTITIES_ARGUMENTS,
 };
@@ -217,6 +218,37 @@ pub fn build_rpc_params(
             params.insert("metadata".to_string(), Value::Object(metadata));
             Ok(params)
         }
+        "memory.smart_walk" => {
+            reject_unexpected_arguments(&args, MEMORY_SMART_WALK_ARGUMENTS)?;
+            let query = required_non_empty_string(&args, "query")?;
+            let mut params = Map::new();
+            params.insert("query".to_string(), Value::String(query));
+            if let Some(ns) = optional_non_empty_string(&args, "namespace")? {
+                params.insert("namespace".to_string(), Value::String(ns));
+            }
+            if let Some(max_turns) = optional_u64(&args, "max_turns")? {
+                params.insert("max_turns".to_string(), Value::from(max_turns));
+            }
+            Ok(params)
+        }
+        "memory.query_source" => {
+            reject_unexpected_arguments(&args, MEMORY_QUERY_SOURCE_ARGUMENTS)?;
+            let mut params = Map::new();
+            if let Some(source_id) = optional_non_empty_string(&args, "source_id")? {
+                params.insert("source_id".to_string(), Value::String(source_id));
+            }
+            if let Some(source_kind) = optional_non_empty_string(&args, "source_kind")? {
+                params.insert("source_kind".to_string(), Value::String(source_kind));
+            }
+            if let Some(days) = optional_u64(&args, "time_window_days")? {
+                params.insert("time_window_days".to_string(), Value::from(days));
+            }
+            if let Some(query) = optional_non_empty_string(&args, "query")? {
+                params.insert("query".to_string(), Value::String(query));
+            }
+            params.insert("limit".to_string(), Value::from(optional_limit(&args)?));
+            Ok(params)
+        }
         _ => Err(ToolCallError::InvalidParams(format!(
             "unknown MCP tool `{tool_name}`"
         ))),
@@ -388,18 +420,23 @@ pub fn optional_u64(args: &Map<String, Value>, key: &str) -> Result<Option<u64>,
 }
 
 pub fn optional_limit(args: &Map<String, Value>) -> Result<u64, ToolCallError> {
-    let Some(value) = args.get("k") else {
+    // Accept both `limit` (spec.rs schema) and `k` (legacy) as the same parameter.
+    let (field, value) = if let Some(v) = args.get("limit") {
+        ("limit", v)
+    } else if let Some(v) = args.get("k") {
+        ("k", v)
+    } else {
         return Ok(DEFAULT_LIMIT);
     };
     let Some(limit) = value.as_u64() else {
-        return Err(ToolCallError::InvalidParams(
-            "argument `k` must be a positive integer".to_string(),
-        ));
+        return Err(ToolCallError::InvalidParams(format!(
+            "argument `{field}` must be a positive integer"
+        )));
     };
     if limit == 0 {
-        return Err(ToolCallError::InvalidParams(
-            "argument `k` must be greater than zero".to_string(),
-        ));
+        return Err(ToolCallError::InvalidParams(format!(
+            "argument `{field}` must be greater than zero"
+        )));
     }
     if limit > MAX_LIMIT {
         // Reject explicitly instead of silently clamping. The schema advertises
@@ -407,7 +444,7 @@ pub fn optional_limit(args: &Map<String, Value>) -> Result<u64, ToolCallError> {
         // lets the LLM self-correct on the next call instead of believing it
         // received the page size it asked for.
         return Err(ToolCallError::InvalidParams(format!(
-            "argument `k` must not exceed {MAX_LIMIT} (got {limit})"
+            "argument `{field}` must not exceed {MAX_LIMIT} (got {limit})"
         )));
     }
     Ok(limit)

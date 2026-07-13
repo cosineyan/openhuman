@@ -32,9 +32,9 @@ pub const DEFAULT_MODEL: &str = MODEL_CHAT_V1;
 /// surfaced in the Memory Sources UI. See issue #3302.
 pub const DEFAULT_MEMORY_SYNC_INTERVAL_SECS: u64 = 86_400;
 
-/// Preset memory-sync cadences (seconds) offered in the UI: 4h / 12h / 24h.
+/// Preset memory-sync cadences (seconds) offered in the UI: 20min / 1h / 4h / 12h / 24h.
 /// "Manual only" is represented separately by `Some(0)`. See issue #3302.
-pub const MEMORY_SYNC_INTERVAL_PRESETS_SECS: [u64; 3] = [14_400, 43_200, 86_400];
+pub const MEMORY_SYNC_INTERVAL_PRESETS_SECS: [u64; 5] = [1_200, 3_600, 14_400, 43_200, 86_400];
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ModelRegistryEntry {

@@ -368,12 +368,23 @@ async fn sync_items_individually(
                 let doc = DocumentInput {
                     provider: format!("memory_sources:{kind_str}"),
                     title: content.title.clone(),
-                    body: content.body.clone(),
+                    // Strip HTML tags so the chunker and LLM see plain text instead
+                    // of raw HTML markup. Outlook emails and Teams messages arrive
+                    // as HTML; without stripping, chunks are full of <p>, <span>,
+                    // style="" noise that obscures the actual content.
+                    body: if matches!(content.content_type, crate::openhuman::memory_sources::types::ContentType::Html) {
+                        strip_html(content.body.as_str())
+                    } else {
+                        content.body.clone()
+                    },
                     modified_at: chrono::Utc::now(),
                     source_ref: Some(format!("{source_id}:{}", item.id)),
                     source_kind_override: match source_kind {
-                        SourceKind::OutlookMail | SourceKind::TeamsMessages => {
+                        SourceKind::OutlookMail => {
                             Some(crate::openhuman::memory_store::chunks::types::SourceKind::Email)
+                        }
+                        SourceKind::TeamsMessages => {
+                            Some(crate::openhuman::memory_store::chunks::types::SourceKind::Chat)
                         }
                         SourceKind::OutlookCalendar => Some(
                             crate::openhuman::memory_store::chunks::types::SourceKind::Document,
@@ -550,4 +561,83 @@ pub(crate) fn derive_scopes(source: &MemorySourceEntry, config: &Config) -> Vec<
         }
         _ => Vec::new(),
     }
+}
+
+/// Strip HTML tags from a string, preserving meaningful alt/title attributes
+/// from emoji, images, and attachments. Used to convert Outlook email bodies
+/// and Teams messages to plain text before chunking.
+///
+/// Special handling:
+/// - `<emoji alt="🤐" title="Zipper mouth face">` → `🤐`
+/// - `<img alt="screenshot.png">` → `[Image: screenshot.png]`
+/// - `<attachment id="...">` (no inner text) → `[Attachment]`
+/// - All other tags: stripped, whitespace collapsed
+fn strip_html(html: &str) -> String {
+    use regex::Regex;
+
+    let mut text = html.to_string();
+
+    // 1. Emoji: extract the alt attribute (the actual emoji character or name)
+    // <emoji id="..." alt="🤐" title="Zipper mouth face"> → 🤐
+    let emoji_re = Regex::new(r#"(?i)<emoji[^>]*\balt="([^"]*)"[^>]*>"#).unwrap();
+    text = emoji_re.replace_all(&text, |caps: &regex::Captures| {
+        caps.get(1).map(|m| m.as_str()).unwrap_or("").to_string()
+    }).to_string();
+
+    // 2. Inline images hosted by Graph API — mark with [Image] placeholder.
+    // We can't download & describe them here (no async context); callers that
+    // want vision descriptions should do so in read_item before strip_html.
+    let img_alt_re = Regex::new(r#"(?i)<img[^>]*\balt="([^"]+)"[^>]*/?>"#).unwrap();
+    text = img_alt_re.replace_all(&text, |caps: &regex::Captures| {
+        format!("[Image: {}]", caps.get(1).map(|m| m.as_str()).unwrap_or(""))
+    }).to_string();
+    // Images without alt — just mark as [Image]
+    let img_re = Regex::new(r#"(?i)<img[^>]*/?>|<img[^>]*>"#).unwrap();
+    text = img_re.replace_all(&text, "[Image]").to_string();
+
+    // 3. Attachments: mark presence
+    let attach_re = Regex::new(r#"(?i)<attachment[^>]*>.*?</attachment>"#).unwrap();
+    text = attach_re.replace_all(&text, "[Attachment]").to_string();
+    let attach_self_re = Regex::new(r#"(?i)<attachment[^>]*/?>|<attachment[^>]*>"#).unwrap();
+    text = attach_self_re.replace_all(&text, "[Attachment]").to_string();
+
+    // 4. Strip remaining HTML tags, collapse whitespace
+    let mut result = String::with_capacity(text.len());
+    let mut in_tag = false;
+    let mut last_was_space = true;
+
+    for ch in text.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => {
+                in_tag = false;
+                if !last_was_space && !result.is_empty() {
+                    result.push(' ');
+                    last_was_space = true;
+                }
+            }
+            _ if !in_tag => {
+                if ch.is_whitespace() {
+                    if !last_was_space && !result.is_empty() {
+                        result.push(' ');
+                        last_was_space = true;
+                    }
+                } else {
+                    result.push(ch);
+                    last_was_space = false;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Decode common HTML entities
+    result.trim().to_string()
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&nbsp;", " ")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&apos;", "'")
 }

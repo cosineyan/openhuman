@@ -860,6 +860,10 @@ export interface MemoryTreePipelineStatus {
    * structure ("empty-but-built wiki"). Optional for back-compat.
    */
   extraction_coverage?: number | null;
+  /** Number of chunks that have a vector embedding. Optional for back-compat. */
+  embedded_chunks?: number;
+  /** Number of chunks still waiting for embedding (pending = 0 means complete). Optional for back-compat. */
+  pending_embed_chunks?: number;
 }
 
 /**

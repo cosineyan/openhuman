@@ -579,7 +579,8 @@ pub fn retry_all_failed(config: &Config) -> Result<u64> {
                     started_at_ms = NULL,
                     completed_at_ms = NULL,
                     last_error = NULL
-              WHERE status = 'failed'",
+              WHERE status = 'failed'
+                AND (failure_class IS NULL OR failure_class != 'unrecoverable')",
             params![now_ms],
         )?;
         if n > 0 {

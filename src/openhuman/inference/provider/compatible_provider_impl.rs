@@ -536,7 +536,8 @@ impl Provider for OpenAiCompatibleProvider {
                 // field (Google Gemini shim — TAURI-RUST-4PJ); the reactive
                 // retry below stays as defense-in-depth for unknown providers.
                 frequency_penalty: self.effective_frequency_penalty(),
-                max_tokens: request.max_tokens,
+                max_tokens: if model.starts_with("gpt-5") { None } else { request.max_tokens },
+                max_completion_tokens: if model.starts_with("gpt-5") { request.max_tokens } else { None },
             };
             let stream_dump_seq = reserve_dump_seq();
             dump_prompt_if_enabled(&self.name, model, stream_dump_seq, &native_request);
@@ -623,7 +624,8 @@ impl Provider for OpenAiCompatibleProvider {
             // The buffered non-streaming path omits `frequency_penalty` for maximum
             // compatibility. The streaming path carries it and retries without on rejection.
             frequency_penalty: None,
-            max_tokens: request.max_tokens,
+            max_tokens: if model.starts_with("gpt-5") { None } else { request.max_tokens },
+            max_completion_tokens: if model.starts_with("gpt-5") { request.max_tokens } else { None },
         };
         let dump_seq = reserve_dump_seq();
         dump_prompt_if_enabled(&self.name, model, dump_seq, &native_request);

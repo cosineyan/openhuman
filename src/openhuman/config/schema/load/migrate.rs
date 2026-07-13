@@ -148,12 +148,23 @@ pub(crate) fn migrate_cloud_provider_slugs(config: &mut Config) {
                     );
                     *field = Some(format!("{other}:"));
                 } else if other != "openhuman" {
-                    tracing::warn!(
-                        "[config][migrate] bare routing '{}' has no matching provider entry, \
-                         falling back to 'openhuman'",
-                        other
-                    );
-                    *field = Some("openhuman".to_string());
+                    // Check if it's a valid "<slug>:<model>" format where the slug
+                    // exists in cloud_providers — leave it unchanged.
+                    let slug_part = other.split(':').next().unwrap_or(other);
+                    if slug_to_id.contains_key(slug_part) {
+                        // Valid slug:model format — leave as-is.
+                        tracing::debug!(
+                            "[config][migrate] routing '{}' is valid slug:model for known slug '{}' — leaving unchanged",
+                            other, slug_part
+                        );
+                    } else {
+                        tracing::warn!(
+                            "[config][migrate] bare routing '{}' has no matching provider entry, \
+                             falling back to 'openhuman'",
+                            other
+                        );
+                        *field = Some("openhuman".to_string());
+                    }
                 }
             }
         }

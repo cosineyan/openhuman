@@ -571,8 +571,8 @@ export function MemorySourcesRegistry({
 
 /** Manual-only sentinel — stored as `sync_interval_secs = 0`. */
 const MANUAL_INTERVAL_SECS = 0;
-/** Preset cadences offered in the UI (seconds): 4h / 12h / 24h. */
-const SYNC_INTERVAL_PRESETS_SECS = [14_400, 43_200, 86_400];
+/** Preset cadences offered in the UI (seconds): 20min / 1h / 4h / 12h / 24h. */
+const SYNC_INTERVAL_PRESETS_SECS = [1_200, 3_600, 14_400, 43_200, 86_400];
 
 /** Human label for a cadence ("Every 4h" / "Every 30m" / "Manual only"). */
 function intervalChipLabel(secs: number, t: (k: string) => string): string {

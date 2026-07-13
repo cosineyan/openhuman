@@ -19,6 +19,10 @@ const DEFAULT_MAX_ITEMS: u32 = 50;
 // Token helper
 // ---------------------------------------------------------------------------
 
+pub fn read_graph_token_public(config: &Config) -> Result<String, String> {
+    read_token_by_key(config, "graph")
+}
+
 fn read_graph_token(config: &Config) -> Result<String, String> {
     read_token_by_key(config, "graph")
 }
@@ -41,7 +45,9 @@ fn read_token_by_key(config: &Config, key: &str) -> Result<String, String> {
         .get(key)
         .ok_or_else(|| format!("{key} token not found — please connect Outlook in SAP Systems"))?;
     let exp = entry.get("expiresOn").and_then(|v| v.as_i64()).unwrap_or(0);
-    if exp > 0 && exp < Utc::now().timestamp() {
+    // Use a 30-second safety margin (matches m365_token_usable_for) so the
+    // scheduler check and this reader agree on token validity.
+    if exp > 0 && exp < Utc::now().timestamp() + 30 {
         return Err(format!(
             "{key} token expired — please click Refresh in SAP Systems to renew it"
         ));
@@ -57,7 +63,7 @@ fn read_token_by_key(config: &Config, key: &str) -> Result<String, String> {
 // Graph API helper
 // ---------------------------------------------------------------------------
 
-async fn graph_get(token: &str, url: &str) -> Result<serde_json::Value, String> {
+pub(crate) async fn graph_get(token: &str, url: &str) -> Result<serde_json::Value, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()
@@ -164,8 +170,9 @@ impl SourceReader for OutlookMailReader {
 
         Ok(SourceContent {
             id: item_id.to_string(),
-            title: subject,
-            body: body_content,
+            title: subject.clone(),
+            // Prefix body with metadata so Claude can identify sender/date directly.
+            body: format!("[Subject: {subject}] [From: {from}] [Date: {received}]\n{body_content}"),
             content_type,
             metadata: serde_json::json!({
                 "from": from,
@@ -308,29 +315,69 @@ impl SourceReader for TeamsMessagesReader {
             format!("{e}. Hint: sync Outlook Mail first to populate the chat graph token.")
         })?;
         let days = source.m365_sync_days.unwrap_or(DEFAULT_SYNC_DAYS);
-        let top_chats = 20usize;
         let messages_per_chat = (source.m365_max_items.unwrap_or(DEFAULT_MAX_ITEMS) / 4).max(5);
 
-        let chats_url = format!(
-            "{GRAPH_BASE}/me/chats?$top={top_chats}&$select=id,topic,chatType\
-             &$orderby=lastMessagePreview/createdDateTime desc"
-        );
-        let chats_data = graph_get(&token, &chats_url).await?;
-        let chats = chats_data
-            .get("value")
-            .and_then(|v| v.as_array())
-            .ok_or("unexpected chats response")?;
+        // Fetch all chats with pagination (Vera's 1:1 may be beyond page 1)
+        // $expand=members to get participant names for 1:1 chats without extra API calls
+        let mut all_chats: Vec<serde_json::Value> = Vec::new();
+        let mut chats_url = Some(format!(
+            "{GRAPH_BASE}/me/chats?$top=50&$select=id,topic,chatType\
+             &$expand=members($select=displayName,userId)"
+        ));
+        let mut pages = 0usize;
+        while let Some(url) = chats_url {
+            if pages >= 10 { break; } // safety cap at 500 chats
+            let chats_data = graph_get(&token, &url).await?;
+            if let Some(arr) = chats_data.get("value").and_then(|v| v.as_array()) {
+                all_chats.extend(arr.iter().cloned());
+            }
+            chats_url = chats_data
+                .get("@odata.nextLink")
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+            pages += 1;
+        }
+        let chats = all_chats;
 
         let since_ms =
             (chrono::Utc::now() - chrono::Duration::days(days as i64)).timestamp_millis();
         let mut items = Vec::new();
 
-        for chat in chats.iter().take(top_chats) {
+        for chat in chats.iter() {
             let chat_id = chat["id"].as_str().unwrap_or("").to_string();
             if chat_id.is_empty() {
                 continue;
             }
-            let topic = chat["topic"].as_str().unwrap_or("Chat").to_string();
+            let chat_type = chat["chatType"].as_str().unwrap_or("unknown");
+            // Build a human-readable label for the chat based on type and members.
+            let chat_label = if chat_type == "oneOnOne" {
+                // Pick the member who is not the current user (any non-empty name)
+                let members = chat.get("members")
+                    .and_then(|v| v.as_array())
+                    .cloned()
+                    .unwrap_or_default();
+                let other = members.iter()
+                    .filter_map(|m| m.get("displayName").and_then(|v| v.as_str()))
+                    .find(|name| !name.is_empty())
+                    .unwrap_or("Unknown");
+                format!("1:1 with {other}")
+            } else {
+                let topic = chat["topic"].as_str().unwrap_or("").to_string();
+                if topic.is_empty() {
+                    let members = chat.get("members")
+                        .and_then(|v| v.as_array())
+                        .cloned()
+                        .unwrap_or_default();
+                    let names: Vec<&str> = members.iter()
+                        .filter_map(|m| m.get("displayName").and_then(|v| v.as_str()))
+                        .filter(|n| !n.is_empty())
+                        .take(3)
+                        .collect();
+                    if names.is_empty() { "Group Chat".to_string() } else { names.join(", ") }
+                } else {
+                    topic
+                }
+            };
             let msgs_url = format!(
                 "{GRAPH_BASE}/me/chats/{chat_id}/messages\
                  ?$top={messages_per_chat}&$select=id,body,from,createdDateTime"
@@ -359,7 +406,7 @@ impl SourceReader for TeamsMessagesReader {
                                 .to_string();
                             items.push(SourceItem {
                                 id: format!("{chat_id}::{msg_id}"),
-                                title: format!("[{topic}] {sender}"),
+                                title: format!("[{chat_label}] {sender}"),
                                 updated_at_ms: ts,
                             });
                         }
@@ -390,6 +437,40 @@ impl SourceReader for TeamsMessagesReader {
         }
         let (chat_id, msg_id) = (parts[0], parts[1]);
         let token = read_chat_graph_token(config)?;
+
+        // For 1:1 chats, fetch the other participant's name to include in body.
+        // This allows Claude to find messages by the other person's name.
+        let chat_info = {
+            let members_url = format!("{GRAPH_BASE}/me/chats/{chat_id}?$select=id,topic,chatType&$expand=members($select=displayName,userId)");
+            graph_get(&token, &members_url).await.ok()
+        };
+        let chat_type = chat_info.as_ref()
+            .and_then(|c| c.get("chatType"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+            .to_string();
+        let chat_context = if chat_type == "oneOnOne" {
+            // Find the other participant (not the current user)
+            let members = chat_info.as_ref()
+                .and_then(|c| c.get("members"))
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
+            // Pick first member whose name differs (the "other" person)
+            let other = members.iter()
+                .filter_map(|m| m.get("displayName").and_then(|v| v.as_str()))
+                .find(|name| !name.is_empty())
+                .unwrap_or("1:1 chat")
+                .to_string();
+            format!("[1:1 Chat with {other}]")
+        } else {
+            let topic = chat_info.as_ref()
+                .and_then(|c| c.get("topic"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("Group Chat")
+                .to_string();
+            format!("[Group Chat: {topic}]")
+        };
         let url = format!(
             "{GRAPH_BASE}/me/chats/{chat_id}/messages/{msg_id}\
              ?$select=id,body,from,createdDateTime"
@@ -412,7 +493,9 @@ impl SourceReader for TeamsMessagesReader {
         Ok(SourceContent {
             id: item_id.to_string(),
             title: format!("Teams message from {sender} at {created}"),
-            body: body_content,
+            // Prefix body with chat context, sender and human-readable date so Claude can
+            // identify the message time without converting raw timestamps.
+            body: format!("{chat_context} [From: {sender}] [{created}]\n{body_content}"),
             content_type,
             metadata: serde_json::json!({
                 "sender": sender,

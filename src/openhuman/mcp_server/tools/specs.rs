@@ -72,7 +72,7 @@ pub fn base_tool_specs() -> Vec<McpToolSpec> {
             name: "memory.search",
             title: "Search Memory",
             description: "Keyword-search OpenHuman's local memory tree and return matching chunks ordered by recency.",
-            rpc_method: Some("openhuman.memory_search"),
+            rpc_method: Some("openhuman.memory_tree_search"),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -97,7 +97,7 @@ pub fn base_tool_specs() -> Vec<McpToolSpec> {
             name: "memory.recall",
             title: "Recall Memory",
             description: "Semantically recall local memory-tree chunks relevant to a natural-language query.",
-            rpc_method: Some("openhuman.memory_recall"),
+            rpc_method: Some("openhuman.memory_tree_recall"),
             input_schema: query_schema("Natural-language query to embed and rerank against memory summaries."),
             annotations: read_only_local_annotations(),
         },
@@ -105,7 +105,7 @@ pub fn base_tool_specs() -> Vec<McpToolSpec> {
             name: "tree.read_chunk",
             title: "Read Memory Chunk",
             description: "Read one memory-tree chunk by id. Use this to inspect the source text behind search or recall results.",
-            rpc_method: Some("openhuman.memory_get_chunk"),
+            rpc_method: Some("openhuman.memory_tree_get_chunk"),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -128,7 +128,7 @@ pub fn base_tool_specs() -> Vec<McpToolSpec> {
                           recent in my Gmail\", \"show me everything from last week about Alice\") \
                           rather than search by query. Returns chunks plus a total match count for \
                           pagination.",
-            rpc_method: Some("openhuman.memory_list_chunks"),
+            rpc_method: Some("openhuman.memory_tree_list_chunks"),
             input_schema: tree_browse_schema(),
             annotations: read_only_local_annotations(),
         },
@@ -139,7 +139,7 @@ pub fn base_tool_specs() -> Vec<McpToolSpec> {
                           topics, emails) across the local memory tree. Call this for entity \
                           discovery before drilling in with `tree.browse` (passing `entity_ids`) \
                           or `memory.search`. Returns entities ordered by reference count.",
-            rpc_method: Some("openhuman.memory_top_entities"),
+            rpc_method: Some("openhuman.memory_tree_top_entities"),
             input_schema: tree_top_entities_schema(),
             annotations: read_only_local_annotations(),
         },
@@ -151,8 +151,33 @@ pub fn base_tool_specs() -> Vec<McpToolSpec> {
                           chunk counts and last-activity timestamps. Use this when the user asks \
                           \"what data sources do I have\" or to discover source ids to pass into \
                           `tree.browse`.",
-            rpc_method: Some("openhuman.memory_list_sources"),
+            rpc_method: Some("openhuman.memory_tree_list_sources"),
             input_schema: tree_list_sources_schema(),
+            annotations: read_only_local_annotations(),
+        },
+        McpToolSpec {
+            name: "memory.smart_walk",
+            title: "Smart Memory Walk",
+            description: "Multi-strategy memory retrieval — combines vector search, keyword \
+                          search, entity lookup, and tree browsing to answer natural-language \
+                          queries across raw chat messages, wiki summaries, documents, and \
+                          episodic memories. Use this for complex questions like \"what did \
+                          Robert say recently\" or \"summarize my Teams chats about project X\". \
+                          More powerful than memory.search or memory.recall for open-ended \
+                          questions.",
+            rpc_method: Some("openhuman.memory_tree_smart_walk"),
+            input_schema: memory_smart_walk_schema(),
+            annotations: read_only_local_annotations(),
+        },
+        McpToolSpec {
+            name: "memory.query_source",
+            title: "Query Memory Source Tree",
+            description: "Return summaries from the wiki summary tree, filtered by source type \
+                          (chat, email, document) and optionally by source_id or time window. \
+                          Use this to query the LLM-generated wiki layer rather than raw chunks. \
+                          Good for \"what happened in my Teams chats this week\" type questions.",
+            rpc_method: Some("openhuman.memory_tree_query_source"),
+            input_schema: memory_query_source_schema(),
             annotations: read_only_local_annotations(),
         },
         McpToolSpec {
@@ -451,6 +476,65 @@ fn tree_tag_schema() -> Value {
             }
         },
         "required": ["chunk_id", "tags"],
+        "additionalProperties": false
+    })
+}
+
+fn memory_smart_walk_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Natural-language question to answer. E.g. 'What did Robert say recently about the project?'"
+            },
+            "namespace": {
+                "type": "string",
+                "description": "Memory namespace. Default: \"default\"."
+            },
+            "max_turns": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 25,
+                "description": "Max LLM turns for the walk. Default 12."
+            }
+        },
+        "required": ["query"],
+        "additionalProperties": false
+    })
+}
+
+fn memory_query_source_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "source_id": {
+                "type": "string",
+                "description": "Exact source id to filter by (e.g. a specific chat or email thread)."
+            },
+            "source_kind": {
+                "type": "string",
+                "enum": ["chat", "email", "document"],
+                "description": "Filter by source type: chat (Teams), email (Outlook), or document."
+            },
+            "time_window_days": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Only return summaries from the last N days."
+            },
+            "query": {
+                "type": "string",
+                "description": "Optional query to rerank results by relevance."
+            },
+            "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 50,
+                "description": "Maximum results to return."
+            }
+        },
+        "required": [],
         "additionalProperties": false
     })
 }

@@ -82,6 +82,44 @@ pub fn token_file_path(config: &Config) -> PathBuf {
     config.workspace_dir.join("m365").join("tokens.json")
 }
 
+/// Quick synchronous check: returns `true` when the M365 tokens needed for
+/// the given source kind exist and have more than 1 minute of remaining validity.
+/// - OutlookMail / OutlookCalendar → checks `graph` token
+/// - TeamsMessages → checks `graph_chat` token (Chat.Read scope)
+pub fn m365_token_usable_for(config: &Config, source_kind: &str) -> bool {
+    let path = token_file_path(config);
+    let Ok(raw) = std::fs::read_to_string(&path) else {
+        return false;
+    };
+    let Ok(tokens) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return false;
+    };
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+
+    let token_key = if source_kind == "teams_messages" {
+        "graph_chat"
+    } else {
+        "graph"
+    };
+
+    let expires_on = tokens
+        .get(token_key)
+        .and_then(|e| e.get("expiresOn"))
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    // Treat as usable when more than 30 seconds remain (matches the margin
+    // used in read_token_by_key so both checks agree on validity).
+    expires_on > now + 30
+}
+
+/// Convenience wrapper that checks the `graph` token (mail + calendar).
+pub fn m365_token_usable(config: &Config) -> bool {
+    m365_token_usable_for(config, "outlook_mail")
+}
+
 // ---------------------------------------------------------------------------
 // Subprocess helper
 // ---------------------------------------------------------------------------
@@ -208,7 +246,58 @@ pub async fn token_status(config: &Config) -> Result<Value> {
     Ok(status)
 }
 
-/// Check whether the mcp-chrome browser extension is reachable on port 12306.
+/// Get a valid graph token, triggering a synchronous refresh if expired or expiring
+/// within 5 minutes. This is the single canonical entry-point for any feature that
+/// needs a Graph API token — consolidates expiry check + refresh into one place.
+///
+/// Unlike `token_status` (which fires a background refresh and returns immediately),
+/// this function waits up to 8 seconds for the refresh to complete before returning.
+pub async fn ensure_graph_token(config: &Config) -> Result<String> {
+    use crate::openhuman::memory_sources::readers::m365::read_graph_token_public;
+
+    // Fast path: token is still valid with 5-minute margin
+    let tokens_path = config.workspace_dir.join("m365").join("tokens.json");
+    let needs_refresh = if let Ok(raw) = std::fs::read_to_string(&tokens_path) {
+        if let Ok(tokens) = serde_json::from_str::<serde_json::Value>(&raw) {
+            let exp = tokens
+                .get("graph")
+                .and_then(|e| e.get("expiresOn"))
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+            let now = chrono::Utc::now().timestamp();
+            exp > 0 && exp < now + 300 // less than 5 minutes remaining
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    if needs_refresh {
+        log::info!("[m365] ensure_graph_token: token expiring soon, refreshing...");
+        if REFRESH_IN_FLIGHT
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+        {
+            let config_clone = config.clone();
+            let handle = tokio::spawn(async move {
+                let result = auth_refresh(&config_clone).await;
+                REFRESH_IN_FLIGHT.store(false, Ordering::SeqCst);
+                result
+            });
+            // Wait up to 8 seconds for refresh
+            match tokio::time::timeout(std::time::Duration::from_secs(8), handle).await {
+                Ok(Ok(Ok(_))) => log::info!("[m365] ensure_graph_token: refresh succeeded"),
+                Ok(Ok(Err(e))) => log::warn!("[m365] ensure_graph_token: refresh failed: {e}"),
+                _ => log::warn!("[m365] ensure_graph_token: refresh timed out"),
+            }
+        }
+    }
+
+    read_graph_token_public(config).map_err(|e| anyhow::anyhow!(e))
+}
+
+
 /// Returns `{ ok: bool, port: number, error?: string }`.
 pub async fn mcp_chrome_status() -> Value {
     let port = std::env::var("MCP_CHROME_PORT")

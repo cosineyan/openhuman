@@ -349,6 +349,22 @@ CREATE TABLE IF NOT EXISTS mem_tree_ingested_sources (
     PRIMARY KEY (source_kind, source_id)
 );
 
+-- Contact directory built from [From: xxx] patterns in ingested chat and email chunks.
+-- Used by profile_person for partial-name lookup.
+-- Rebuilt on-demand via rebuild_contacts_if_stale().
+CREATE TABLE IF NOT EXISTS mem_tree_contacts (
+    display_name           TEXT NOT NULL,
+    display_name_lower     TEXT NOT NULL,
+    email                  TEXT,
+    source_kind            TEXT NOT NULL,
+    mention_count          INTEGER NOT NULL DEFAULT 1,
+    last_seen_ms           INTEGER,
+    PRIMARY KEY (display_name, source_kind)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mem_tree_contacts_name_lower
+    ON mem_tree_contacts(display_name_lower);
+
 -- MCP write-tool audit trail (#2536). This intentionally stores compact
 -- identifying metadata instead of duplicating the memory document body.
 CREATE TABLE IF NOT EXISTS mcp_writes (
