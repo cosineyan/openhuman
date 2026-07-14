@@ -921,18 +921,16 @@ fn hydrate_leaf_inputs(config: &Config, chunk_ids: &[String]) -> Result<Vec<Summ
             Ok(b) => b,
             Err(e) => {
                 let msg = e.to_string();
-                // sha256 mismatch means the chunk file on disk does not match the
-                // DB record — typically caused by a re-sync that updated the content
-                // but left a stale file, or an interrupted write. Retrying won't fix
-                // this; mark as unrecoverable so it doesn't hold degraded status.
+                // sha256 mismatch: the chunk content was updated by a re-sync
+                // (e.g. Teams message edit/reaction) leaving the file and DB
+                // pointer out of sync. Skip this chunk silently — it will be
+                // re-sealed when the next sync re-ingests the updated content.
                 if msg.contains("sha256 mismatch") {
-                    use crate::openhuman::memory_tree::health::{FailureCode, PipelineFailure};
-                    return Err(anyhow::Error::new(PipelineFailure::new(
-                        FailureCode::EmptyInputRefused,
-                    ))
-                    .context(format!(
-                        "[tree::bucket_seal] hydrate_leaf_inputs: read body for chunk {id}: {msg}"
-                    )));
+                    log::debug!(
+                        "[tree::bucket_seal] skipping chunk {id} due to sha256 mismatch \
+                         (stale file after content update): {msg}"
+                    );
+                    continue;
                 }
                 return Err(e.context(format!(
                     "[tree::bucket_seal] hydrate_leaf_inputs: read body for chunk {id}"
