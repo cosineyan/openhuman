@@ -14,6 +14,11 @@ use crate::openhuman::config::Config;
 
 /// Guard: ensures at most one background auth_refresh runs at a time.
 static REFRESH_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
+/// Timestamp (secs since epoch) when the last refresh completed.
+/// Used for a 60-second cooldown to prevent successive spawns when multiple
+/// token_status calls arrive in rapid succession after a token expires.
+static REFRESH_LAST_COMPLETED_SECS: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
 
 // ---------------------------------------------------------------------------
 // Script resolution
@@ -225,9 +230,18 @@ pub async fn token_status(config: &Config) -> Result<Value> {
         || needs_refresh("sharepoint");
 
     if should_refresh {
-        // Only spawn one background refresh at a time — if one is already running,
-        // skip to avoid opening multiple Chrome tabs concurrently.
-        if REFRESH_IN_FLIGHT
+        // 60-second cooldown: if a refresh completed recently, skip spawning another.
+        // Without this, rapid-fire token_status calls (UI polls every 5s when a token
+        // is expired) each see should_refresh=true and try to spawn another refresh
+        // the moment REFRESH_IN_FLIGHT is cleared by the previous one completing.
+        let now_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let last = REFRESH_LAST_COMPLETED_SECS.load(Ordering::SeqCst);
+        if last > 0 && now_secs.saturating_sub(last) < 60 {
+            log::debug!("[m365] refresh cooldown active ({}s ago), skipping", now_secs - last);
+        } else if REFRESH_IN_FLIGHT
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .is_ok()
         {
@@ -236,6 +250,11 @@ pub async fn token_status(config: &Config) -> Result<Value> {
                 if let Err(e) = auth_refresh(&config_clone).await {
                     log::debug!("[m365] background auto-refresh failed: {e}");
                 }
+                let completed_at = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                REFRESH_LAST_COMPLETED_SECS.store(completed_at, Ordering::SeqCst);
                 REFRESH_IN_FLIGHT.store(false, Ordering::SeqCst);
             });
         } else {
