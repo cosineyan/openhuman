@@ -734,27 +734,14 @@ def ensure_graph_token(force=False):
 def ensure_chat_graph_token(force=False):
     """Get a Graph API token with Chat.Read scope.
 
-    The token extracted directly from the Outlook tab (appid 9199bf20, Outlook
-    Web Client) includes Chat.Read scope, unlike the token obtained via Teams
-    refresh token exchange (appid 5e3ce6c0, Teams Web Client) which does not.
-
-    We cache it under the 'graph_chat' key to avoid overwriting the regular
-    graph token used for mail/calendar calls.
-
-    If the cached token is expired or missing, we navigate the Outlook tab to
-    trigger MSAL to silently refresh the token, then re-extract.
+    The token is extracted from an Outlook Web foreground tab (appid 9199bf20).
+    Foreground tabs trigger SAP SSO silent re-auth and MSAL token acquisition.
+    Background tabs are throttled by Chrome and SSO does not trigger.
     """
     tokens = load_tokens()
     entry = tokens.get('graph_chat')
     if not force and is_token_usable(entry):
         return entry['token']
-
-    # Extract fresh token from the open Outlook tab.
-    sid = find_outlook_session()
-    if not sid:
-        raise RuntimeError(
-            'No Outlook tab found. Please open Outlook Web to enable Teams chat sync.'
-        )
 
     def _save_graph_chat(graph_entry):
         t = load_tokens()
@@ -770,54 +757,52 @@ def ensure_chat_graph_token(force=False):
             return _save_graph_chat(graph_entry)
         return None
 
-    def _try_extract():
-        return _try_extract_from(sid)
+    # Step 1: try existing Outlook tab first (fast path, no new tab needed)
+    existing_sid = find_outlook_session()
+    if existing_sid:
+        tok = _try_extract_from(existing_sid)
+        if tok:
+            dlog(f'ensure_chat_graph_token: got token from existing tab {existing_sid}')
+            return tok
 
-    # First try: extract current token from the tab.
-    tok = _try_extract()
-    if tok:
-        return tok
-
-    # Token is expired — open a fresh foreground Outlook tab.
-    # background=False ensures SAP SSO fully loads the page and MSAL
-    # acquires a new token into localStorage. Background tabs are throttled
-    # by Chrome and SSO silent re-auth does not trigger.
-    dlog(f'ensure_chat_graph_token: token expired, opening foreground Outlook tab')
-    new_sid = None
-    try:
-        new_sid = open_outlook_tab()  # opens with background=False
-
-        # Poll up to 40s for page load + MSAL token acquisition
-        dlog(f'ensure_chat_graph_token: polling new foreground tab {new_sid} up to 40s')
-        deadline = time.time() + 40
-        time.sleep(5)
-        while time.time() < deadline:
-            tok = _try_extract_from(new_sid)
-            if tok:
-                dlog(f'ensure_chat_graph_token: got fresh token from foreground tab')
-                close_tab(new_sid)
-                return tok
-            tok = _try_extract()
-            if tok:
-                dlog(f'ensure_chat_graph_token: got fresh token from existing tab')
-                close_tab(new_sid)
-                return tok
-            time.sleep(3)
-
-        close_tab(new_sid)
+    # Step 2: open a foreground Outlook tab and poll until token appears.
+    # Retry up to 2 times (network latency / slow SSO on first attempt).
+    dlog(f'ensure_chat_graph_token: opening foreground Outlook tab (force={force})')
+    for attempt in range(1, 3):
         new_sid = None
-    except Exception as e:
-        dlog(f'ensure_chat_graph_token: approach failed: {e}')
-        if new_sid:
+        try:
+            new_sid = open_outlook_tab()  # background=False — triggers full SSO page load
+            dlog(f'ensure_chat_graph_token: attempt {attempt} tab={new_sid}, polling up to 45s')
+            deadline = time.time() + 45
+            time.sleep(5)  # initial wait for page load
+            while time.time() < deadline:
+                tok = _try_extract_from(new_sid)
+                if tok:
+                    dlog(f'ensure_chat_graph_token: attempt {attempt} success from new tab')
+                    close_tab(new_sid)
+                    return tok
+                # Also check the original existing tab (it may have refreshed too)
+                if existing_sid:
+                    tok = _try_extract_from(existing_sid)
+                    if tok:
+                        dlog(f'ensure_chat_graph_token: attempt {attempt} success from existing tab')
+                        close_tab(new_sid)
+                        return tok
+                time.sleep(3)
+            dlog(f'ensure_chat_graph_token: attempt {attempt} timed out, closing tab')
             close_tab(new_sid)
-
-    tok = _try_extract()
-    if tok:
-        return tok
+            new_sid = None
+        except Exception as e:
+            dlog(f'ensure_chat_graph_token: attempt {attempt} failed: {e}')
+            if new_sid:
+                try:
+                    close_tab(new_sid)
+                except Exception:
+                    pass
 
     raise RuntimeError(
-        'Could not obtain a Chat.Read graph token from Outlook tab. '
-        'Ensure Outlook Web is open and you are logged in.'
+        'Could not obtain a Chat.Read graph token from Outlook tab after 2 attempts. '
+        'Ensure Outlook Web is open in Chrome and you are logged in to SAP.'
     )
 
 

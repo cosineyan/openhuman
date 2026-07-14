@@ -319,10 +319,11 @@ impl SourceReader for TeamsMessagesReader {
 
         // Fetch all chats with pagination (Vera's 1:1 may be beyond page 1)
         // $expand=members to get participant names for 1:1 chats without extra API calls
+        // Note: conversationMember does not expose 'userId' via $select — use displayName only
         let mut all_chats: Vec<serde_json::Value> = Vec::new();
         let mut chats_url = Some(format!(
             "{GRAPH_BASE}/me/chats?$top=50&$select=id,topic,chatType\
-             &$expand=members($select=displayName,userId)"
+             &$expand=members($select=displayName,email)"
         ));
         let mut pages = 0usize;
         while let Some(url) = chats_url {
@@ -451,7 +452,7 @@ impl SourceReader for TeamsMessagesReader {
         // For 1:1 chats, fetch the other participant's name to include in body.
         // This allows Claude to find messages by the other person's name.
         let chat_info = {
-            let members_url = format!("{GRAPH_BASE}/me/chats/{chat_id}?$select=id,topic,chatType&$expand=members($select=displayName,userId)");
+            let members_url = format!("{GRAPH_BASE}/me/chats/{chat_id}?$select=id,topic,chatType&$expand=members($select=displayName,email)");
             graph_get(&token, &members_url).await.ok()
         };
         let chat_type = chat_info
