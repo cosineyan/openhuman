@@ -278,17 +278,10 @@ def auth_refresh(ctx, as_json):
             except Exception as e:
                 errors.append(f'sharepoint: {e}')
 
-        # Refresh graph_chat (Outlook Web token with Chat.Read scope).
-        # If the cached token is expired and can't be refreshed via existing tab,
-        # fall back to full re-extraction from Outlook tab (same as auth login).
-        try:
-            ensure_chat_graph_token(force=True)
-        except Exception:
-            # graph_chat could not be refreshed from existing tab — Outlook's
-            # MSAL cache has expired. Re-extract from Outlook tab which triggers
-            # a fresh page load and MSAL token acquisition.
+        # Refresh graph_chat only if expired or expiring soon — not unconditionally.
+        # Opening a foreground Outlook tab every refresh poll is very disruptive.
+        if _needs_refresh('graph_chat'):
             try:
-                extract_tokens_from_chrome()
                 ensure_chat_graph_token(force=True)
             except Exception as e:
                 errors.append(f'graph_chat: {e}')
