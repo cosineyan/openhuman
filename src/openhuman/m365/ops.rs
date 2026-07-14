@@ -227,7 +227,8 @@ pub async fn token_status(config: &Config) -> Result<Value> {
     let should_refresh = needs_refresh("rest")
         || needs_refresh("graph")
         || needs_refresh("teams")
-        || needs_refresh("sharepoint");
+        || needs_refresh("sharepoint")
+        || needs_refresh("graph_chat");
 
     if should_refresh {
         // 60-second cooldown: if a refresh completed recently, skip spawning another.
@@ -240,7 +241,10 @@ pub async fn token_status(config: &Config) -> Result<Value> {
             .as_secs();
         let last = REFRESH_LAST_COMPLETED_SECS.load(Ordering::SeqCst);
         if last > 0 && now_secs.saturating_sub(last) < 60 {
-            log::debug!("[m365] refresh cooldown active ({}s ago), skipping", now_secs - last);
+            log::debug!(
+                "[m365] refresh cooldown active ({}s ago), skipping",
+                now_secs - last
+            );
         } else if REFRESH_IN_FLIGHT
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .is_ok()

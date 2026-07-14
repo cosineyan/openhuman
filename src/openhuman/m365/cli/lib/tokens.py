@@ -737,6 +737,9 @@ def ensure_chat_graph_token(force=False):
     The token is extracted from an Outlook Web foreground tab (appid 9199bf20).
     Foreground tabs trigger SAP SSO silent re-auth and MSAL token acquisition.
     Background tabs are throttled by Chrome and SSO does not trigger.
+
+    Fast path: if the regular 'graph' token (same appid, includes Chat.Read)
+    is already valid, use it directly instead of opening a new tab.
     """
     tokens = load_tokens()
     entry = tokens.get('graph_chat')
@@ -748,6 +751,16 @@ def ensure_chat_graph_token(force=False):
         t['graph_chat'] = {'token': graph_entry['token'], 'expiresOn': graph_entry['expiresOn']}
         save_tokens(t)
         return graph_entry['token']
+
+    # Fast path: the regular 'graph' token comes from the same Outlook Web appid
+    # (9199bf20) and includes Chat.Read scope. If it's valid, reuse it directly
+    # without opening a new tab — saves ~5-45 seconds per refresh cycle.
+    tokens = load_tokens()
+    graph_entry = tokens.get('graph') or {}
+    now = int(time.time())
+    if graph_entry.get('token') and graph_entry.get('expiresOn', 0) > now + 30:
+        dlog(f'ensure_chat_graph_token: reusing valid graph token as graph_chat (fast path)')
+        return _save_graph_chat(graph_entry)
 
     def _try_extract_from(session_id):
         data = extract_from_session(session_id)
