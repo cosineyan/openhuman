@@ -147,7 +147,7 @@ impl SourceReader for OutlookMailReader {
         let token = read_graph_token(config)?;
         let url = format!(
             "{GRAPH_BASE}/me/messages/{item_id}\
-             ?$select=id,subject,body,from,toRecipients,receivedDateTime"
+             ?$select=id,subject,body,from,toRecipients,ccRecipients,receivedDateTime"
         );
         let msg = graph_get(&token, &url).await?;
 
@@ -155,7 +155,20 @@ impl SourceReader for OutlookMailReader {
             .as_str()
             .unwrap_or("(no subject)")
             .to_string();
-        let from = msg["from"]["emailAddress"]["address"]
+
+        // Format: "Display Name <email@example.com>" when name is available
+        let format_addr = |addr: &serde_json::Value| -> String {
+            let email = addr["emailAddress"]["address"].as_str().unwrap_or("").to_string();
+            let name = addr["emailAddress"]["name"].as_str().unwrap_or("").to_string();
+            if name.is_empty() || name == email {
+                email
+            } else {
+                format!("{name} <{email}>")
+            }
+        };
+
+        let from = format_addr(&msg["from"]);
+        let from_email = msg["from"]["emailAddress"]["address"]
             .as_str()
             .unwrap_or("")
             .to_string();
@@ -168,14 +181,46 @@ impl SourceReader for OutlookMailReader {
             ContentType::Plaintext
         };
 
+        // Build To: list (up to 5 recipients to keep prefix concise)
+        let to_list: Vec<String> = msg["toRecipients"]
+            .as_array()
+            .unwrap_or(&vec![])
+            .iter()
+            .take(5)
+            .map(format_addr)
+            .collect();
+        let to_str = if to_list.is_empty() {
+            String::new()
+        } else {
+            format!(" [To: {}]", to_list.join(", "))
+        };
+
+        // Build CC: list (up to 3)
+        let cc_list: Vec<String> = msg["ccRecipients"]
+            .as_array()
+            .unwrap_or(&vec![])
+            .iter()
+            .take(3)
+            .map(format_addr)
+            .collect();
+        let cc_str = if cc_list.is_empty() {
+            String::new()
+        } else {
+            format!(" [CC: {}]", cc_list.join(", "))
+        };
+
         Ok(SourceContent {
             id: item_id.to_string(),
             title: subject.clone(),
-            // Prefix body with metadata so Claude can identify sender/date directly.
-            body: format!("[Subject: {subject}] [From: {from}] [Date: {received}]\n{body_content}"),
+            body: format!(
+                "[Subject: {subject}] [From: {from}] [Date: {received}]{to_str}{cc_str}\n{body_content}"
+            ),
             content_type,
             metadata: serde_json::json!({
-                "from": from,
+                "from": from_email,
+                "from_display": from,
+                "to": to_list,
+                "cc": cc_list,
                 "receivedDateTime": received,
                 "source": "outlook_mail",
             }),
@@ -452,7 +497,9 @@ impl SourceReader for TeamsMessagesReader {
         // For 1:1 chats, fetch the other participant's name to include in body.
         // This allows Claude to find messages by the other person's name.
         let chat_info = {
-            let members_url = format!("{GRAPH_BASE}/me/chats/{chat_id}?$select=id,topic,chatType&$expand=members");
+            let members_url = format!(
+                "{GRAPH_BASE}/me/chats/{chat_id}?$select=id,topic,chatType&$expand=members"
+            );
             graph_get(&token, &members_url).await.ok()
         };
         let chat_type = chat_info
