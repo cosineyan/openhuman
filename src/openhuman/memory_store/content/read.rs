@@ -230,6 +230,16 @@ pub fn read_chunk_body(
     })?;
     let (rel_path, expected_sha256) = pointers;
     if rel_path.is_empty() {
+        // Email chunks from the M365 reader have no content_path (body is not
+        // written to a separate file) and no raw_refs (not stored via the raw
+        // archive path). Fall back to the `content` column which holds up to
+        // 500 chars of inline text — sufficient for entity extraction.
+        use crate::openhuman::memory_store::chunks::store::get_chunk_content_inline;
+        if let Ok(Some(inline)) = get_chunk_content_inline(config, chunk_id) {
+            if !inline.is_empty() {
+                return Ok(inline);
+            }
+        }
         return Err(anyhow::anyhow!(
             "[content_store::read] empty content_path and no raw_refs for chunk_id={} \
              — chunk has no resolvable body source",

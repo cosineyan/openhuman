@@ -595,6 +595,21 @@ const MAX_FETCH_BATCH: usize = 500;
 ///
 /// Reuses [`row_to_chunk`] so decoding stays bit-identical to the
 /// per-row helper — no risk of decoder drift.
+
+/// Return the inline `content` column value for a chunk — used as a fallback
+/// body source for chunks (e.g. email) that have no `content_path` and no `raw_refs`.
+pub fn get_chunk_content_inline(config: &Config, chunk_id: &str) -> Result<Option<String>> {
+    with_connection(config, |conn| {
+        Ok(conn.query_row(
+            "SELECT content FROM mem_tree_chunks WHERE id = ?1",
+            [chunk_id],
+            |r| r.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|e| anyhow::anyhow!(e))?)
+    })
+}
+
 pub fn get_chunks_batch(config: &Config, chunk_ids: &[String]) -> Result<HashMap<String, Chunk>> {
     if chunk_ids.is_empty() {
         return Ok(HashMap::new());
