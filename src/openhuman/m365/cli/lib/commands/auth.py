@@ -232,6 +232,19 @@ def auth_login_watch(ctx, session_id, timeout_sec, as_json):
 @click.pass_context
 def auth_refresh(ctx, as_json):
     """Re-acquire tokens that are expired or expiring within 5 minutes."""
+    import fcntl
+    # File lock: prevent concurrent auth refresh processes (UI polls every 5s
+    # when a token is expired, which would spawn multiple refresh subprocesses).
+    lock_path = os.path.join(CONFIG_DIR, 'refresh.lock')
+    try:
+        lock_fd = open(lock_path, 'w')
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        # Another refresh is already running — return current status immediately
+        st = token_status()
+        if as_json:
+            ctx.obj['out']({'ok': True, 'skipped': True, **st})
+        return
     try:
         cached = load_tokens()
 
@@ -308,6 +321,12 @@ def auth_refresh(ctx, as_json):
                     ctx.obj['text'](f'Warning: {err}')
     except Exception as e:
         ctx.obj['die'](str(e))
+    finally:
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            lock_fd.close()
+        except Exception:
+            pass
 
 
 @auth.command('logout')
