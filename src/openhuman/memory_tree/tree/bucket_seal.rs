@@ -917,9 +917,28 @@ fn hydrate_leaf_inputs(config: &Config, chunk_ids: &[String]) -> Result<Vec<Summ
         // For pre-MD-migration chunks (no content_path recorded) this call
         // returns Err; callers that want to handle legacy rows should check
         // content_path presence before calling hydrate_inputs.
-        let body = content_read::read_chunk_body(config, id).with_context(|| {
-            format!("[tree::bucket_seal] hydrate_leaf_inputs: read body for chunk {id}")
-        })?;
+        let body = match content_read::read_chunk_body(config, id) {
+            Ok(b) => b,
+            Err(e) => {
+                let msg = e.to_string();
+                // sha256 mismatch means the chunk file on disk does not match the
+                // DB record — typically caused by a re-sync that updated the content
+                // but left a stale file, or an interrupted write. Retrying won't fix
+                // this; mark as unrecoverable so it doesn't hold degraded status.
+                if msg.contains("sha256 mismatch") {
+                    use crate::openhuman::memory_tree::health::{FailureCode, PipelineFailure};
+                    return Err(anyhow::Error::new(PipelineFailure::new(
+                        FailureCode::EmptyInputRefused,
+                    ))
+                    .context(format!(
+                        "[tree::bucket_seal] hydrate_leaf_inputs: read body for chunk {id}: {msg}"
+                    )));
+                }
+                return Err(e.context(format!(
+                    "[tree::bucket_seal] hydrate_leaf_inputs: read body for chunk {id}"
+                )));
+            }
+        };
         out.push(SummaryInput {
             id: chunk.id.clone(),
             content: body,
