@@ -616,7 +616,7 @@ const Conversations = ({
   const armSilenceTimer = (threadId: string) => {
     clearSilenceTimer(threadId);
     const timeout = setTimeout(() => {
-      debug(`armSilenceTimer: no inference signal for 120s — clearing runtime (${threadId})`);
+      debug(`armSilenceTimer: no inference signal for 300s — clearing runtime (${threadId})`);
       setSendError(chatSendError('safety_timeout', t('chat.safetyTimeout')));
       dispatch(clearRuntimeForThread({ threadId }));
       dispatch(clearThreadInferenceActive(threadId));
@@ -627,7 +627,7 @@ const Conversations = ({
       turnSignatureByThreadRef.current.delete(threadId);
       pendingSendsRef.current.delete(threadId);
       removePendingSendingThread(threadId);
-    }, 120_000);
+    }, 300_000); // 5 minutes — claude-code needs extra time for session save after streaming
     sendingTimeoutsRef.current.set(threadId, timeout);
   };
 
