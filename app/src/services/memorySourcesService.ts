@@ -151,6 +151,7 @@ export interface SourceStatus {
   chunks_synced: number;
   chunks_pending: number;
   last_chunk_at_ms: number | null;
+  last_sync_at_ms: number | null;
   freshness: FreshnessLabel;
 }
 

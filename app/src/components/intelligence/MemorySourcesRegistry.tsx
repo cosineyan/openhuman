@@ -731,7 +731,8 @@ function SourceRow({
   const icon = SOURCE_KIND_ICONS[source.kind] ?? '📄';
   const kindLabel = t(SOURCE_KIND_LABEL_KEYS[source.kind] ?? source.kind);
   const detail = sourceDetail(source);
-  const lastSync = status ? relativeTimestamp(status.last_chunk_at_ms, t) : null;
+  const lastChunk = status ? relativeTimestamp(status.last_chunk_at_ms, t) : null;
+  const lastSyncTime = status ? relativeTimestamp(status.last_sync_at_ms, t) : null;
 
   return (
     <li className="flex flex-col gap-2 py-3" data-testid={`memory-source-row-${source.kind}`}>
@@ -812,9 +813,14 @@ function SourceRow({
                 <span>
                   {status.chunks_synced.toLocaleString()} {t('sync.chunks')}
                 </span>
-                {lastSync && (
+                {lastSyncTime && (
                   <span>
-                    {t('sync.lastChunk')} {lastSync}
+                    {t('sync.lastSync')} {lastSyncTime}
+                  </span>
+                )}
+                {lastChunk && (
+                  <span>
+                    {t('sync.lastChunk')} {lastChunk}
                   </span>
                 )}
                 {status.chunks_pending > 0 && (

@@ -46,6 +46,7 @@ pub struct SourceStatus {
     pub chunks_synced: u64,
     pub chunks_pending: u64,
     pub last_chunk_at_ms: Option<i64>,
+    pub last_sync_at_ms: Option<i64>,
     pub freshness: FreshnessLabel,
 }
 
@@ -112,17 +113,15 @@ pub async fn source_status(
 
             let now_ms = chrono::Utc::now().timestamp_millis();
 
-            // Prefer the last successful sync time from the audit log over the
-            // last chunk timestamp. When a source syncs successfully but finds
-            // no new items (e.g. calendar with no new events), the chunk
-            // timestamp stays old but the sync itself just ran — show the sync
-            // time so the UI doesn't mislead users into thinking sync is stale.
+            // last_chunk_at_ms = last time a new chunk was saved (actual content)
+            // last_sync_at_ms  = last time sync ran successfully (even if no new items)
             let display_ts = last_sync_ms.or(last_ts);
             Ok(SourceStatus {
                 source_id: source_clone.id.clone(),
                 chunks_synced: synced.max(0) as u64,
                 chunks_pending: pending.max(0) as u64,
-                last_chunk_at_ms: display_ts,
+                last_chunk_at_ms: last_ts,
+                last_sync_at_ms: display_ts,
                 freshness: FreshnessLabel::from_age_ms(display_ts, now_ms),
             })
         })
@@ -150,6 +149,7 @@ pub async fn status_list(config: &Config) -> Result<Vec<SourceStatus>, String> {
                     chunks_synced: 0,
                     chunks_pending: 0,
                     last_chunk_at_ms: None,
+                    last_sync_at_ms: None,
                     freshness: FreshnessLabel::Idle,
                 });
             }
