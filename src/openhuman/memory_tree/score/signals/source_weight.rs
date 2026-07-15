@@ -42,6 +42,7 @@ pub fn score(meta: &Metadata) -> f32 {
     match meta.source_kind {
         SourceKind::Email => 0.75,
         SourceKind::Document => 0.7,
+        SourceKind::Transcript => 0.85, // Meeting transcripts are high-signal
         SourceKind::Chat => 0.5,
     }
 }

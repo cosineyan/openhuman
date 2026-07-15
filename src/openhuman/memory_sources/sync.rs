@@ -394,7 +394,7 @@ async fn sync_items_individually(
                             crate::openhuman::memory_store::chunks::types::SourceKind::Document,
                         ),
                         SourceKind::TeamsTranscript => Some(
-                            crate::openhuman::memory_store::chunks::types::SourceKind::Document,
+                            crate::openhuman::memory_store::chunks::types::SourceKind::Transcript,
                         ),
                         _ => None,
                     },

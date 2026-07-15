@@ -82,7 +82,7 @@ pub async fn ingest_rpc(
                 .await
                 .map_err(|e| format!("ingest: {e}"))?
         }
-        SourceKind::Document => {
+        SourceKind::Document | SourceKind::Transcript => {
             let doc: DocumentInput = serde_json::from_value(payload)
                 .map_err(|e| format!("invalid document payload: {e}"))?;
             do_ingest_document(config, &source_id, &owner, tags, doc)

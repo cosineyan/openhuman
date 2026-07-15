@@ -26,6 +26,8 @@ pub enum SourceKind {
     Email,
     /// Standalone document (Notion page, Drive doc, meeting note, uploaded file…).
     Document,
+    /// Meeting transcript (Teams, Zoom, etc.) with speaker breakdown and AI summary.
+    Transcript,
 }
 
 impl SourceKind {
@@ -35,6 +37,7 @@ impl SourceKind {
             SourceKind::Chat => "chat",
             SourceKind::Email => "email",
             SourceKind::Document => "document",
+            SourceKind::Transcript => "transcript",
         }
     }
 
@@ -44,6 +47,7 @@ impl SourceKind {
             "chat" => Ok(SourceKind::Chat),
             "email" => Ok(SourceKind::Email),
             "document" => Ok(SourceKind::Document),
+            "transcript" => Ok(SourceKind::Transcript),
             other => Err(format!("unknown source kind: {other}")),
         }
     }
