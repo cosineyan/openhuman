@@ -156,7 +156,50 @@ impl SourceReader for OutlookMailReader {
             .unwrap_or("(no subject)")
             .to_string();
 
-        // Format: "Display Name <email@example.com>" when name is available
+        // Helper: extract name+email pair from an address node
+        let format_participant = |addr: &serde_json::Value| -> serde_json::Value {
+            let email = addr["emailAddress"]["address"]
+                .as_str()
+                .unwrap_or("")
+                .to_string();
+            let name = addr["emailAddress"]["name"]
+                .as_str()
+                .unwrap_or("")
+                .to_string();
+            serde_json::json!({"name": name, "email": email})
+        };
+
+        // Build participants: From + To + CC unified list, deduplicated by email
+        let mut seen_emails = std::collections::HashSet::new();
+        let mut participants: Vec<serde_json::Value> = Vec::new();
+
+        // From
+        let from_p = format_participant(&msg["from"]);
+        if let Some(e) = from_p["email"].as_str().filter(|e| !e.is_empty()) {
+            if seen_emails.insert(e.to_lowercase()) {
+                participants.push(from_p);
+            }
+        }
+        // To
+        for addr in msg["toRecipients"].as_array().unwrap_or(&vec![]) {
+            let p = format_participant(addr);
+            if let Some(e) = p["email"].as_str().filter(|e| !e.is_empty()) {
+                if seen_emails.insert(e.to_lowercase()) {
+                    participants.push(p);
+                }
+            }
+        }
+        // CC
+        for addr in msg["ccRecipients"].as_array().unwrap_or(&vec![]) {
+            let p = format_participant(addr);
+            if let Some(e) = p["email"].as_str().filter(|e| !e.is_empty()) {
+                if seen_emails.insert(e.to_lowercase()) {
+                    participants.push(p);
+                }
+            }
+        }
+
+        // Also build the content-prefix lists as before
         let format_addr = |addr: &serde_json::Value| -> String {
             let email = addr["emailAddress"]["address"]
                 .as_str()
@@ -213,11 +256,31 @@ impl SourceReader for OutlookMailReader {
             format!(" [CC: {}]", cc_list.join(", "))
         };
 
+        // Build [Participants: ...] prefix for entity extraction
+        // Format: "Name <email>" for each unique participant
+        let participants_str = if participants.is_empty() {
+            String::new()
+        } else {
+            let parts: Vec<String> = participants
+                .iter()
+                .map(|p| {
+                    let name = p["name"].as_str().unwrap_or("");
+                    let email = p["email"].as_str().unwrap_or("");
+                    if name.is_empty() || name == email {
+                        email.to_string()
+                    } else {
+                        format!("{name} <{email}>")
+                    }
+                })
+                .collect();
+            format!(" [Participants: {}]", parts.join(", "))
+        };
+
         Ok(SourceContent {
             id: item_id.to_string(),
             title: subject.clone(),
             body: format!(
-                "[Subject: {subject}] [From: {from}] [Date: {received}]{to_str}{cc_str}\n{body_content}"
+                "[Subject: {subject}] [From: {from}] [Date: {received}]{to_str}{cc_str}{participants_str}\n{body_content}"
             ),
             content_type,
             metadata: serde_json::json!({
@@ -225,6 +288,7 @@ impl SourceReader for OutlookMailReader {
                 "from_display": from,
                 "to": to_list,
                 "cc": cc_list,
+                "participants": participants,
                 "receivedDateTime": received,
                 "source": "outlook_mail",
             }),
