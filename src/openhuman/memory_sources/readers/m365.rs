@@ -811,29 +811,49 @@ impl SourceReader for TeamsTranscriptReader {
         let script = crate::openhuman::m365::ops::resolve_m365_cli_script()
             .ok_or("m365_cli.py not found")?;
 
-        // Get AI summary
-        let summary_output = tokio::process::Command::new("python3")
-            .arg(&script)
-            .args(["meetings", "recap", &thread_id, "--summary", "--json"])
-            .env("M365_TOKEN_FILE", token_file.to_string_lossy().as_ref())
-            .output()
-            .await
-            .map_err(|e| format!("spawn meetings recap --summary: {e}"))?;
+        // Get AI summary (best-effort — substrate token may be expired)
+        let summary_json = match tokio::time::timeout(
+            std::time::Duration::from_secs(120),
+            tokio::process::Command::new("python3")
+                .arg(&script)
+                .args(["meetings", "recap", &thread_id, "--summary", "--json"])
+                .env("M365_TOKEN_FILE", token_file.to_string_lossy().as_ref())
+                .output(),
+        )
+        .await
+        {
+            Ok(Ok(out)) => serde_json::from_slice::<serde_json::Value>(&out.stdout)
+                .unwrap_or(serde_json::Value::Null),
+            Ok(Err(e)) => {
+                log::warn!("[teams_transcript] meetings recap --summary failed: {e}");
+                serde_json::Value::Null
+            }
+            Err(_) => {
+                log::warn!("[teams_transcript] meetings recap --summary timed out");
+                serde_json::Value::Null
+            }
+        };
 
-        let summary_json: serde_json::Value =
-            serde_json::from_slice(&summary_output.stdout).unwrap_or(serde_json::Value::Null);
-
-        // Get transcript
-        let transcript_output = tokio::process::Command::new("python3")
-            .arg(&script)
-            .args(["meetings", "recap", &thread_id, "--json"])
-            .env("M365_TOKEN_FILE", token_file.to_string_lossy().as_ref())
-            .output()
-            .await
-            .map_err(|e| format!("spawn meetings recap: {e}"))?;
-
-        let transcript_json: serde_json::Value =
-            serde_json::from_slice(&transcript_output.stdout).unwrap_or(serde_json::Value::Null);
+        // Get transcript (required — skip if unavailable)
+        let transcript_json = match tokio::time::timeout(
+            std::time::Duration::from_secs(120),
+            tokio::process::Command::new("python3")
+                .arg(&script)
+                .args(["meetings", "recap", &thread_id, "--json"])
+                .env("M365_TOKEN_FILE", token_file.to_string_lossy().as_ref())
+                .output(),
+        )
+        .await
+        {
+            Ok(Ok(out)) => serde_json::from_slice::<serde_json::Value>(&out.stdout)
+                .unwrap_or(serde_json::Value::Null),
+            Ok(Err(e)) => {
+                return Err(format!("meetings recap transcript failed: {e}"));
+            }
+            Err(_) => {
+                return Err("meetings recap transcript timed out after 120s".to_string());
+            }
+        };
 
         // Step 3: build content body
         let mut body = format!("[Meeting: {subject}] [Date: {start_dt}]\n\n");
@@ -914,10 +934,8 @@ impl SourceReader for TeamsTranscriptReader {
                         } else {
                             0.0
                         };
-                        let parts: Vec<u64> = s[..dot]
-                            .split(':')
-                            .filter_map(|p| p.parse().ok())
-                            .collect();
+                        let parts: Vec<u64> =
+                            s[..dot].split(':').filter_map(|p| p.parse().ok()).collect();
                         let base = match parts.len() {
                             3 => parts[0] * 3600 + parts[1] * 60 + parts[2],
                             2 => parts[0] * 60 + parts[1],
@@ -928,8 +946,7 @@ impl SourceReader for TeamsTranscriptReader {
                     }
 
                     for entry in entries {
-                        let speaker =
-                            entry.get("speaker").and_then(|v| v.as_str()).unwrap_or("?");
+                        let speaker = entry.get("speaker").and_then(|v| v.as_str()).unwrap_or("?");
                         let text = entry.get("text").and_then(|v| v.as_str()).unwrap_or("");
                         let start_off = entry
                             .get("startOffset")
@@ -944,7 +961,9 @@ impl SourceReader for TeamsTranscriptReader {
                             (parse_offset_secs(end_off) - parse_offset_secs(start_off)).max(0.0);
                         let word_count = text.split_whitespace().count() as u32;
 
-                        let stat = speaker_stats.entry(speaker.to_string()).or_insert((0.0, 0, 0));
+                        let stat = speaker_stats
+                            .entry(speaker.to_string())
+                            .or_insert((0.0, 0, 0));
                         stat.0 += duration;
                         stat.1 += 1;
                         stat.2 += word_count;
