@@ -89,7 +89,7 @@ pub fn chunk_markdown(input: &ChunkerInput, opts: &ChunkerOptions) -> Vec<Chunk>
     let units: Vec<String> = match input.source_kind {
         SourceKind::Chat => split_chat_messages(&input.markdown),
         SourceKind::Email => split_email_messages(&input.markdown),
-        SourceKind::Transcript | SourceKind::Document => {
+        SourceKind::Transcript | SourceKind::Document | SourceKind::Calendar => {
             // Transcript/Document: split by token budget (paragraph splitter).
             log::debug!(
                 "[memory_tree::chunker] document source_id_hash={} len={} — paragraph split",

@@ -28,6 +28,8 @@ pub enum SourceKind {
     Document,
     /// Meeting transcript (Teams, Zoom, etc.) with speaker breakdown and AI summary.
     Transcript,
+    /// Calendar event with time, attendees, and location.
+    Calendar,
 }
 
 impl SourceKind {
@@ -38,6 +40,7 @@ impl SourceKind {
             SourceKind::Email => "email",
             SourceKind::Document => "document",
             SourceKind::Transcript => "transcript",
+            SourceKind::Calendar => "calendar",
         }
     }
 
@@ -48,6 +51,7 @@ impl SourceKind {
             "email" => Ok(SourceKind::Email),
             "document" => Ok(SourceKind::Document),
             "transcript" => Ok(SourceKind::Transcript),
+            "calendar" => Ok(SourceKind::Calendar),
             other => Err(format!("unknown source kind: {other}")),
         }
     }

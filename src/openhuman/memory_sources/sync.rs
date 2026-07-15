@@ -391,7 +391,7 @@ async fn sync_items_individually(
                             Some(crate::openhuman::memory_store::chunks::types::SourceKind::Chat)
                         }
                         SourceKind::OutlookCalendar => Some(
-                            crate::openhuman::memory_store::chunks::types::SourceKind::Document,
+                            crate::openhuman::memory_store::chunks::types::SourceKind::Calendar,
                         ),
                         SourceKind::TeamsTranscript => Some(
                             crate::openhuman::memory_store::chunks::types::SourceKind::Transcript,

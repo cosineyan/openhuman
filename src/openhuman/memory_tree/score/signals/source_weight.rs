@@ -42,7 +42,8 @@ pub fn score(meta: &Metadata) -> f32 {
     match meta.source_kind {
         SourceKind::Email => 0.75,
         SourceKind::Document => 0.7,
-        SourceKind::Transcript => 0.85, // Meeting transcripts are high-signal
+        SourceKind::Transcript => 0.85,
+        SourceKind::Calendar => 0.8, // Calendar events are structured and time-indexed
         SourceKind::Chat => 0.5,
     }
 }
