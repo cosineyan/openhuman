@@ -504,7 +504,8 @@ impl SourceReader for TeamsMessagesReader {
             };
             let msgs_url = format!(
                 "{GRAPH_BASE}/me/chats/{chat_id}/messages\
-                 ?$top={messages_per_chat}&$select=id,body,from,createdDateTime"
+                 ?$top={messages_per_chat}&$select=id,body,from,createdDateTime\
+                 &$orderby=createdDateTime desc"
             );
             match graph_get(&token, &msgs_url).await {
                 Ok(msgs_data) => {
