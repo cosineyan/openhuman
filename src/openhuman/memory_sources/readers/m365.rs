@@ -158,8 +158,14 @@ impl SourceReader for OutlookMailReader {
 
         // Format: "Display Name <email@example.com>" when name is available
         let format_addr = |addr: &serde_json::Value| -> String {
-            let email = addr["emailAddress"]["address"].as_str().unwrap_or("").to_string();
-            let name = addr["emailAddress"]["name"].as_str().unwrap_or("").to_string();
+            let email = addr["emailAddress"]["address"]
+                .as_str()
+                .unwrap_or("")
+                .to_string();
+            let name = addr["emailAddress"]["name"]
+                .as_str()
+                .unwrap_or("")
+                .to_string();
             if name.is_empty() || name == email {
                 email
             } else {
@@ -181,12 +187,11 @@ impl SourceReader for OutlookMailReader {
             ContentType::Plaintext
         };
 
-        // Build To: list (up to 5 recipients to keep prefix concise)
+        // Build To: list (all recipients)
         let to_list: Vec<String> = msg["toRecipients"]
             .as_array()
             .unwrap_or(&vec![])
             .iter()
-            .take(5)
             .map(format_addr)
             .collect();
         let to_str = if to_list.is_empty() {
@@ -195,12 +200,11 @@ impl SourceReader for OutlookMailReader {
             format!(" [To: {}]", to_list.join(", "))
         };
 
-        // Build CC: list (up to 3)
+        // Build CC: list (all recipients)
         let cc_list: Vec<String> = msg["ccRecipients"]
             .as_array()
             .unwrap_or(&vec![])
             .iter()
-            .take(3)
             .map(format_addr)
             .collect();
         let cc_str = if cc_list.is_empty() {
