@@ -12,7 +12,8 @@ from ..tokens import (ensure_token, ensure_teams_token, ensure_graph_token,
                       check_github_accessible,
                       find_outlook_session, open_outlook_tab,
                       extract_from_session, close_tab,
-                      ensure_chat_graph_token)
+                      ensure_chat_graph_token,
+                      ensure_substrate_token, ensure_csa_token)
 
 _DEBUG_LOG = os.path.join(os.path.expanduser('~'), '.m365-cli', 'debug.log')
 
@@ -298,6 +299,20 @@ def auth_refresh(ctx, as_json):
                 ensure_chat_graph_token(force=True)
             except Exception as e:
                 errors.append(f'graph_chat: {e}')
+
+        # Refresh substrate (Copilot AI summary) and CSA tokens if needed.
+        # Both use Teams refresh token exchange — cheap, no UI interaction required.
+        if _needs_refresh('substrate'):
+            try:
+                ensure_substrate_token()
+            except Exception as e:
+                errors.append(f'substrate: {e}')
+
+        if _needs_refresh('csa'):
+            try:
+                ensure_csa_token()
+            except Exception as e:
+                errors.append(f'csa: {e}')
 
         status = token_status()
         rest_ok = status.get('rest', {}).get('valid', False)
