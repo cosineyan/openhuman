@@ -351,30 +351,30 @@ async fn sync_items_individually(
                 _ => SYNC_CONCURRENCY,
             },
             |(_, item)| {
-            let config = config.clone();
-            let source_kind = source_kind.clone();
-            let reader = readers::reader_for(&source_kind);
-            let source_clone = source.clone();
-            let ingested = Arc::clone(&ingested);
-            let processed = Arc::clone(&processed);
-            let source_id = source_id.clone();
-            let kind_str = kind_str.clone();
+                let config = config.clone();
+                let source_kind = source_kind.clone();
+                let reader = readers::reader_for(&source_kind);
+                let source_clone = source.clone();
+                let ingested = Arc::clone(&ingested);
+                let processed = Arc::clone(&processed);
+                let source_id = source_id.clone();
+                let kind_str = kind_str.clone();
 
-            async move {
-                let content = match reader.read_item(&source_clone, &item.id, &config).await {
-                    Ok(c) => c,
-                    Err(e) => {
-                        tracing::warn!(
-                            item_id = %item.id,
-                            error = %e,
-                            "[memory_sources:sync] skipping item — read failed"
-                        );
-                        processed.fetch_add(1, Ordering::Relaxed);
-                        return;
-                    }
-                };
+                async move {
+                    let content = match reader.read_item(&source_clone, &item.id, &config).await {
+                        Ok(c) => c,
+                        Err(e) => {
+                            tracing::warn!(
+                                item_id = %item.id,
+                                error = %e,
+                                "[memory_sources:sync] skipping item — read failed"
+                            );
+                            processed.fetch_add(1, Ordering::Relaxed);
+                            return;
+                        }
+                    };
 
-                let doc = DocumentInput {
+                    let doc = DocumentInput {
                     provider: format!("memory_sources:{kind_str}"),
                     title: content.title.clone(),
                     // Strip HTML tags so the chunker and LLM see plain text instead
@@ -389,7 +389,10 @@ async fn sync_items_individually(
                     } else {
                         content.body.clone()
                     },
-                    modified_at: chrono::Utc::now(),
+                    modified_at: item
+                        .updated_at_ms
+                        .and_then(|ms| chrono::DateTime::from_timestamp_millis(ms))
+                        .unwrap_or_else(chrono::Utc::now),
                     source_ref: Some(format!("{source_id}:{}", item.id)),
                     source_kind_override: match source_kind {
                         SourceKind::OutlookMail => {
@@ -408,47 +411,48 @@ async fn sync_items_individually(
                     },
                 };
 
-                let composite_source_id = format!("mem_src:{source_id}:{}", item.id);
-                let tags = vec!["memory_sources".to_string(), kind_str.clone()];
+                    let composite_source_id = format!("mem_src:{source_id}:{}", item.id);
+                    let tags = vec!["memory_sources".to_string(), kind_str.clone()];
 
-                match ingest_document_with_scope(
-                    &config,
-                    &composite_source_id,
-                    "user",
-                    tags,
-                    doc,
-                    None,
-                )
-                .await
-                {
-                    Ok(result) => {
-                        if !result.already_ingested {
-                            ingested.fetch_add(1, Ordering::Relaxed);
+                    match ingest_document_with_scope(
+                        &config,
+                        &composite_source_id,
+                        "user",
+                        tags,
+                        doc,
+                        None,
+                    )
+                    .await
+                    {
+                        Ok(result) => {
+                            if !result.already_ingested {
+                                ingested.fetch_add(1, Ordering::Relaxed);
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                item_id = %item.id,
+                                error = %e,
+                                "[memory_sources:sync] ingest failed for item"
+                            );
                         }
                     }
-                    Err(e) => {
-                        tracing::warn!(
-                            item_id = %item.id,
-                            error = %e,
-                            "[memory_sources:sync] ingest failed for item"
+
+                    let done = processed.fetch_add(1, Ordering::Relaxed) + 1;
+                    let new = ingested.load(Ordering::Relaxed);
+                    if done % 10 == 0 || done == total {
+                        emit_sync_stage(
+                            MemorySyncTrigger::Manual,
+                            MemorySyncStage::Ingesting,
+                            Some(&kind_str),
+                            Some(&source_id),
+                            Some(format!("{done}/{total} processed ({new} new)")),
+                            Some(&source_id),
                         );
                     }
                 }
-
-                let done = processed.fetch_add(1, Ordering::Relaxed) + 1;
-                let new = ingested.load(Ordering::Relaxed);
-                if done % 10 == 0 || done == total {
-                    emit_sync_stage(
-                        MemorySyncTrigger::Manual,
-                        MemorySyncStage::Ingesting,
-                        Some(&kind_str),
-                        Some(&source_id),
-                        Some(format!("{done}/{total} processed ({new} new)")),
-                        Some(&source_id),
-                    );
-                }
-            }
-        })
+            },
+        )
         .await;
 
     Ok(ingested.load(Ordering::Relaxed))
