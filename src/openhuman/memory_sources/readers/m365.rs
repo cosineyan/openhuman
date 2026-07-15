@@ -502,27 +502,44 @@ impl SourceReader for TeamsMessagesReader {
                     topic
                 }
             };
-            let msgs_url = format!(
+            // Fetch all messages within the sync window using pagination.
+            // We fetch newest-first and stop as soon as we hit a message older
+            // than the window — avoids pulling the full history of old chats.
+            // already_ingested dedup in sync.rs prevents double-storing on re-sync.
+            let mut msgs_url: Option<String> = Some(format!(
                 "{GRAPH_BASE}/me/chats/{chat_id}/messages\
-                 ?$top={messages_per_chat}&$select=id,body,from,createdDateTime\
+                 ?$top=50&$select=id,body,from,createdDateTime\
                  &$orderby=createdDateTime desc"
-            );
-            match graph_get(&token, &msgs_url).await {
-                Ok(msgs_data) => {
-                    if let Some(msgs) = msgs_data.get("value").and_then(|v| v.as_array()) {
-                        for msg in msgs {
+            ));
+            let mut page = 0usize;
+            let mut hit_window_end = false;
+            while let Some(url) = msgs_url {
+                if page >= 20 || hit_window_end {
+                    break; // safety cap: max 1000 messages per chat
+                }
+                match graph_get(&token, &url).await {
+                    Ok(msgs_data) => {
+                        let msgs = msgs_data
+                            .get("value")
+                            .and_then(|v| v.as_array())
+                            .cloned()
+                            .unwrap_or_default();
+                        for msg in &msgs {
                             let msg_id = msg["id"].as_str().unwrap_or("").to_string();
                             if msg_id.is_empty() {
                                 continue;
                             }
-                            let created = msg["createdDateTime"].as_str().unwrap_or("").to_string();
+                            let created =
+                                msg["createdDateTime"].as_str().unwrap_or("").to_string();
                             let ts = chrono::DateTime::parse_from_rfc3339(&created)
                                 .ok()
                                 .map(|dt| dt.timestamp_millis());
-                            // Skip messages older than sync window
                             if let Some(t) = ts {
                                 if t < since_ms {
-                                    continue;
+                                    // This message (and all following, since desc order)
+                                    // are outside the window — stop pagination.
+                                    hit_window_end = true;
+                                    break;
                                 }
                             }
                             let sender = msg["from"]["user"]["displayName"]
@@ -535,17 +552,29 @@ impl SourceReader for TeamsMessagesReader {
                                 updated_at_ms: ts,
                             });
                         }
+                        // Only continue to next page if there are more and we haven't
+                        // hit the window end
+                        msgs_url = if hit_window_end || msgs.len() < 50 {
+                            None
+                        } else {
+                            msgs_data
+                                .get("@odata.nextLink")
+                                .and_then(|v| v.as_str())
+                                .map(str::to_string)
+                        };
+                        page += 1;
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            chat_id = %chat_id,
+                            error = %e,
+                            "[memory_sources:teams] skipping chat messages"
+                        );
+                        break;
                     }
                 }
-                Err(e) => {
-                    tracing::warn!(
-                        chat_id = %chat_id,
-                        error = %e,
-                        "[memory_sources:teams] skipping chat messages"
-                    );
-                }
-            }
-        }
+            } // end while msgs_url
+        } // end for chat
 
         Ok(items)
     }
