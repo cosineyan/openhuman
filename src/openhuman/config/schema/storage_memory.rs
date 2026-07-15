@@ -357,6 +357,21 @@ pub struct MemoryTreeConfig {
     /// memory content will be sent to an external service.
     #[serde(default)]
     pub cloud_summarization_opt_in: bool,
+
+    /// Authority mapping: person-topic expertise that boosts chunk importance.
+    ///
+    /// Each entry defines a person (by email or display name) whose messages
+    /// about specific topics are considered more authoritative and get a score
+    /// boost during extraction. This affects both retrieval ranking and the
+    /// priority_authority tag added to matching chunks.
+    ///
+    /// Example in config.toml:
+    ///   [[memory_tree.authority]]
+    ///   person = "rob.rabe@sap.com"
+    ///   topics = ["product", "roadmap", "escalation", "engineering"]
+    ///   boost = 0.2
+    #[serde(default)]
+    pub authority: Vec<AuthorityEntry>,
 }
 
 /// Returns `None` so that existing installs that never opted into Phase 4
@@ -366,6 +381,30 @@ pub struct MemoryTreeConfig {
 /// in TOML or the `OPENHUMAN_MEMORY_EMBED_ENDPOINT` env var.
 fn default_memory_tree_embedding_endpoint() -> Option<String> {
     None
+}
+
+/// One entry in the authority mapping. Defines a person whose messages about
+/// specific topics are considered more authoritative.
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+pub struct AuthorityEntry {
+    /// Email address or display name fragment to match against the From field.
+    /// Examples: "rob.rabe@sap.com", "Rabe, Robert", "rabe"
+    pub person: String,
+
+    /// Topic keywords. If any of these appear in the chunk content or entity
+    /// topics, the boost is applied. Case-insensitive substring match.
+    /// Examples: ["product", "roadmap", "escalation"]
+    #[serde(default)]
+    pub topics: Vec<String>,
+
+    /// Score boost to add (0.0–1.0, clamped to 1.0 after addition).
+    /// Recommended: 0.15–0.25. Default: 0.2
+    #[serde(default = "default_authority_boost")]
+    pub boost: f32,
+}
+
+fn default_authority_boost() -> f32 {
+    0.2
 }
 
 fn default_memory_tree_embedding_model() -> Option<String> {
@@ -459,6 +498,7 @@ impl Default for MemoryTreeConfig {
             cloud_llm_model: default_cloud_llm_model(),
             smart_walk_model: None,
             cloud_summarization_opt_in: false,
+            authority: Vec::new(),
         }
     }
 }

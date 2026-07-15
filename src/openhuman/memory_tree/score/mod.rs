@@ -87,6 +87,8 @@ pub struct ScoringConfig {
     pub definite_keep_threshold: f32,
     /// Cheap-signals total ≤ this → drop without consulting LLM.
     pub definite_drop_threshold: f32,
+    /// Authority entries from config for approach B boost.
+    pub authority_entries: Vec<crate::openhuman::config::schema::AuthorityEntry>,
 }
 
 impl ScoringConfig {
@@ -99,6 +101,7 @@ impl ScoringConfig {
             llm_extractor: None,
             definite_keep_threshold: DEFAULT_DEFINITE_KEEP,
             definite_drop_threshold: DEFAULT_DEFINITE_DROP,
+            authority_entries: Vec::new(),
         }
     }
 
@@ -113,6 +116,7 @@ impl ScoringConfig {
             llm_extractor: Some(llm),
             definite_keep_threshold: DEFAULT_DEFINITE_KEEP,
             definite_drop_threshold: DEFAULT_DEFINITE_DROP,
+            authority_entries: Vec::new(),
         }
     }
 
@@ -147,6 +151,15 @@ impl ScoringConfig {
             model
         );
         Self::with_llm_extractor(Arc::new(extract::LlmEntityExtractor::new(cfg, provider)))
+            .with_authority(config.memory_tree.authority.clone())
+    }
+
+    fn with_authority(
+        mut self,
+        entries: Vec<crate::openhuman::config::schema::AuthorityEntry>,
+    ) -> Self {
+        self.authority_entries = entries;
+        self
     }
 }
 
@@ -272,6 +285,33 @@ pub async fn score_chunk(chunk: &Chunk, cfg: &ScoringConfig) -> Result<ScoreResu
         }
     }
 
+    // 4c. Approach A: Summary/decision content pattern boost.
+    // Detect high-credibility content patterns in the chunk prefix/body.
+    // These indicate the author is providing a structured summary or decision
+    // rather than casual chat, making the content more authoritative.
+    let summary_boost = detect_summary_pattern(&chunk.content);
+    if summary_boost > 0.0 {
+        let boosted = (total + summary_boost).min(1.0);
+        log::debug!(
+            "[memory::score] summary pattern boost chunk_id={} {:.3} -> {:.3}",
+            chunk.id, total, boosted
+        );
+        total = boosted;
+    }
+
+    // 4d. Approach B: Authority mapping boost.
+    // If the chunk's sender is in the authority list and the content matches
+    // their topics, apply their configured boost.
+    let authority_boost = detect_authority_boost(chunk, &cfg.authority_entries);
+    if authority_boost > 0.0 {
+        let boosted = (total + authority_boost).min(1.0);
+        log::debug!(
+            "[memory::score] authority boost chunk_id={} {:.3} -> {:.3}",
+            chunk.id, total, boosted
+        );
+        total = boosted;
+    }
+
     // 5. Admission gate. Source and interaction priors are deliberately
     // non-zero, so guard against very short entity-free chatter being kept by
     // metadata alone. Priority-tagged chunks bypass the tiny/entity-free
@@ -355,6 +395,7 @@ pub async fn score_chunks_fast(chunks: &[Chunk], cfg: &ScoringConfig) -> Result<
         llm_extractor: None,
         definite_keep_threshold: cfg.definite_keep_threshold,
         definite_drop_threshold: cfg.definite_drop_threshold,
+        authority_entries: cfg.authority_entries.clone(),
     };
     score_chunks(chunks, &fast_cfg).await
 }
@@ -437,6 +478,112 @@ fn score_row(result: &ScoreResult) -> store::ScoreRow {
         computed_at_ms: Utc::now().timestamp_millis(),
         llm_importance_reason: result.extracted.llm_importance_reason.clone(),
     }
+}
+
+/// Approach A: detect high-credibility content patterns.
+///
+/// Looks for structural indicators that suggest the author is providing
+/// a summary, decision, or authoritative statement rather than casual chat.
+/// Returns a boost amount (0.0 = no boost).
+fn detect_summary_pattern(content: &str) -> f32 {
+    let lower = content.to_lowercase();
+    // First 500 chars of content (the prefix line + start of body)
+    let head = &lower[..lower.len().min(500)];
+
+    // High-confidence summary/decision indicators (+0.2)
+    let strong_patterns = [
+        "in summary", "in conclusion", "to summarize", "决策:", "decision:",
+        "action items:", "以下是决策", "总结:", "结论是", "我们决定",
+        "it was decided", "agreed:", "resolution:", "summary:", "key decisions",
+        "action required", "please action", "next steps:", "下一步:",
+        "fyi:", "for your information", "heads up:", "important update",
+        "escalation:", "升级:", "紧急:", "urgent:",
+    ];
+
+    // Medium-confidence patterns (+0.1)
+    let medium_patterns = [
+        "1.", "- [ ]", "•", "→", // structured list indicators
+        "as discussed", "per our discussion", "following up",
+        "per meeting", "as agreed", "以下", "如下",
+    ];
+
+    let has_strong = strong_patterns.iter().any(|p| head.contains(p));
+    let has_medium = medium_patterns.iter().any(|p| head.contains(p));
+
+    // Bullet/numbered list: check for 3+ list items (strong signal of structured content)
+    let list_count = content.lines()
+        .filter(|l| {
+            let t = l.trim();
+            t.starts_with("- ") || t.starts_with("* ") || t.starts_with("• ")
+            || (t.len() > 2 && t.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false)
+                && t.chars().nth(1).map(|c| c == '.' || c == ')').unwrap_or(false))
+        })
+        .count();
+    let has_list = list_count >= 3;
+
+    if has_strong {
+        0.2
+    } else if has_medium || has_list {
+        0.1
+    } else {
+        0.0
+    }
+}
+
+/// Approach B: authority mapping boost.
+///
+/// If the chunk's sender (From: field) matches an authority entry and the
+/// content contains one of their topic keywords, apply the configured boost.
+fn detect_authority_boost(
+    chunk: &crate::openhuman::memory_store::chunks::types::Chunk,
+    authority_entries: &[crate::openhuman::config::schema::AuthorityEntry],
+) -> f32 {
+    if authority_entries.is_empty() {
+        return 0.0;
+    }
+
+    let content_lower = chunk.content.to_lowercase();
+
+    // Extract From: field from content prefix
+    let from_field = chunk.content.lines()
+        .next()
+        .and_then(|line| {
+            // Match [From: xxx] or [From: Name <email>]
+            let start = line.find("[From: ")?;
+            let rest = &line[start + 7..];
+            let end = rest.find(']')?;
+            Some(rest[..end].to_lowercase())
+        })
+        .unwrap_or_default();
+
+    let mut max_boost = 0.0f32;
+
+    for entry in authority_entries {
+        let person_lower = entry.person.to_lowercase();
+
+        // Check if this chunk is from the authority person
+        let is_from_authority = !from_field.is_empty()
+            && (from_field.contains(&person_lower) || person_lower.contains(&from_field));
+
+        if !is_from_authority {
+            continue;
+        }
+
+        // Check if content contains any of their topic keywords
+        if entry.topics.is_empty() {
+            // No topic restriction — boost all their messages
+            max_boost = max_boost.max(entry.boost);
+        } else {
+            let topic_match = entry.topics.iter().any(|t| {
+                content_lower.contains(&t.to_lowercase())
+            });
+            if topic_match {
+                max_boost = max_boost.max(entry.boost);
+            }
+        }
+    }
+
+    max_boost
 }
 
 #[cfg(test)]
