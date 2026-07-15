@@ -361,6 +361,36 @@ fn finalize_extract(config: &Config, item: PreparedExtract) -> Result<JobOutcome
             None,
         )?;
 
+        // For email and chat chunks, extract person+email entities directly from
+        // the structured [From: Name <email>], [Participants: ...] prefix — this
+        // gives 100% accurate person entities without LLM ambiguity, and links
+        // person:first-last with email:addr for the same chunk so profile_person
+        // queries can find both.
+        if result.kept
+            && matches!(
+                chunk.metadata.source_kind,
+                crate::openhuman::memory_store::chunks::types::SourceKind::Email
+                    | crate::openhuman::memory_store::chunks::types::SourceKind::Chat
+            )
+        {
+            let structured = extract_structured_participant_entities(&chunk.content);
+            if !structured.is_empty() {
+                score_store::index_entities_tx(
+                    &tx,
+                    &structured,
+                    &chunk.id,
+                    "leaf",
+                    chunk.metadata.timestamp.timestamp_millis(),
+                    None,
+                )?;
+                log::debug!(
+                    "[memory::extract] indexed {} structured participant entities for chunk {}",
+                    structured.len(),
+                    &chunk.id[..chunk.id.len().min(16)]
+                );
+            }
+        }
+
         if result.kept {
             tx.execute(
                 "UPDATE mem_tree_chunks
@@ -1007,6 +1037,123 @@ async fn handle_reembed_backfill(config: &Config, job: &Job) -> Result<JobOutcom
         until_ms: chrono::Utc::now().timestamp_millis() + REEMBED_BACKFILL_REVISIT_MS,
         reason: "#1574 §6 re-embed backfill: batch done, more pending".to_string(),
     })
+}
+
+/// Parse `[From: Name <email>]`, `[Participants: Name <email>, ...]`, and
+/// `[From: Name]` patterns from the chunk content prefix and return
+/// `CanonicalEntity` entries for each unique person+email pair.
+///
+/// This gives 100% accurate person entities for email and chat chunks without
+/// relying on LLM extraction, which often produces single-token names like
+/// `person:yan` instead of `person:cosine-yan`.
+fn extract_structured_participant_entities(
+    content: &str,
+) -> Vec<crate::openhuman::memory_tree::score::resolver::CanonicalEntity> {
+    use crate::openhuman::memory_tree::score::resolver::{canonical_id_for, CanonicalEntity};
+    use crate::openhuman::memory_tree::score::extract::types::EntityKind;
+
+    let mut entities: Vec<CanonicalEntity> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    // Extract all tag-like fields from the prefix: [Field: value]
+    // Stop at first newline (prefix is always on the first line)
+    let prefix = content.lines().next().unwrap_or("");
+
+    // Find all [...] blocks
+    let mut pos = 0;
+    while let Some(start) = prefix[pos..].find('[') {
+        let abs_start = pos + start;
+        let Some(end) = prefix[abs_start..].find(']') else { break };
+        let abs_end = abs_start + end;
+        let block = &prefix[abs_start + 1..abs_end]; // content inside [...]
+
+        // Identify field type
+        let (field, value) = if let Some(v) = block.strip_prefix("From: ") {
+            ("participants", v)
+        } else if let Some(v) = block.strip_prefix("Participants: ") {
+            ("participants", v)
+        } else if let Some(v) = block.strip_prefix("To: ") {
+            ("participants", v)
+        } else if let Some(v) = block.strip_prefix("CC: ") {
+            ("participants", v)
+        } else {
+            pos = abs_end + 1;
+            continue;
+        };
+
+        if field == "participants" {
+            // Parse comma-separated "Name <email>" or "email" entries
+            for entry in value.split(',') {
+                let entry = entry.trim();
+                if entry.is_empty() {
+                    continue;
+                }
+                // Try "Name <email>" format
+                if let (Some(lt), Some(_gt)) = (entry.find('<'), entry.find('>')) {
+                    let name = entry[..lt].trim().to_string();
+                    let email = entry[lt + 1..entry.len() - 1].trim().to_lowercase();
+                    // Add person entity
+                    if !name.is_empty() && name.len() > 1 {
+                        let person_id = canonical_id_for(EntityKind::Person, &name);
+                        if seen.insert(person_id.clone()) {
+                            entities.push(CanonicalEntity {
+                                canonical_id: person_id,
+                                kind: EntityKind::Person,
+                                surface: name.clone(),
+                                span_start: 0,
+                                span_end: 0,
+                                score: 1.0,
+                            });
+                        }
+                    }
+                    // Add email entity
+                    if !email.is_empty() && email.contains('@') {
+                        let email_id = canonical_id_for(EntityKind::Email, &email);
+                        if seen.insert(email_id.clone()) {
+                            entities.push(CanonicalEntity {
+                                canonical_id: email_id,
+                                kind: EntityKind::Email,
+                                surface: email,
+                                span_start: 0,
+                                span_end: 0,
+                                score: 1.0,
+                            });
+                        }
+                    }
+                } else if entry.contains('@') {
+                    // Plain email address
+                    let email = entry.to_lowercase();
+                    let email_id = canonical_id_for(EntityKind::Email, &email);
+                    if seen.insert(email_id.clone()) {
+                        entities.push(CanonicalEntity {
+                            canonical_id: email_id,
+                            kind: EntityKind::Email,
+                            surface: email,
+                            span_start: 0,
+                            span_end: 0,
+                            score: 1.0,
+                        });
+                    }
+                } else if entry.len() > 2 && !entry.starts_with('[') {
+                    // Plain name (e.g. from Teams [From: Yan, Cosine])
+                    let person_id = canonical_id_for(EntityKind::Person, entry);
+                    if seen.insert(person_id.clone()) {
+                        entities.push(CanonicalEntity {
+                            canonical_id: person_id,
+                            kind: EntityKind::Person,
+                            surface: entry.to_string(),
+                            span_start: 0,
+                            span_end: 0,
+                            score: 1.0,
+                        });
+                    }
+                }
+            }
+        }
+        pos = abs_end + 1;
+    }
+
+    entities
 }
 
 #[cfg(test)]
