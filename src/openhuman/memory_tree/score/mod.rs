@@ -294,7 +294,9 @@ pub async fn score_chunk(chunk: &Chunk, cfg: &ScoringConfig) -> Result<ScoreResu
         let boosted = (total + summary_boost).min(1.0);
         log::debug!(
             "[memory::score] summary pattern boost chunk_id={} {:.3} -> {:.3}",
-            chunk.id, total, boosted
+            chunk.id,
+            total,
+            boosted
         );
         total = boosted;
     }
@@ -307,7 +309,9 @@ pub async fn score_chunk(chunk: &Chunk, cfg: &ScoringConfig) -> Result<ScoreResu
         let boosted = (total + authority_boost).min(1.0);
         log::debug!(
             "[memory::score] authority boost chunk_id={} {:.3} -> {:.3}",
-            chunk.id, total, boosted
+            chunk.id,
+            total,
+            boosted
         );
         total = boosted;
     }
@@ -487,36 +491,75 @@ fn score_row(result: &ScoreResult) -> store::ScoreRow {
 /// Returns a boost amount (0.0 = no boost).
 fn detect_summary_pattern(content: &str) -> f32 {
     let lower = content.to_lowercase();
-    // First 500 chars of content (the prefix line + start of body)
-    let head = &lower[..lower.len().min(500)];
+    // First 500 chars (by char boundary, not bytes — content may contain CJK)
+    let head: String = lower.chars().take(500).collect();
 
     // High-confidence summary/decision indicators (+0.2)
     let strong_patterns = [
-        "in summary", "in conclusion", "to summarize", "决策:", "decision:",
-        "action items:", "以下是决策", "总结:", "结论是", "我们决定",
-        "it was decided", "agreed:", "resolution:", "summary:", "key decisions",
-        "action required", "please action", "next steps:", "下一步:",
-        "fyi:", "for your information", "heads up:", "important update",
-        "escalation:", "升级:", "紧急:", "urgent:",
+        "in summary",
+        "in conclusion",
+        "to summarize",
+        "决策:",
+        "decision:",
+        "action items:",
+        "以下是决策",
+        "总结:",
+        "结论是",
+        "我们决定",
+        "it was decided",
+        "agreed:",
+        "resolution:",
+        "summary:",
+        "key decisions",
+        "action required",
+        "please action",
+        "next steps:",
+        "下一步:",
+        "fyi:",
+        "for your information",
+        "heads up:",
+        "important update",
+        "escalation:",
+        "升级:",
+        "紧急:",
+        "urgent:",
     ];
 
     // Medium-confidence patterns (+0.1)
     let medium_patterns = [
-        "1.", "- [ ]", "•", "→", // structured list indicators
-        "as discussed", "per our discussion", "following up",
-        "per meeting", "as agreed", "以下", "如下",
+        "1.",
+        "- [ ]",
+        "•",
+        "→", // structured list indicators
+        "as discussed",
+        "per our discussion",
+        "following up",
+        "per meeting",
+        "as agreed",
+        "以下",
+        "如下",
     ];
 
     let has_strong = strong_patterns.iter().any(|p| head.contains(p));
     let has_medium = medium_patterns.iter().any(|p| head.contains(p));
 
     // Bullet/numbered list: check for 3+ list items (strong signal of structured content)
-    let list_count = content.lines()
+    let list_count = content
+        .lines()
         .filter(|l| {
             let t = l.trim();
-            t.starts_with("- ") || t.starts_with("* ") || t.starts_with("• ")
-            || (t.len() > 2 && t.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false)
-                && t.chars().nth(1).map(|c| c == '.' || c == ')').unwrap_or(false))
+            t.starts_with("- ")
+                || t.starts_with("* ")
+                || t.starts_with("• ")
+                || (t.len() > 2
+                    && t.chars()
+                        .next()
+                        .map(|c| c.is_ascii_digit())
+                        .unwrap_or(false)
+                    && t.chars()
+                        .nth(1)
+                        .map(|c| c == '.' || c == ')')
+                        .unwrap_or(false))
         })
         .count();
     let has_list = list_count >= 3;
@@ -545,7 +588,9 @@ fn detect_authority_boost(
     let content_lower = chunk.content.to_lowercase();
 
     // Extract From: field from content prefix
-    let from_field = chunk.content.lines()
+    let from_field = chunk
+        .content
+        .lines()
         .next()
         .and_then(|line| {
             // Match [From: xxx] or [From: Name <email>]
@@ -574,9 +619,10 @@ fn detect_authority_boost(
             // No topic restriction — boost all their messages
             max_boost = max_boost.max(entry.boost);
         } else {
-            let topic_match = entry.topics.iter().any(|t| {
-                content_lower.contains(&t.to_lowercase())
-            });
+            let topic_match = entry
+                .topics
+                .iter()
+                .any(|t| content_lower.contains(&t.to_lowercase()));
             if topic_match {
                 max_boost = max_boost.max(entry.boost);
             }
