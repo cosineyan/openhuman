@@ -20,7 +20,8 @@ export type SourceKind =
   | 'web_page'
   | 'outlook_mail'
   | 'outlook_calendar'
-  | 'teams_messages';
+  | 'teams_messages'
+  | 'teams_transcript';
 
 export interface MemorySourceEntry {
   id: string;
@@ -219,6 +220,7 @@ export const SOURCE_KIND_LABEL_KEYS: Record<SourceKind, string> = {
   outlook_mail: 'memorySources.kind.outlook_mail',
   outlook_calendar: 'memorySources.kind.outlook_calendar',
   teams_messages: 'memorySources.kind.teams_messages',
+  teams_transcript: 'memorySources.kind.teams_transcript',
 };
 
 export const SOURCE_KIND_ICONS: Record<SourceKind, string> = {
@@ -231,5 +233,6 @@ export const SOURCE_KIND_ICONS: Record<SourceKind, string> = {
   web_page: '🌐',
   outlook_mail: '📧',
   outlook_calendar: '📅',
-  teams_messages: '💼',
+  teams_messages: '💬',
+  teams_transcript: '🎙️',
 };

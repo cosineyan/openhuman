@@ -33,6 +33,7 @@ const KIND_FIELDS: Record<SourceKind, Array<keyof LimitFields>> = {
   outlook_mail: ['sync_depth_days', 'max_items'],
   outlook_calendar: ['sync_depth_days', 'max_items'],
   teams_messages: ['sync_depth_days', 'max_items'],
+  teams_transcript: ['sync_depth_days', 'max_items'],
 };
 
 // i18n key for each field label

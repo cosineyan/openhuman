@@ -2808,6 +2808,7 @@ const en: TranslationMap = {
   'memorySources.kind.outlook_mail': 'Outlook Mail',
   'memorySources.kind.outlook_calendar': 'Outlook Calendar',
   'memorySources.kind.teams_messages': 'Teams Messages',
+  'memorySources.kind.teams_transcript': 'Teams Meeting Transcripts',
   'memorySources.m365TokenHint':
     'Uses the token from SAP Systems. Make sure Outlook/Teams is connected before syncing.',
   'memorySources.sync.successTitle': 'Syncing',

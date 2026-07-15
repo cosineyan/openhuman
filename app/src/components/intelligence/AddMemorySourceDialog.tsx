@@ -54,6 +54,7 @@ const ALL_KINDS: SourceKind[] = [
   'outlook_mail',
   'outlook_calendar',
   'teams_messages',
+  'teams_transcript',
 ];
 
 export function AddMemorySourceDialog({ open, onClose, onAdded }: AddMemorySourceDialogProps) {
@@ -171,6 +172,7 @@ export function AddMemorySourceDialog({ open, onClose, onAdded }: AddMemorySourc
         case 'outlook_mail':
         case 'outlook_calendar':
         case 'teams_messages':
+        case 'teams_transcript':
           // No extra fields needed — token is read from the m365 token file.
           break;
       }
@@ -532,6 +534,7 @@ function KindFields(props: KindFieldsProps) {
     case 'outlook_mail':
     case 'outlook_calendar':
     case 'teams_messages':
+    case 'teams_transcript':
       return (
         <p className="text-xs text-stone-500 dark:text-neutral-400">
           {t('memorySources.m365TokenHint')}
