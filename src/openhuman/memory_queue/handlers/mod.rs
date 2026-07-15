@@ -679,6 +679,11 @@ async fn handle_seal(config: &Config, job: &Job) -> Result<JobOutcome> {
 
     let summary_id = seal_one_level(config, &tree, &buf, &strategy, true).await?;
 
+    // Empty summary_id means buffer was empty (all chunks dropped) — skip post-processing
+    if summary_id.is_empty() {
+        return Ok(JobOutcome::Done);
+    }
+
     emit_build_progress(
         "seal",
         "completed",
@@ -1049,8 +1054,8 @@ async fn handle_reembed_backfill(config: &Config, job: &Job) -> Result<JobOutcom
 fn extract_structured_participant_entities(
     content: &str,
 ) -> Vec<crate::openhuman::memory_tree::score::resolver::CanonicalEntity> {
-    use crate::openhuman::memory_tree::score::resolver::{canonical_id_for, CanonicalEntity};
     use crate::openhuman::memory_tree::score::extract::types::EntityKind;
+    use crate::openhuman::memory_tree::score::resolver::{canonical_id_for, CanonicalEntity};
 
     let mut entities: Vec<CanonicalEntity> = Vec::new();
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -1063,7 +1068,9 @@ fn extract_structured_participant_entities(
     let mut pos = 0;
     while let Some(start) = prefix[pos..].find('[') {
         let abs_start = pos + start;
-        let Some(end) = prefix[abs_start..].find(']') else { break };
+        let Some(end) = prefix[abs_start..].find(']') else {
+            break;
+        };
         let abs_end = abs_start + end;
         let block = &prefix[abs_start + 1..abs_end]; // content inside [...]
 

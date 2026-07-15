@@ -371,16 +371,16 @@ pub(crate) async fn seal_one_level(
     // Hydrate inputs (synchronous DB reads).
     let inputs = hydrate_inputs(config, level, &buf.item_ids)?;
     if inputs.is_empty() {
-        // All chunks in this buffer were dropped during extraction — seal will never
-        // succeed. Wrap as unrecoverable so it doesn't accumulate as Degraded.
-        use crate::openhuman::memory_tree::health::{FailureCode, PipelineFailure};
-        return Err(anyhow::Error::new(PipelineFailure::new(
-            FailureCode::EmptyInputRefused,
-        ))
-        .context(format!(
-            "[tree::bucket_seal] refused to seal empty buffer tree_id={} level={}",
-            tree.id, level
-        )));
+        // All chunks in this buffer were dropped during extraction (too short,
+        // system events, etc.). Skip silently — return empty vec so the caller
+        // marks the job Done without any failure record.
+        log::debug!(
+            "[tree::bucket_seal] skipping empty buffer tree_id={} level={} \
+             (all chunks dropped during admission)",
+            tree.id,
+            level
+        );
+        return Ok(String::new());
     }
 
     // Compute envelope across children (time range, max score).
