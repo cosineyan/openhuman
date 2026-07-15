@@ -490,8 +490,23 @@ async fn handle_append_buffer(config: &Config, job: &Job) -> Result<JobOutcome> 
             // Read the full body from disk — the `content` column in SQLite
             // is a ≤500-char preview after the MD-on-disk migration. The
             // summariser receives this LeafRef and must see the complete text.
-            let body = content_read::read_chunk_body(config, chunk_id)
-                .with_context(|| format!("read chunk body in append_buffer chunk_id={chunk_id}"))?;
+            let body = match content_read::read_chunk_body(config, chunk_id) {
+                Ok(b) => b,
+                Err(e) => {
+                    let msg = e.to_string();
+                    if msg.contains("sha256 mismatch") {
+                        // Content was updated by re-sync — skip silently.
+                        // The updated chunk will be re-appended on the next sync.
+                        log::debug!(
+                            "[memory::jobs] append_buffer: skipping chunk {} due to sha256 mismatch \
+                             (content updated since job was enqueued)",
+                            chunk_id
+                        );
+                        return Ok(JobOutcome::Done);
+                    }
+                    return Err(e.context(format!("read chunk body in append_buffer chunk_id={chunk_id}")));
+                }
+            };
             let leaf = LeafRef {
                 chunk_id: chunk.id.clone(),
                 token_count: chunk.token_count,
