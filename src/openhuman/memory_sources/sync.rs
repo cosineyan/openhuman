@@ -27,6 +27,9 @@ use crate::openhuman::memory_sync::canonicalize::document::DocumentInput;
 use crate::openhuman::memory_sync::composio::{self, ComposioUsage, SyncReason};
 
 const SYNC_CONCURRENCY: usize = 10;
+/// Lower concurrency for M365 mail sources — Graph API enforces MailboxConcurrency
+/// limits (typically 4 concurrent requests per mailbox). Using 3 leaves headroom.
+const SYNC_CONCURRENCY_MAIL: usize = 3;
 
 static ACTIVE_SYNCS: std::sync::LazyLock<Mutex<HashSet<String>>> =
     std::sync::LazyLock::new(|| Mutex::new(HashSet::new()));
@@ -342,7 +345,12 @@ async fn sync_items_individually(
     let kind_str = source.kind.as_str().to_string();
 
     stream::iter(items.iter().enumerate())
-        .for_each_concurrent(SYNC_CONCURRENCY, |(_, item)| {
+        .for_each_concurrent(
+            match source.kind {
+                SourceKind::OutlookMail => SYNC_CONCURRENCY_MAIL,
+                _ => SYNC_CONCURRENCY,
+            },
+            |(_, item)| {
             let config = config.clone();
             let source_kind = source_kind.clone();
             let reader = readers::reader_for(&source_kind);
