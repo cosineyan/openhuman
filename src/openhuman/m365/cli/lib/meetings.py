@@ -5,7 +5,29 @@ import urllib.request
 import urllib.parse
 
 from .api import graph_request
-from .tokens import ensure_token, ensure_spo_token, ensure_substrate_token
+from .tokens import ensure_token, ensure_spo_token, ensure_substrate_token, load_tokens
+
+
+def _graph_chat_request(endpoint):
+    """Make a Graph API request using the graph_chat token (includes Chat.Read scope)."""
+    tokens = load_tokens()
+    graph_chat_token = (tokens.get('graph_chat') or {}).get('token', '')
+    if not graph_chat_token:
+        # fallback to graph token
+        return graph_request(endpoint, raw=True)
+    url = f'https://graph.microsoft.com/v1.0/{endpoint}'
+    req = urllib.request.Request(url, headers={'Authorization': f'Bearer {graph_chat_token}'})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return {'status_code': r.status, 'body': json.load(r)}
+    except urllib.error.HTTPError as e:
+        import json as _json
+        raw = e.read().decode('utf-8')
+        try:
+            body = _json.loads(raw)
+        except Exception:
+            body = raw
+        return {'status_code': e.code, 'body': body}
 
 
 def ticks_to_datetime(ticks):
@@ -39,7 +61,7 @@ def json_fetch(url, method='GET', headers=None, body=None, timeout=30):
 
 
 def get_meeting_artifacts(chat_id):
-    chat_result = graph_request(f'chats/{urllib.parse.quote(chat_id, safe="")}?$select=id,chatType,tenantId,onlineMeetingInfo', raw=True)
+    chat_result = _graph_chat_request(f'chats/{urllib.parse.quote(chat_id, safe="")}?$select=id,chatType,tenantId,onlineMeetingInfo')
     if chat_result['status_code'] != 200:
         raise RuntimeError(f"Failed to get chat: {chat_result['status_code']} {json.dumps(chat_result['body'])}")
 
