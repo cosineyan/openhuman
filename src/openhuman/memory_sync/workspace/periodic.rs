@@ -75,6 +75,7 @@ fn is_workspace_synced_kind(kind: &SourceKind) -> bool {
             | SourceKind::OutlookMail
             | SourceKind::OutlookCalendar
             | SourceKind::TeamsMessages
+            | SourceKind::TeamsTranscript
     )
 }
 
@@ -243,7 +244,7 @@ pub(crate) async fn run_one_tick() -> Result<(), String> {
         // stale tokens don't produce repeated 401 failures during auto-sync.
         let is_m365 = matches!(
             source.kind,
-            SourceKind::OutlookMail | SourceKind::OutlookCalendar | SourceKind::TeamsMessages
+            SourceKind::OutlookMail | SourceKind::OutlookCalendar | SourceKind::TeamsMessages | SourceKind::TeamsTranscript
         );
         if is_m365 {
             let token_ok =

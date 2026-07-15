@@ -262,6 +262,7 @@ pub fn schemas(function: &str) -> ControllerSchema {
                             "outlook_mail",
                             "outlook_calendar",
                             "teams_messages",
+                            "teams_transcript",
                         ],
                     },
                     comment: "Source kind.",

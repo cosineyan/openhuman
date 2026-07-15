@@ -46,5 +46,6 @@ pub fn reader_for(kind: &SourceKind) -> Box<dyn SourceReader> {
         SourceKind::OutlookMail => Box::new(m365::OutlookMailReader),
         SourceKind::OutlookCalendar => Box::new(m365::OutlookCalendarReader),
         SourceKind::TeamsMessages => Box::new(m365::TeamsMessagesReader),
+        SourceKind::TeamsTranscript => Box::new(m365::TeamsTranscriptReader),
     }
 }

@@ -636,3 +636,317 @@ impl SourceReader for TeamsMessagesReader {
         })
     }
 }
+
+// ---------------------------------------------------------------------------
+// TeamsTranscriptReader
+// ---------------------------------------------------------------------------
+//
+// Pipeline:
+//   list_items → Calendar events (online meetings, last N days)
+//                Item id = "{thread_id}||{meeting_subject}||{start_iso}"
+//   read_item  → m365-cli `meetings recap --summary` + `meetings recap`
+//                Produces one chunk per meeting with:
+//                  - Full transcript text (speaker: line format)
+//                  - AI summary topics & action items
+//                  - Metadata: participants, topics, recording URL
+// ---------------------------------------------------------------------------
+
+pub struct TeamsTranscriptReader;
+
+#[async_trait]
+impl SourceReader for TeamsTranscriptReader {
+    fn kind(&self) -> SourceKind {
+        SourceKind::TeamsTranscript
+    }
+
+    async fn list_items(
+        &self,
+        source: &MemorySourceEntry,
+        config: &Config,
+    ) -> Result<Vec<SourceItem>, String> {
+        let token = read_graph_token(config)?;
+        let days = source.m365_sync_days.unwrap_or(30);
+        let top = source.m365_max_items.unwrap_or(50);
+
+        let start = (Utc::now() - chrono::Duration::days(days as i64))
+            .format("%Y-%m-%dT00:00:00Z")
+            .to_string();
+        let end = (Utc::now() + chrono::Duration::days(1))
+            .format("%Y-%m-%dT00:00:00Z")
+            .to_string();
+
+        let params = format!(
+            "startDateTime={start}&endDateTime={end}\
+             &$select=id,subject,start,end,onlineMeeting,onlineMeetingUrl,isOnlineMeeting,attendees\
+             &$top={top}"
+        );
+        let url = format!("{GRAPH_BASE}/me/calendarView?{params}");
+        let data = graph_get(&token, &url).await?;
+
+        let items = data
+            .get("value")
+            .and_then(|v| v.as_array())
+            .ok_or("unexpected calendarView response")?
+            .iter()
+            .filter_map(|ev| {
+                // Only include online meetings
+                let is_online = ev["isOnlineMeeting"].as_bool().unwrap_or(false)
+                    || ev["onlineMeetingUrl"].as_str().is_some();
+                if !is_online {
+                    return None;
+                }
+
+                let subject = ev["subject"].as_str().unwrap_or("(no subject)").to_string();
+                let start_dt = ev["start"]["dateTime"].as_str().unwrap_or("").to_string();
+
+                // Extract join URL for thread_id lookup
+                let join_url = ev["onlineMeetingUrl"]
+                    .as_str()
+                    .or_else(|| ev["onlineMeeting"]["joinUrl"].as_str())
+                    .unwrap_or("")
+                    .to_string();
+
+                if join_url.is_empty() {
+                    return None;
+                }
+
+                let updated_at_ms = chrono::DateTime::parse_from_rfc3339(&start_dt)
+                    .ok()
+                    .map(|dt| dt.timestamp_millis());
+
+                // Item id encodes join_url, subject, start for read_item to use
+                let item_id = format!(
+                    "{}||{}||{}",
+                    urlencoding::encode(&join_url),
+                    urlencoding::encode(&subject),
+                    urlencoding::encode(&start_dt)
+                );
+
+                Some(SourceItem {
+                    id: item_id,
+                    title: subject,
+                    updated_at_ms,
+                })
+            })
+            .collect();
+
+        Ok(items)
+    }
+
+    async fn read_item(
+        &self,
+        _source: &MemorySourceEntry,
+        item_id: &str,
+        config: &Config,
+    ) -> Result<SourceContent, String> {
+        // Parse the encoded item_id
+        let parts: Vec<&str> = item_id.splitn(3, "||").collect();
+        if parts.len() < 2 {
+            return Err(format!("invalid TeamsTranscript item_id: {item_id}"));
+        }
+        let join_url = urlencoding::decode(parts[0])
+            .map_err(|e| format!("decode join_url: {e}"))?
+            .into_owned();
+        let subject = urlencoding::decode(parts[1])
+            .map_err(|e| format!("decode subject: {e}"))?
+            .into_owned();
+        let start_dt = if parts.len() > 2 {
+            urlencoding::decode(parts[2])
+                .map_err(|e| format!("decode start_dt: {e}"))?
+                .into_owned()
+        } else {
+            String::new()
+        };
+
+        // Step 1: get thread_id via Graph API (graph_chat token has Chat.Read)
+        let graph_chat_token = crate::openhuman::m365::ops::ensure_graph_token(config)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        // Actually we need the graph_chat token for Chat.Read scope
+        let graph_chat_tok = {
+            let path = config.workspace_dir.join("m365").join("tokens.json");
+            let raw = std::fs::read_to_string(&path)
+                .map_err(|e| format!("read tokens: {e}"))?;
+            let tokens: serde_json::Value = serde_json::from_str(&raw)
+                .map_err(|e| format!("parse tokens: {e}"))?;
+            let entry = tokens.get("graph_chat").ok_or("graph_chat token not found")?;
+            let exp = entry.get("expiresOn").and_then(|v| v.as_i64()).unwrap_or(0);
+            if exp > 0 && exp < Utc::now().timestamp() + 30 {
+                return Err("graph_chat token expired — please refresh in SAP Systems".to_string());
+            }
+            entry.get("token").and_then(|v| v.as_str())
+                .ok_or("graph_chat token missing")?
+                .to_string()
+        };
+
+        let filter_str = format!("JoinWebUrl eq '{join_url}'");
+        let enc_filter = urlencoding::encode(&filter_str);
+        let meeting_url = format!(
+            "{GRAPH_BASE}/me/onlineMeetings?$filter={enc_filter}"
+        );
+        let meeting_data = graph_get(&graph_chat_tok, &meeting_url).await
+            .map_err(|e| format!("meeting lookup: {e}"))?;
+
+        let meetings = meeting_data.get("value").and_then(|v| v.as_array())
+            .ok_or("no meetings found for join URL")?;
+        if meetings.is_empty() {
+            return Err(format!("meeting not found for: {subject}"));
+        }
+
+        let meeting = &meetings[0];
+        let thread_id = meeting
+            .get("chatInfo").and_then(|c| c.get("threadId")).and_then(|v| v.as_str())
+            .ok_or("no chatInfo.threadId in meeting")?
+            .to_string();
+
+        // Step 2: run m365-cli meetings recap to get transcript + summary
+        let token_file = config.workspace_dir.join("m365").join("tokens.json");
+        let script = crate::openhuman::m365::ops::resolve_m365_cli_script()
+            .ok_or("m365_cli.py not found")?;
+
+        // Get AI summary
+        let summary_output = tokio::process::Command::new("python3")
+            .arg(&script)
+            .args(["meetings", "recap", &thread_id, "--summary", "--json"])
+            .env("M365_TOKEN_FILE", token_file.to_string_lossy().as_ref())
+            .output()
+            .await
+            .map_err(|e| format!("spawn meetings recap --summary: {e}"))?;
+
+        let summary_json: serde_json::Value = serde_json::from_slice(&summary_output.stdout)
+            .unwrap_or(serde_json::Value::Null);
+
+        // Get transcript
+        let transcript_output = tokio::process::Command::new("python3")
+            .arg(&script)
+            .args(["meetings", "recap", &thread_id, "--json"])
+            .env("M365_TOKEN_FILE", token_file.to_string_lossy().as_ref())
+            .output()
+            .await
+            .map_err(|e| format!("spawn meetings recap: {e}"))?;
+
+        let transcript_json: serde_json::Value =
+            serde_json::from_slice(&transcript_output.stdout)
+                .unwrap_or(serde_json::Value::Null);
+
+        // Step 3: build content body
+        let mut body = format!(
+            "[Meeting: {subject}] [Date: {start_dt}]\n\n"
+        );
+
+        // Participants from onlineMeetingInfo or attendees
+        let mut participants: Vec<String> = Vec::new();
+        if let Some(participants_data) = meeting.get("participants") {
+            if let Some(attendees) = participants_data.get("attendees").and_then(|a| a.as_array()) {
+                for att in attendees.iter().take(20) {
+                    if let Some(name) = att.get("upn").and_then(|v| v.as_str())
+                        .or_else(|| att.get("displayName").and_then(|v| v.as_str())) {
+                        participants.push(name.to_string());
+                    }
+                }
+            }
+        }
+
+        // AI Summary section
+        let mut topics: Vec<String> = Vec::new();
+        let mut action_items: Vec<String> = Vec::new();
+
+        if let Some(data) = summary_json.get("data") {
+            body.push_str("## AI Meeting Summary\n\n");
+
+            if let Some(topic_list) = data.get("topics").and_then(|t| t.as_array()) {
+                for t in topic_list {
+                    let headline = t.get("headline").and_then(|v| v.as_str()).unwrap_or("");
+                    let summary = t.get("summary").and_then(|v| v.as_str()).unwrap_or("");
+                    if !headline.is_empty() {
+                        body.push_str(&format!("### {headline}\n{summary}\n\n"));
+                        topics.push(headline.to_string());
+                    }
+                }
+            }
+
+            if let Some(actions) = data.get("actionItems").and_then(|a| a.as_array()) {
+                if !actions.is_empty() {
+                    body.push_str("## Action Items\n\n");
+                    for a in actions {
+                        let text = a.get("text").and_then(|v| v.as_str()).unwrap_or("");
+                        let owner = a.get("owner").and_then(|v| v.as_str()).unwrap_or("");
+                        let item = if owner.is_empty() {
+                            format!("- {text}")
+                        } else {
+                            format!("- {text} (@{owner})")
+                        };
+                        body.push_str(&item);
+                        body.push('\n');
+                        action_items.push(text.to_string());
+                    }
+                    body.push('\n');
+                }
+            }
+        }
+
+        // Transcript section
+        let mut transcript_entries: Vec<String> = Vec::new();
+        if let Some(data) = transcript_json.get("data") {
+            if let Some(entries) = data.get("entries").and_then(|e| e.as_array()) {
+                if !entries.is_empty() {
+                    body.push_str("## Transcript\n\n");
+                    for entry in entries {
+                        let speaker = entry.get("speaker").and_then(|v| v.as_str()).unwrap_or("?");
+                        let text = entry.get("text").and_then(|v| v.as_str()).unwrap_or("");
+                        let offset = entry.get("startOffset").and_then(|v| v.as_str()).unwrap_or("");
+                        let line = format!("[{offset}] {speaker}: {text}");
+                        body.push_str(&line);
+                        body.push('\n');
+                        // Collect unique speakers as participants
+                        if !participants.contains(&speaker.to_string()) {
+                            participants.push(speaker.to_string());
+                        }
+                        transcript_entries.push(line);
+                    }
+                }
+            }
+        }
+
+        if body.len() <= format!("[Meeting: {subject}] [Date: {start_dt}]\n\n").len() {
+            return Err(format!(
+                "no transcript or summary available for meeting: {subject}"
+            ));
+        }
+
+        // Add participants prefix for entity extraction
+        let participants_str = if participants.is_empty() {
+            String::new()
+        } else {
+            format!(" [Participants: {}]", participants.join(", "))
+        };
+
+        let topics_str = if topics.is_empty() {
+            String::new()
+        } else {
+            format!(" [Topics: {}]", topics.join("; "))
+        };
+
+        let full_body = format!(
+            "[Meeting: {subject}] [Date: {start_dt}]{participants_str}{topics_str}\n\n{body}"
+        );
+
+        Ok(SourceContent {
+            id: item_id.to_string(),
+            title: subject.clone(),
+            body: full_body,
+            content_type: ContentType::Plaintext,
+            metadata: serde_json::json!({
+                "meeting_subject": subject,
+                "start_datetime": start_dt,
+                "thread_id": thread_id,
+                "participants": participants,
+                "topics": topics,
+                "action_items": action_items,
+                "transcript_length": transcript_entries.len(),
+                "source": "teams_transcript",
+            }),
+        })
+    }
+}

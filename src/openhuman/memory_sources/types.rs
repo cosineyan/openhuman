@@ -20,6 +20,7 @@ pub enum SourceKind {
     OutlookMail,
     OutlookCalendar,
     TeamsMessages,
+    TeamsTranscript,
 }
 
 impl SourceKind {
@@ -35,6 +36,7 @@ impl SourceKind {
             SourceKind::OutlookMail => "outlook_mail",
             SourceKind::OutlookCalendar => "outlook_calendar",
             SourceKind::TeamsMessages => "teams_messages",
+            SourceKind::TeamsTranscript => "teams_transcript",
         }
     }
 }
@@ -148,7 +150,7 @@ impl MemorySourceEntry {
             SourceKind::WebPage => {
                 require_field(&self.url, "url")?;
             }
-            SourceKind::OutlookMail | SourceKind::OutlookCalendar | SourceKind::TeamsMessages => {
+            SourceKind::OutlookMail | SourceKind::OutlookCalendar | SourceKind::TeamsMessages | SourceKind::TeamsTranscript => {
                 // Token is read from the global m365 token file — no extra fields required.
             }
         }

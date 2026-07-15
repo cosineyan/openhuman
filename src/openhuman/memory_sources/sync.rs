@@ -114,7 +114,8 @@ pub async fn sync_source(source: MemorySourceEntry, config: Config) -> Result<()
                 | SourceKind::WebPage
                 | SourceKind::OutlookMail
                 | SourceKind::OutlookCalendar
-                | SourceKind::TeamsMessages => sync_items_individually(&source, &config).await,
+                | SourceKind::TeamsMessages
+                | SourceKind::TeamsTranscript => sync_items_individually(&source, &config).await,
                 SourceKind::TwitterQuery => Err(
                     "Twitter sync not yet configured. Provide bearer token in settings."
                         .to_string(),
@@ -390,6 +391,9 @@ async fn sync_items_individually(
                             Some(crate::openhuman::memory_store::chunks::types::SourceKind::Chat)
                         }
                         SourceKind::OutlookCalendar => Some(
+                            crate::openhuman::memory_store::chunks::types::SourceKind::Document,
+                        ),
+                        SourceKind::TeamsTranscript => Some(
                             crate::openhuman::memory_store::chunks::types::SourceKind::Document,
                         ),
                         _ => None,
