@@ -428,32 +428,67 @@ impl SourceReader for TeamsMessagesReader {
             format!("{e}. Hint: sync Outlook Mail first to populate the chat graph token.")
         })?;
         let days = source.m365_sync_days.unwrap_or(DEFAULT_SYNC_DAYS);
-        let messages_per_chat = (source.m365_max_items.unwrap_or(DEFAULT_MAX_ITEMS) / 4).max(5);
+        let _messages_per_chat = (source.m365_max_items.unwrap_or(DEFAULT_MAX_ITEMS) / 4).max(5);
+        let since_ms =
+            (chrono::Utc::now() - chrono::Duration::days(days as i64)).timestamp_millis();
 
-        // Fetch all chats with pagination (Vera's 1:1 may be beyond page 1)
-        // $expand=members without $select — conversationMember does not support
-        // $select sub-filtering (causes 400 Bad Request).
+        // Fetch chats that have recent activity within the sync window.
+        // Sort by lastMessageDateTime desc so we can stop once we reach chats
+        // older than the window — avoids fetching all 500+ chats every sync.
+        let since_iso = (chrono::Utc::now() - chrono::Duration::days(days as i64))
+            .format("%Y-%m-%dT%H:%M:%SZ")
+            .to_string();
+
         let mut all_chats: Vec<serde_json::Value> = Vec::new();
         let mut chats_url = Some(format!(
-            "{GRAPH_BASE}/me/chats?$top=50&$select=id,topic,chatType\
-             &$expand=members"
+            "{GRAPH_BASE}/me/chats?$top=50&$select=id,topic,chatType,lastMessageDateTime\
+             &$expand=members&$orderby=lastMessageDateTime desc"
         ));
         let mut pages = 0usize;
         while let Some(url) = chats_url {
-            if pages >= 10 {
-                break;
-            } // safety cap at 500 chats
-            let chats_data = graph_get(&token, &url).await?;
-            if let Some(arr) = chats_data.get("value").and_then(|v| v.as_array()) {
-                all_chats.extend(arr.iter().cloned());
+            if pages >= 20 {
+                break; // safety cap at ~1000 chats
             }
-            chats_url = chats_data
-                .get("@odata.nextLink")
-                .and_then(|v| v.as_str())
-                .map(str::to_string);
+            let chats_data = graph_get(&token, &url).await?;
+            let arr = chats_data
+                .get("value")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
+
+            let mut hit_old = false;
+            for chat in &arr {
+                // Stop when we see a chat with no recent activity
+                let last_msg = chat
+                    .get("lastMessageDateTime")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                if !last_msg.is_empty() {
+                    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(last_msg) {
+                        if dt.timestamp_millis() < since_ms {
+                            hit_old = true;
+                            break;
+                        }
+                    }
+                }
+                all_chats.push(chat.clone());
+            }
+
+            chats_url = if hit_old || arr.len() < 50 {
+                None
+            } else {
+                chats_data
+                    .get("@odata.nextLink")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string)
+            };
             pages += 1;
         }
         let chats = all_chats;
+        log::info!(
+            "[teams_messages] found {} active chats in last {days} days",
+            chats.len()
+        );
 
         let since_ms =
             (chrono::Utc::now() - chrono::Duration::days(days as i64)).timestamp_millis();
@@ -529,8 +564,7 @@ impl SourceReader for TeamsMessagesReader {
                             if msg_id.is_empty() {
                                 continue;
                             }
-                            let created =
-                                msg["createdDateTime"].as_str().unwrap_or("").to_string();
+                            let created = msg["createdDateTime"].as_str().unwrap_or("").to_string();
                             let ts = chrono::DateTime::parse_from_rfc3339(&created)
                                 .ok()
                                 .map(|dt| dt.timestamp_millis());
