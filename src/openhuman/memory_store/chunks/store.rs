@@ -421,8 +421,8 @@ pub fn upsert_chunks(config: &Config, chunks: &[Chunk]) -> Result<usize> {
                     tags_json = excluded.tags_json,
                     content = excluded.content,
                     token_count = excluded.token_count,
-                    seq_in_source = excluded.seq_in_source,
-                    created_at_ms = excluded.created_at_ms",
+                    seq_in_source = excluded.seq_in_source",
+                    // created_at_ms intentionally NOT updated on conflict
             )?;
             upsert_chunks_with_statement(&mut stmt, chunks)?;
         }
@@ -454,8 +454,7 @@ pub(crate) fn upsert_chunks_tx(tx: &Transaction<'_>, chunks: &[Chunk]) -> Result
             tags_json = excluded.tags_json,
             content = excluded.content,
             token_count = excluded.token_count,
-            seq_in_source = excluded.seq_in_source,
-            created_at_ms = excluded.created_at_ms",
+            seq_in_source = excluded.seq_in_source",
     )?;
     upsert_chunks_with_statement(&mut stmt, chunks)?;
     Ok(chunks.len())
@@ -493,7 +492,6 @@ pub(crate) fn upsert_staged_chunks_tx(
             content = excluded.content,
             token_count = excluded.token_count,
             seq_in_source = excluded.seq_in_source,
-            created_at_ms = excluded.created_at_ms,
             content_path = excluded.content_path,
             content_sha256 = excluded.content_sha256",
     )?;
@@ -600,13 +598,14 @@ const MAX_FETCH_BATCH: usize = 500;
 /// body source for chunks (e.g. email) that have no `content_path` and no `raw_refs`.
 pub fn get_chunk_content_inline(config: &Config, chunk_id: &str) -> Result<Option<String>> {
     with_connection(config, |conn| {
-        Ok(conn.query_row(
-            "SELECT content FROM mem_tree_chunks WHERE id = ?1",
-            [chunk_id],
-            |r| r.get::<_, String>(0),
-        )
-        .optional()
-        .map_err(|e| anyhow::anyhow!(e))?)
+        Ok(conn
+            .query_row(
+                "SELECT content FROM mem_tree_chunks WHERE id = ?1",
+                [chunk_id],
+                |r| r.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(|e| anyhow::anyhow!(e))?)
     })
 }
 
