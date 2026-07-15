@@ -441,13 +441,13 @@ impl SourceReader for TeamsMessagesReader {
 
         let mut all_chats: Vec<serde_json::Value> = Vec::new();
         let mut chats_url = Some(format!(
-            "{GRAPH_BASE}/me/chats?$top=50&$select=id,topic,chatType,lastMessageDateTime\
+            "{GRAPH_BASE}/me/chats?$top=50&$select=id,topic,chatType\
              &$expand=members"
         ));
         let mut pages = 0usize;
         while let Some(url) = chats_url {
-            if pages >= 20 {
-                break; // safety cap at ~1000 chats
+            if pages >= 10 {
+                break; // safety cap at 500 chats
             }
             let chats_data = graph_get(&token, &url).await?;
             let arr = chats_data
@@ -456,26 +456,9 @@ impl SourceReader for TeamsMessagesReader {
                 .cloned()
                 .unwrap_or_default();
 
-            let mut hit_old_chat = false;
-            for chat in &arr {
-                // Client-side early-exit: Graph returns chats sorted by
-                // lastMessageDateTime desc. Once we see an old chat, stop.
-                let last_msg = chat
-                    .get("lastMessageDateTime")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                if !last_msg.is_empty() {
-                    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(last_msg) {
-                        if dt.timestamp_millis() < since_ms {
-                            hit_old_chat = true;
-                            break;
-                        }
-                    }
-                }
-                all_chats.push(chat.clone());
-            }
+            all_chats.extend(arr.iter().cloned());
 
-            chats_url = if hit_old_chat || arr.len() < 50 {
+            chats_url = if arr.len() < 50 {
                 None
             } else {
                 chats_data
