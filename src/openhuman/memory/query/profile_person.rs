@@ -548,6 +548,9 @@ fn profile_person_blocking(
         sent_chunks.truncate(limit);
 
         // "Mentioned in" — from entity index, but not sent by
+        // Further split into:
+        //   - addressed_to: this person is in [To: ...] or [CC: ...] or [Participants: ...]
+        //   - discussed_about: this person appears in body/entity but is NOT From/To/CC
         let sent_ids: std::collections::HashSet<String> =
             sent_chunks.iter().map(|(id, ..)| id.clone()).collect();
         let mention_ids: Vec<String> = mentioned_chunk_ids
@@ -556,22 +559,62 @@ fn profile_person_blocking(
             .cloned()
             .collect::<Vec<_>>();
 
-        let mut mention_chunks: Vec<(String, String, String, i64)> = Vec::new();
-        for chunk_id in mention_ids.iter().take(limit * 2) {
-            if let Ok(row) = conn.query_row(
+        // To/CC pattern matches for "addressed to this person"
+        let mut to_patterns: Vec<String> = Vec::new();
+        for pat in &from_patterns {
+            // Convert [From: X] → [To: X], [CC: X], [Participants: X]
+            let base = pat.trim_matches('%');
+            if base.starts_with("From: ") {
+                let name_part = &base["From: ".len()..];
+                to_patterns.push(format!("%To: {name_part}%"));
+                to_patterns.push(format!("%CC: {name_part}%"));
+                to_patterns.push(format!("%Participants: {name_part}%"));
+            }
+        }
+        // Also match by email in To/CC/Participants
+        if !email_lower.is_empty() {
+            to_patterns.push(format!("%To: %{email_lower}%"));
+            to_patterns.push(format!("%CC: %{email_lower}%"));
+            to_patterns.push(format!("%Participants: %{email_lower}%"));
+        }
+
+        let mut addressed_chunks: Vec<(String, String, String, String, i64)> = Vec::new();
+        let mut discussed_chunks: Vec<(String, String, String, i64)> = Vec::new();
+        let mut seen_addr: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+        for chunk_id in mention_ids.iter().take(limit * 3) {
+            // Check if this chunk has To/CC match for the person
+            let row: Option<(String, String, String, String, i64)> = conn.query_row(
                 &format!(
-                    "SELECT source_kind, source_id, substr(content,1,200), timestamp_ms \
+                    "SELECT id, source_kind, source_id, substr(content,1,300), timestamp_ms \
                      FROM mem_tree_chunks \
                      WHERE id=?1 AND timestamp_ms >= ?2 AND {source_kind_filter}"
                 ),
                 [chunk_id, &since_ms.to_string()],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
-            ) {
-                mention_chunks.push(row);
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+            )
+            .ok();
+
+            if let Some(row) = row {
+                let content = &row.3;
+                // Check if person is in To/CC/Participants
+                let is_addressed = to_patterns.iter().any(|pat| {
+                    let pat_lower = pat.to_lowercase();
+                    let pat_trimmed = pat_lower.trim_matches('%');
+                    content.to_lowercase().contains(pat_trimmed)
+                });
+
+                if is_addressed && seen_addr.insert(row.0.clone()) {
+                    addressed_chunks.push(row);
+                } else if !is_addressed && !seen_addr.contains(&row.0) {
+                    discussed_chunks.push((row.1, row.2, row.3, row.4));
+                }
             }
         }
-        mention_chunks.sort_by(|a, b| b.3.cmp(&a.3));
-        mention_chunks.truncate(limit);
+        addressed_chunks.sort_by(|a, b| b.4.cmp(&a.4));
+        addressed_chunks.truncate(limit);
+        discussed_chunks.sort_by(|a, b| b.3.cmp(&a.3));
+        discussed_chunks.truncate(limit);
 
         // 5. Format output
         let person_label = if !name.is_empty() { name } else { email };
@@ -583,11 +626,13 @@ fn profile_person_blocking(
 
         let mut out = format!(
             "# Profile: {person_label}\n\
-             Period: {period} | Sources: {} sent, {} mentions\n\n",
+             Period: {period} | Sources: {} sent, {} addressed-to, {} discussed-about\n\n",
             sent_chunks.len(),
-            mention_chunks.len()
+            addressed_chunks.len(),
+            discussed_chunks.len(),
         );
 
+        // Section 1: Messages sent BY this person (From:)
         if !sent_chunks.is_empty() {
             out.push_str(&format!(
                 "## Messages sent by {person_label} ({} found)\n\n",
@@ -597,7 +642,6 @@ fn profile_person_blocking(
                 let dt = chrono::DateTime::from_timestamp_millis(*ts_ms)
                     .map(|d| d.format("%Y-%m-%d %H:%M UTC").to_string())
                     .unwrap_or_default();
-                // Shorten source_id for display
                 let src_short = sid.split(':').last().unwrap_or(sid);
                 let src_short = &src_short[..src_short.len().min(30)];
                 out.push_str(&format!("**[{sk}]** {dt} (…{src_short})\n{content}\n\n"));
@@ -608,12 +652,31 @@ fn profile_person_blocking(
             ));
         }
 
-        if !mention_chunks.is_empty() {
+        // Section 2: Messages addressed TO this person (To:/CC:/Participants:)
+        if !addressed_chunks.is_empty() {
             out.push_str(&format!(
-                "## Mentions of {person_label} ({} found)\n\n",
-                mention_chunks.len()
+                "## Messages addressed to {person_label} ({} found)\n\n\
+                 _(emails/chats where {person_label} is in To, CC, or Participants)_\n\n",
+                addressed_chunks.len()
             ));
-            for (sk, sid, content, ts_ms) in &mention_chunks {
+            for (_, sk, sid, content, ts_ms) in &addressed_chunks {
+                let dt = chrono::DateTime::from_timestamp_millis(*ts_ms)
+                    .map(|d| d.format("%Y-%m-%d %H:%M UTC").to_string())
+                    .unwrap_or_default();
+                let src_short = sid.split(':').last().unwrap_or(sid);
+                let src_short = &src_short[..src_short.len().min(30)];
+                out.push_str(&format!("**[{sk}]** {dt} (…{src_short})\n{content}\n\n"));
+            }
+        }
+
+        // Section 3: Messages discussing this person (body mentions, not From/To/CC)
+        if !discussed_chunks.is_empty() {
+            out.push_str(&format!(
+                "## Others discussing {person_label} ({} found)\n\n\
+                 _(content where {person_label} is mentioned but is not sender or recipient)_\n\n",
+                discussed_chunks.len()
+            ));
+            for (sk, sid, content, ts_ms) in &discussed_chunks {
                 let dt = chrono::DateTime::from_timestamp_millis(*ts_ms)
                     .map(|d| d.format("%Y-%m-%d %H:%M UTC").to_string())
                     .unwrap_or_default();
@@ -629,8 +692,11 @@ fn profile_person_blocking(
         for (_, sk, ..) in &sent_chunks {
             *breakdown.entry(sk.clone()).or_insert(0) += 1;
         }
-        for (sk, ..) in &mention_chunks {
-            *breakdown.entry(format!("{sk} (mention)")).or_insert(0) += 1;
+        for (_, sk, ..) in &addressed_chunks {
+            *breakdown.entry(format!("{sk} (to)")).or_insert(0) += 1;
+        }
+        for (sk, ..) in &discussed_chunks {
+            *breakdown.entry(format!("{sk} (discussed)")).or_insert(0) += 1;
         }
         if !breakdown.is_empty() {
             out.push_str("## Source breakdown\n");
