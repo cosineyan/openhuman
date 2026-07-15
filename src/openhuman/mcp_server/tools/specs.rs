@@ -515,8 +515,8 @@ fn memory_query_source_schema() -> Value {
             },
             "source_kind": {
                 "type": "string",
-                "enum": ["chat", "email", "document"],
-                "description": "Filter by source type: chat (Teams), email (Outlook), or document."
+                "enum": ["chat", "email", "document", "transcript", "calendar"],
+                "description": "Filter by source type: chat (Teams), email (Outlook), document, transcript (meeting transcripts), or calendar."
             },
             "time_window_days": {
                 "type": "integer",

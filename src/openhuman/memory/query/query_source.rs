@@ -16,7 +16,7 @@ impl Tool for MemoryTreeQuerySourceTool {
 
     fn description(&self) -> &str {
         "Return summaries from per-source memory trees, optionally filtered \
-         by `source_id` (exact), `source_kind` (chat/email/document) and/or \
+         by `source_id` (exact), `source_kind` (chat/email/document/transcript/calendar) and/or \
          `time_window_days`. Use this for intents like \"in my email last \
          week...\" or \"summarise our slack #eng activity\". Newest-first \
          by default; pass `query` for semantic rerank."
@@ -32,8 +32,8 @@ impl Tool for MemoryTreeQuerySourceTool {
                 },
                 "source_kind": {
                     "type": "string",
-                    "enum": ["chat", "email", "document"],
-                    "description": "Source kind filter when no exact id is known."
+                    "enum": ["chat", "email", "document", "transcript", "calendar"],
+                    "description": "Source kind filter when no exact id is known. Use 'transcript' for meeting transcripts, 'calendar' for calendar events."
                 },
                 "time_window_days": {
                     "type": "integer",
