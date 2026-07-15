@@ -2758,7 +2758,7 @@ const en: TranslationMap = {
   'sync.memorySources': 'Memory Sources',
   'sync.noConnectedSources': 'No connected sources',
   'sync.chunks': 'chunks',
-  'sync.lastChunk': 'Last chunk:',
+  'sync.lastChunk': 'Latest data:',
   'sync.lastSync': 'Last sync:',
   'sync.pending': 'pending',
   'sync.processed': 'processed',
