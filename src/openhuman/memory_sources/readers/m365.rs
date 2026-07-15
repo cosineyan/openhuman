@@ -766,29 +766,33 @@ impl SourceReader for TeamsTranscriptReader {
         // Actually we need the graph_chat token for Chat.Read scope
         let graph_chat_tok = {
             let path = config.workspace_dir.join("m365").join("tokens.json");
-            let raw = std::fs::read_to_string(&path)
-                .map_err(|e| format!("read tokens: {e}"))?;
-            let tokens: serde_json::Value = serde_json::from_str(&raw)
-                .map_err(|e| format!("parse tokens: {e}"))?;
-            let entry = tokens.get("graph_chat").ok_or("graph_chat token not found")?;
+            let raw = std::fs::read_to_string(&path).map_err(|e| format!("read tokens: {e}"))?;
+            let tokens: serde_json::Value =
+                serde_json::from_str(&raw).map_err(|e| format!("parse tokens: {e}"))?;
+            let entry = tokens
+                .get("graph_chat")
+                .ok_or("graph_chat token not found")?;
             let exp = entry.get("expiresOn").and_then(|v| v.as_i64()).unwrap_or(0);
             if exp > 0 && exp < Utc::now().timestamp() + 30 {
                 return Err("graph_chat token expired — please refresh in SAP Systems".to_string());
             }
-            entry.get("token").and_then(|v| v.as_str())
+            entry
+                .get("token")
+                .and_then(|v| v.as_str())
                 .ok_or("graph_chat token missing")?
                 .to_string()
         };
 
         let filter_str = format!("JoinWebUrl eq '{join_url}'");
         let enc_filter = urlencoding::encode(&filter_str);
-        let meeting_url = format!(
-            "{GRAPH_BASE}/me/onlineMeetings?$filter={enc_filter}"
-        );
-        let meeting_data = graph_get(&graph_chat_tok, &meeting_url).await
+        let meeting_url = format!("{GRAPH_BASE}/me/onlineMeetings?$filter={enc_filter}");
+        let meeting_data = graph_get(&graph_chat_tok, &meeting_url)
+            .await
             .map_err(|e| format!("meeting lookup: {e}"))?;
 
-        let meetings = meeting_data.get("value").and_then(|v| v.as_array())
+        let meetings = meeting_data
+            .get("value")
+            .and_then(|v| v.as_array())
             .ok_or("no meetings found for join URL")?;
         if meetings.is_empty() {
             return Err(format!("meeting not found for: {subject}"));
@@ -796,7 +800,9 @@ impl SourceReader for TeamsTranscriptReader {
 
         let meeting = &meetings[0];
         let thread_id = meeting
-            .get("chatInfo").and_then(|c| c.get("threadId")).and_then(|v| v.as_str())
+            .get("chatInfo")
+            .and_then(|c| c.get("threadId"))
+            .and_then(|v| v.as_str())
             .ok_or("no chatInfo.threadId in meeting")?
             .to_string();
 
@@ -814,8 +820,8 @@ impl SourceReader for TeamsTranscriptReader {
             .await
             .map_err(|e| format!("spawn meetings recap --summary: {e}"))?;
 
-        let summary_json: serde_json::Value = serde_json::from_slice(&summary_output.stdout)
-            .unwrap_or(serde_json::Value::Null);
+        let summary_json: serde_json::Value =
+            serde_json::from_slice(&summary_output.stdout).unwrap_or(serde_json::Value::Null);
 
         // Get transcript
         let transcript_output = tokio::process::Command::new("python3")
@@ -827,21 +833,24 @@ impl SourceReader for TeamsTranscriptReader {
             .map_err(|e| format!("spawn meetings recap: {e}"))?;
 
         let transcript_json: serde_json::Value =
-            serde_json::from_slice(&transcript_output.stdout)
-                .unwrap_or(serde_json::Value::Null);
+            serde_json::from_slice(&transcript_output.stdout).unwrap_or(serde_json::Value::Null);
 
         // Step 3: build content body
-        let mut body = format!(
-            "[Meeting: {subject}] [Date: {start_dt}]\n\n"
-        );
+        let mut body = format!("[Meeting: {subject}] [Date: {start_dt}]\n\n");
 
         // Participants from onlineMeetingInfo or attendees
         let mut participants: Vec<String> = Vec::new();
         if let Some(participants_data) = meeting.get("participants") {
-            if let Some(attendees) = participants_data.get("attendees").and_then(|a| a.as_array()) {
+            if let Some(attendees) = participants_data
+                .get("attendees")
+                .and_then(|a| a.as_array())
+            {
                 for att in attendees.iter().take(20) {
-                    if let Some(name) = att.get("upn").and_then(|v| v.as_str())
-                        .or_else(|| att.get("displayName").and_then(|v| v.as_str())) {
+                    if let Some(name) = att
+                        .get("upn")
+                        .and_then(|v| v.as_str())
+                        .or_else(|| att.get("displayName").and_then(|v| v.as_str()))
+                    {
                         participants.push(name.to_string());
                     }
                 }
@@ -886,20 +895,63 @@ impl SourceReader for TeamsTranscriptReader {
             }
         }
 
-        // Transcript section
+        // Transcript section — also compute speaker statistics
         let mut transcript_entries: Vec<String> = Vec::new();
+        // speaker_id -> (total_secs, turns, words)
+        let mut speaker_stats: std::collections::HashMap<String, (f64, u32, u32)> =
+            std::collections::HashMap::new();
+
         if let Some(data) = transcript_json.get("data") {
             if let Some(entries) = data.get("entries").and_then(|e| e.as_array()) {
                 if !entries.is_empty() {
                     body.push_str("## Transcript\n\n");
+
+                    // Helper: parse "HH:MM:SS.fff" offset to seconds
+                    fn parse_offset_secs(s: &str) -> f64 {
+                        let dot = s.find('.').unwrap_or(s.len());
+                        let frac: f64 = if dot < s.len() {
+                            format!("0{}", &s[dot..]).parse().unwrap_or(0.0)
+                        } else {
+                            0.0
+                        };
+                        let parts: Vec<u64> = s[..dot]
+                            .split(':')
+                            .filter_map(|p| p.parse().ok())
+                            .collect();
+                        let base = match parts.len() {
+                            3 => parts[0] * 3600 + parts[1] * 60 + parts[2],
+                            2 => parts[0] * 60 + parts[1],
+                            1 => parts[0],
+                            _ => 0,
+                        };
+                        base as f64 + frac
+                    }
+
                     for entry in entries {
-                        let speaker = entry.get("speaker").and_then(|v| v.as_str()).unwrap_or("?");
+                        let speaker =
+                            entry.get("speaker").and_then(|v| v.as_str()).unwrap_or("?");
                         let text = entry.get("text").and_then(|v| v.as_str()).unwrap_or("");
-                        let offset = entry.get("startOffset").and_then(|v| v.as_str()).unwrap_or("");
-                        let line = format!("[{offset}] {speaker}: {text}");
+                        let start_off = entry
+                            .get("startOffset")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("0");
+                        let end_off = entry
+                            .get("endOffset")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("0");
+
+                        let duration =
+                            (parse_offset_secs(end_off) - parse_offset_secs(start_off)).max(0.0);
+                        let word_count = text.split_whitespace().count() as u32;
+
+                        let stat = speaker_stats.entry(speaker.to_string()).or_insert((0.0, 0, 0));
+                        stat.0 += duration;
+                        stat.1 += 1;
+                        stat.2 += word_count;
+
+                        let line = format!("[{start_off}] {speaker}: {text}");
                         body.push_str(&line);
                         body.push('\n');
-                        // Collect unique speakers as participants
                         if !participants.contains(&speaker.to_string()) {
                             participants.push(speaker.to_string());
                         }
@@ -908,6 +960,31 @@ impl SourceReader for TeamsTranscriptReader {
                 }
             }
         }
+
+        // Build speaker breakdown sorted by speaking time
+        let total_secs: f64 = speaker_stats.values().map(|(s, _, _)| s).sum();
+        let mut speaker_breakdown: Vec<serde_json::Value> = speaker_stats
+            .iter()
+            .map(|(name, (secs, turns, words))| {
+                let pct = if total_secs > 0.0 {
+                    (secs / total_secs * 100.0 * 10.0).round() / 10.0
+                } else {
+                    0.0
+                };
+                serde_json::json!({
+                    "name": name,
+                    "speaking_seconds": (*secs as u32),
+                    "speaking_pct": pct,
+                    "turns": turns,
+                    "words": words,
+                })
+            })
+            .collect();
+        speaker_breakdown.sort_by(|a, b| {
+            let sa = a["speaking_seconds"].as_u64().unwrap_or(0);
+            let sb = b["speaking_seconds"].as_u64().unwrap_or(0);
+            sb.cmp(&sa)
+        });
 
         if body.len() <= format!("[Meeting: {subject}] [Date: {start_dt}]\n\n").len() {
             return Err(format!(
@@ -945,6 +1022,7 @@ impl SourceReader for TeamsTranscriptReader {
                 "topics": topics,
                 "action_items": action_items,
                 "transcript_length": transcript_entries.len(),
+                "speaker_breakdown": speaker_breakdown,
                 "source": "teams_transcript",
             }),
         })
