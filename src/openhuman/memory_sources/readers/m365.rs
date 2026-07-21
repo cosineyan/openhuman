@@ -85,6 +85,44 @@ pub(crate) async fn graph_get(token: &str, url: &str) -> Result<serde_json::Valu
         .map_err(|e| format!("parse graph response: {e}"))
 }
 
+/// Extract a Teams meeting join URL from a calendar event body (HTML or plain text).
+/// Teams meeting URLs look like: https://teams.microsoft.com/l/meetup-join/...
+fn extract_teams_join_url_from_body(body: &str) -> Option<String> {
+    // Look for href containing teams.microsoft.com/l/meetup-join
+    if let Some(start) = body.find("https://teams.microsoft.com/l/meetup-join/") {
+        // Find the end of the URL (terminated by ", ', <, space, or newline)
+        let rest = &body[start..];
+        let end = rest
+            .find(|c: char| matches!(c, '"' | '\'' | '<' | ' ' | '\n' | '\r' | '&'))
+            .unwrap_or(rest.len());
+        let raw = &rest[..end];
+        // URL-decode the extracted URL (HTML entities like &amp; may be present)
+        let decoded = raw.replace("&amp;", "&");
+        if !decoded.is_empty() {
+            return Some(decoded);
+        }
+    }
+    None
+}
+
+/// Extract the Teams thread_id from a meetup-join URL.
+/// URL format: https://teams.microsoft.com/l/meetup-join/{encoded_thread_id}/0?...
+/// where encoded_thread_id is URL-encoded "19:meeting_XXX@thread.v2"
+fn extract_thread_id_from_join_url(join_url: &str) -> Option<String> {
+    // Find the path segment after /meetup-join/
+    let marker = "/l/meetup-join/";
+    let start = join_url.find(marker)? + marker.len();
+    let rest = &join_url[start..];
+    // Thread id is the next path segment (up to the next /)
+    let end = rest.find('/').unwrap_or(rest.len());
+    let encoded = &rest[..end];
+    if encoded.is_empty() {
+        return None;
+    }
+    // URL-decode: "19%3Ameeting_XXX%40thread.v2" → "19:meeting_XXX@thread.v2"
+    urlencoding::decode(encoded).ok().map(|s| s.into_owned())
+}
+
 fn since_date(days: u32) -> String {
     let dt = Utc::now() - chrono::Duration::days(days as i64);
     dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()
@@ -714,7 +752,7 @@ impl SourceReader for TeamsTranscriptReader {
     ) -> Result<Vec<SourceItem>, String> {
         let token = read_graph_token(config)?;
         let days = source.m365_sync_days.unwrap_or(30);
-        let top = source.m365_max_items.unwrap_or(50);
+        let max_items = source.m365_max_items.unwrap_or(500) as usize;
 
         let start = (Utc::now() - chrono::Duration::days(days as i64))
             .format("%Y-%m-%dT00:00:00Z")
@@ -723,18 +761,32 @@ impl SourceReader for TeamsTranscriptReader {
             .format("%Y-%m-%dT00:00:00Z")
             .to_string();
 
+        // Fetch all pages (Graph API max $top=100 per page for calendarView)
+        let page_size = 100usize;
         let params = format!(
             "startDateTime={start}&endDateTime={end}\
              &$select=id,subject,start,end,onlineMeeting,onlineMeetingUrl,isOnlineMeeting,attendees\
-             &$top={top}"
+             &$top={page_size}"
         );
-        let url = format!("{GRAPH_BASE}/me/calendarView?{params}");
-        let data = graph_get(&token, &url).await?;
+        let mut next_url = Some(format!("{GRAPH_BASE}/me/calendarView?{params}"));
+        let mut all_events: Vec<serde_json::Value> = Vec::new();
 
-        let items = data
-            .get("value")
-            .and_then(|v| v.as_array())
-            .ok_or("unexpected calendarView response")?
+        while let Some(url) = next_url {
+            if all_events.len() >= max_items {
+                break;
+            }
+            let data = graph_get(&token, &url).await?;
+            if let Some(arr) = data.get("value").and_then(|v| v.as_array()) {
+                all_events.extend(arr.iter().cloned());
+            }
+            // Follow @odata.nextLink for pagination
+            next_url = data
+                .get("@odata.nextLink")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+        }
+
+        let items = all_events
             .iter()
             .filter_map(|ev| {
                 // Only include online meetings
@@ -754,7 +806,11 @@ impl SourceReader for TeamsTranscriptReader {
                     .unwrap_or("")
                     .to_string();
 
-                if join_url.is_empty() {
+                // Also get event id as fallback for meetings without join URL
+                let event_id = ev["id"].as_str().unwrap_or("").to_string();
+
+                // Skip if no way to look up the meeting
+                if join_url.is_empty() && event_id.is_empty() {
                     return None;
                 }
 
@@ -762,10 +818,16 @@ impl SourceReader for TeamsTranscriptReader {
                     .ok()
                     .map(|dt| dt.timestamp_millis());
 
-                // Item id encodes join_url, subject, start for read_item to use
+                // Item id: prefer join URL, fall back to event ID
+                let lookup_key = if !join_url.is_empty() {
+                    format!("join:{}", urlencoding::encode(&join_url))
+                } else {
+                    format!("event:{}", urlencoding::encode(&event_id))
+                };
+
                 let item_id = format!(
                     "{}||{}||{}",
-                    urlencoding::encode(&join_url),
+                    lookup_key,
                     urlencoding::encode(&subject),
                     urlencoding::encode(&start_dt)
                 );
@@ -792,8 +854,8 @@ impl SourceReader for TeamsTranscriptReader {
         if parts.len() < 2 {
             return Err(format!("invalid TeamsTranscript item_id: {item_id}"));
         }
-        let join_url = urlencoding::decode(parts[0])
-            .map_err(|e| format!("decode join_url: {e}"))?
+        let lookup_key = urlencoding::decode(parts[0])
+            .map_err(|e| format!("decode lookup_key: {e}"))?
             .into_owned();
         let subject = urlencoding::decode(parts[1])
             .map_err(|e| format!("decode subject: {e}"))?
@@ -806,53 +868,50 @@ impl SourceReader for TeamsTranscriptReader {
             String::new()
         };
 
-        // Step 1: get thread_id via Graph API (graph_chat token has Chat.Read)
-        let graph_chat_token = crate::openhuman::m365::ops::ensure_graph_token(config)
-            .await
-            .map_err(|e| e.to_string())?;
+        // Step 1: extract thread_id from the join URL (no Graph API call needed —
+        // the thread_id is embedded in the meetup-join path segment of the URL itself,
+        // and the /me/onlineMeetings filter API only works for meetings YOU organized).
+        let thread_id = if let Some(join_url) = lookup_key.strip_prefix("join:") {
+            extract_thread_id_from_join_url(join_url).ok_or_else(|| {
+                format!("cannot extract thread_id from join URL for: {subject}")
+            })?
+        } else if let Some(event_id) = lookup_key.strip_prefix("event:") {
+            // For meetings without join URL in Calendar, fetch the event body and
+            // extract the Teams join URL embedded in the HTML.
+            let graph_tok = read_graph_token(config)?;
+            let event_url = format!(
+                "{GRAPH_BASE}/me/events/{event_id}?$select=body,onlineMeetingUrl,subject"
+            );
+            let event_data = graph_get(&graph_tok, &event_url)
+                .await
+                .map_err(|e| format!("calendar event lookup for {subject}: {e}"))?;
 
-        // Actually we need the graph_chat token for Chat.Read scope
-        let graph_chat_tok = {
-            let path = config.workspace_dir.join("m365").join("tokens.json");
-            let raw = std::fs::read_to_string(&path).map_err(|e| format!("read tokens: {e}"))?;
-            let tokens: serde_json::Value =
-                serde_json::from_str(&raw).map_err(|e| format!("parse tokens: {e}"))?;
-            let entry = tokens
-                .get("graph_chat")
-                .ok_or("graph_chat token not found")?;
-            let exp = entry.get("expiresOn").and_then(|v| v.as_i64()).unwrap_or(0);
-            if exp > 0 && exp < Utc::now().timestamp() + 30 {
-                return Err("graph_chat token expired — please refresh in SAP Systems".to_string());
-            }
-            entry
-                .get("token")
+            let body_content = event_data
+                .get("body")
+                .and_then(|b| b.get("content"))
                 .and_then(|v| v.as_str())
-                .ok_or("graph_chat token missing")?
-                .to_string()
+                .unwrap_or("");
+
+            let join_url_candidate =
+                extract_teams_join_url_from_body(body_content).or_else(|| {
+                    event_data
+                        .get("onlineMeetingUrl")
+                        .and_then(|v| v.as_str())
+                        .filter(|s| !s.is_empty())
+                        .map(|s| s.to_string())
+                });
+
+            match join_url_candidate.as_deref().and_then(extract_thread_id_from_join_url) {
+                Some(tid) => tid,
+                None => {
+                    return Err(format!(
+                        "cannot find Teams thread_id for event {event_id} ({subject})"
+                    ))
+                }
+            }
+        } else {
+            return Err(format!("invalid lookup_key format: {lookup_key}"));
         };
-
-        let filter_str = format!("JoinWebUrl eq '{join_url}'");
-        let enc_filter = urlencoding::encode(&filter_str);
-        let meeting_url = format!("{GRAPH_BASE}/me/onlineMeetings?$filter={enc_filter}");
-        let meeting_data = graph_get(&graph_chat_tok, &meeting_url)
-            .await
-            .map_err(|e| format!("meeting lookup: {e}"))?;
-
-        let meetings = meeting_data
-            .get("value")
-            .and_then(|v| v.as_array())
-            .ok_or("no meetings found for join URL")?;
-        if meetings.is_empty() {
-            return Err(format!("meeting not found for: {subject}"));
-        }
-
-        let meeting = &meetings[0];
-        let thread_id = meeting
-            .get("chatInfo")
-            .and_then(|c| c.get("threadId"))
-            .and_then(|v| v.as_str())
-            .ok_or("no chatInfo.threadId in meeting")?
-            .to_string();
 
         // Step 2: run m365-cli meetings recap to get transcript + summary
         let token_file = config.workspace_dir.join("m365").join("tokens.json");
@@ -906,24 +965,8 @@ impl SourceReader for TeamsTranscriptReader {
         // Step 3: build content body
         let mut body = format!("[Meeting: {subject}] [Date: {start_dt}]\n\n");
 
-        // Participants from onlineMeetingInfo or attendees
+        // Participants are embedded in the transcript entries (displayName per speaker)
         let mut participants: Vec<String> = Vec::new();
-        if let Some(participants_data) = meeting.get("participants") {
-            if let Some(attendees) = participants_data
-                .get("attendees")
-                .and_then(|a| a.as_array())
-            {
-                for att in attendees.iter().take(20) {
-                    if let Some(name) = att
-                        .get("upn")
-                        .and_then(|v| v.as_str())
-                        .or_else(|| att.get("displayName").and_then(|v| v.as_str()))
-                    {
-                        participants.push(name.to_string());
-                    }
-                }
-            }
-        }
 
         // AI Summary section
         let mut topics: Vec<String> = Vec::new();

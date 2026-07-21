@@ -150,7 +150,10 @@ impl MemorySourceEntry {
             SourceKind::WebPage => {
                 require_field(&self.url, "url")?;
             }
-            SourceKind::OutlookMail | SourceKind::OutlookCalendar | SourceKind::TeamsMessages | SourceKind::TeamsTranscript => {
+            SourceKind::OutlookMail
+            | SourceKind::OutlookCalendar
+            | SourceKind::TeamsMessages
+            | SourceKind::TeamsTranscript => {
                 // Token is read from the global m365 token file — no extra fields required.
             }
         }
