@@ -238,8 +238,10 @@ pub async fn token_status(config: &Config) -> Result<Value> {
     let should_refresh = needs_refresh("rest")
         || needs_refresh("graph")
         || needs_refresh("teams")
-        || needs_refresh("sharepoint")
-        || needs_refresh("graph_chat");
+        || needs_refresh("sharepoint");
+    // graph_chat is intentionally excluded: MSAL cannot proactively refresh this
+    // token before expiry — the Outlook Web page only re-acquires it after expiry
+    // via silent SSO. Triggering an early refresh just opens a Chrome tab for nothing.
 
     if should_refresh {
         // 60-second cooldown: if a refresh completed recently, skip spawning another.
