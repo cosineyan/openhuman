@@ -167,6 +167,10 @@ pub struct GetChunkRequest {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GetChunkResponse {
     pub chunk: Option<Chunk>,
+    /// Full body text read from the content file (content_path).
+    /// Falls back to the inline `content` column if the file is unavailable.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body: Option<String>,
 }
 
 /// `get_chunk` RPC handler. Returns the chunk identified by `id`, or `None`.
@@ -175,16 +179,107 @@ pub async fn get_chunk_rpc(
     req: GetChunkRequest,
 ) -> Result<RpcOutcome<GetChunkResponse>, String> {
     let id = req.id.clone();
-    let chunk = tokio::task::spawn_blocking({
+    let (chunk, body) = tokio::task::spawn_blocking({
         let config = config.clone();
-        move || chunk_store::get_chunk(&config, &id)
+        move || -> anyhow::Result<(Option<Chunk>, Option<String>)> {
+            let chunk = chunk_store::get_chunk(&config, &id)?;
+            let body = if chunk.is_some() {
+                match crate::openhuman::memory_store::content::read::read_chunk_body(&config, &id) {
+                    Ok(b) => Some(b),
+                    Err(_) => chunk.as_ref().map(|c| c.content.clone()),
+                }
+            } else {
+                None
+            };
+            Ok((chunk, body))
+        }
     })
     .await
     .map_err(|e| format!("get_chunk join error: {e}"))?
     .map_err(|e| format!("get_chunk: {e}"))?;
     Ok(RpcOutcome::single_log(
-        GetChunkResponse { chunk },
+        GetChunkResponse { chunk, body },
         format!("memory_tree: get_chunk id={}", req.id),
+    ))
+}
+
+/// Request shape for `suppress_chunk` / `restore_chunk`.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SetChunkStatusRequest {
+    pub chunk_id: String,
+}
+
+/// Response shape for `suppress_chunk` / `restore_chunk`.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SetChunkStatusResponse {
+    pub chunk_id: String,
+    pub new_status: String,
+    pub found: bool,
+}
+
+/// `suppress_chunk` RPC — marks a chunk as `dropped` so it is excluded from
+/// all future search, recall, and browse results. The chunk and its content
+/// file are preserved on disk and can be restored at any time via
+/// `restore_chunk`. Use this when Chat returns information you know is wrong.
+pub async fn suppress_chunk_rpc(
+    config: &Config,
+    req: SetChunkStatusRequest,
+) -> Result<RpcOutcome<SetChunkStatusResponse>, String> {
+    let id = req.chunk_id.clone();
+    let found = tokio::task::spawn_blocking({
+        let config = config.clone();
+        move || -> anyhow::Result<bool> {
+            let existing = chunk_store::get_chunk_lifecycle_status(&config, &id)?;
+            if existing.is_none() {
+                return Ok(false);
+            }
+            chunk_store::set_chunk_lifecycle_status(&config, &id, chunk_store::CHUNK_STATUS_DROPPED)?;
+            log::info!("[memory_tree] suppress_chunk: chunk_id={id} → dropped");
+            Ok(true)
+        }
+    })
+    .await
+    .map_err(|e| format!("suppress_chunk join error: {e}"))?
+    .map_err(|e| format!("suppress_chunk: {e}"))?;
+    Ok(RpcOutcome::single_log(
+        SetChunkStatusResponse {
+            chunk_id: req.chunk_id.clone(),
+            new_status: chunk_store::CHUNK_STATUS_DROPPED.to_string(),
+            found,
+        },
+        format!("memory_tree: suppress_chunk id={} found={found}", req.chunk_id),
+    ))
+}
+
+/// `restore_chunk` RPC — reverses `suppress_chunk` by setting lifecycle status
+/// back to `admitted`. The chunk will appear in search and recall again.
+pub async fn restore_chunk_rpc(
+    config: &Config,
+    req: SetChunkStatusRequest,
+) -> Result<RpcOutcome<SetChunkStatusResponse>, String> {
+    let id = req.chunk_id.clone();
+    let found = tokio::task::spawn_blocking({
+        let config = config.clone();
+        move || -> anyhow::Result<bool> {
+            let existing = chunk_store::get_chunk_lifecycle_status(&config, &id)?;
+            if existing.is_none() {
+                return Ok(false);
+            }
+            chunk_store::set_chunk_lifecycle_status(&config, &id, chunk_store::CHUNK_STATUS_ADMITTED)?;
+            log::info!("[memory_tree] restore_chunk: chunk_id={id} → admitted");
+            Ok(true)
+        }
+    })
+    .await
+    .map_err(|e| format!("restore_chunk join error: {e}"))?
+    .map_err(|e| format!("restore_chunk: {e}"))?;
+    Ok(RpcOutcome::single_log(
+        SetChunkStatusResponse {
+            chunk_id: req.chunk_id.clone(),
+            new_status: chunk_store::CHUNK_STATUS_ADMITTED.to_string(),
+            found,
+        },
+        format!("memory_tree: restore_chunk id={} found={found}", req.chunk_id),
     ))
 }
 

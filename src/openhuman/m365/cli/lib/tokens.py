@@ -185,6 +185,8 @@ def mcp_browser_cmd(body, timeout_ms=30000):
         return json.loads(resp.read().decode('utf-8'))
 
 
+
+
 def find_outlook_session():
     resp = mcp_browser_cmd({'command': 'sessions'})
     if not resp.get('ok') or not resp.get('sessions'):
@@ -761,13 +763,15 @@ def ensure_chat_graph_token(force=False):
             return _save_graph_chat(graph_entry)
         return None
 
-    # Step 1: try existing Outlook tab first (fast path, no new tab needed)
+    # Step 1: close any existing Outlook tab so the new tab gets a clean SSO
+    # load instead of reading stale MSAL tokens from a cached page.
     existing_sid = find_outlook_session()
     if existing_sid:
-        tok = _try_extract_from(existing_sid)
-        if tok:
-            dlog(f'ensure_chat_graph_token: got token from existing tab {existing_sid}')
-            return tok
+        dlog(f'ensure_chat_graph_token: closing existing Outlook tab {existing_sid} before fresh open')
+        try:
+            close_tab(existing_sid)
+        except Exception as e:
+            dlog(f'ensure_chat_graph_token: could not close existing tab: {e}')
 
     # Step 2: open a foreground Outlook tab and poll until token appears.
     # Retry up to 2 times (network latency / slow SSO on first attempt).
@@ -785,13 +789,6 @@ def ensure_chat_graph_token(force=False):
                     dlog(f'ensure_chat_graph_token: attempt {attempt} success from new tab')
                     close_tab(new_sid)
                     return tok
-                # Also check the original existing tab (it may have refreshed too)
-                if existing_sid:
-                    tok = _try_extract_from(existing_sid)
-                    if tok:
-                        dlog(f'ensure_chat_graph_token: attempt {attempt} success from existing tab')
-                        close_tab(new_sid)
-                        return tok
                 time.sleep(3)
             dlog(f'ensure_chat_graph_token: attempt {attempt} timed out, closing tab')
             close_tab(new_sid)

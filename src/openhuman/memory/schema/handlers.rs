@@ -31,6 +31,22 @@ pub(super) fn handle_get_chunk(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
+pub(super) fn handle_suppress_chunk(params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let config = config_rpc::load_config_with_timeout().await?;
+        let req = parse_value::<rpc::SetChunkStatusRequest>(Value::Object(params))?;
+        to_json(rpc::suppress_chunk_rpc(&config, req).await?)
+    })
+}
+
+pub(super) fn handle_restore_chunk(params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let config = config_rpc::load_config_with_timeout().await?;
+        let req = parse_value::<rpc::SetChunkStatusRequest>(Value::Object(params))?;
+        to_json(rpc::restore_chunk_rpc(&config, req).await?)
+    })
+}
+
 pub(super) fn handle_memory_backfill_status(_params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;

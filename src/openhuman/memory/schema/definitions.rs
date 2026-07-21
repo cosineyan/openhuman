@@ -175,6 +175,58 @@ pub fn schemas(function: &str) -> ControllerSchema {
                 required: false,
             }],
         },
+        "suppress_chunk" => ControllerSchema {
+            namespace: NAMESPACE,
+            function: "suppress_chunk",
+            description: "Mark a chunk as dropped so it is excluded from all future search and recall. \
+                          The chunk and its content file are preserved and can be restored via restore_chunk.",
+            inputs: vec![FieldSchema {
+                name: "chunk_id",
+                ty: TypeSchema::String,
+                comment: "Chunk id to suppress.",
+                required: true,
+            }],
+            outputs: vec![
+                FieldSchema {
+                    name: "chunk_id",
+                    ty: TypeSchema::String,
+                    comment: "The chunk id that was operated on.",
+                    required: true,
+                },
+                FieldSchema {
+                    name: "found",
+                    ty: TypeSchema::Bool,
+                    comment: "True if the chunk was found and updated.",
+                    required: true,
+                },
+            ],
+        },
+        "restore_chunk" => ControllerSchema {
+            namespace: NAMESPACE,
+            function: "restore_chunk",
+            description: "Restore a previously suppressed chunk back to admitted status, \
+                          making it visible in search and recall again.",
+            inputs: vec![FieldSchema {
+                name: "chunk_id",
+                ty: TypeSchema::String,
+                comment: "Chunk id to restore.",
+                required: true,
+            }],
+            outputs: vec![
+                FieldSchema {
+                    name: "chunk_id",
+                    ty: TypeSchema::String,
+                    comment: "The chunk id that was operated on.",
+                    required: true,
+                },
+                FieldSchema {
+                    name: "found",
+                    ty: TypeSchema::Bool,
+                    comment: "True if the chunk was found and updated.",
+                    required: true,
+                },
+            ],
+        },
         "list_sources" => ControllerSchema {
             namespace: NAMESPACE,
             function: "list_sources",

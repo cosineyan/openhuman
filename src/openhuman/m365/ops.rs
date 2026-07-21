@@ -88,10 +88,23 @@ pub fn token_file_path(config: &Config) -> PathBuf {
 }
 
 /// Quick synchronous check: returns `true` when the M365 tokens needed for
-/// the given source kind exist and have more than 1 minute of remaining validity.
-/// - OutlookMail / OutlookCalendar → checks `graph` token
-/// - TeamsMessages → checks `graph_chat` token (Chat.Read scope)
+/// the given source kind exist and have more than the required validity margin.
+/// - OutlookMail / OutlookCalendar / TeamsTranscript → checks `graph` token (10 min margin)
+/// - TeamsMessages → checks `graph_chat` token (30 sec margin only — MSAL cannot
+///   proactively refresh this token before expiry; it only re-acquires after expiry)
+pub const MIN_TOKEN_MARGIN_SECS: i64 = 600; // 10 minutes for graph/teams/substrate
+pub const GRAPH_CHAT_MARGIN_SECS: i64 = 30; // graph_chat: only check not already expired
+
 pub fn m365_token_usable_for(config: &Config, source_kind: &str) -> bool {
+    let margin = if source_kind == "teams_messages" {
+        GRAPH_CHAT_MARGIN_SECS
+    } else {
+        MIN_TOKEN_MARGIN_SECS
+    };
+    m365_token_usable_for_margin(config, source_kind, margin)
+}
+
+pub fn m365_token_usable_for_margin(config: &Config, source_kind: &str, margin_secs: i64) -> bool {
     let path = token_file_path(config);
     let Ok(raw) = std::fs::read_to_string(&path) else {
         return false;
@@ -115,9 +128,7 @@ pub fn m365_token_usable_for(config: &Config, source_kind: &str) -> bool {
         .and_then(|e| e.get("expiresOn"))
         .and_then(|v| v.as_i64())
         .unwrap_or(0);
-    // Treat as usable when more than 30 seconds remain (matches the margin
-    // used in read_token_by_key so both checks agree on validity).
-    expires_on > now + 30
+    expires_on > now + margin_secs
 }
 
 /// Convenience wrapper that checks the `graph` token (mail + calendar).

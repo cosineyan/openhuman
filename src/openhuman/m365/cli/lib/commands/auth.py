@@ -260,8 +260,8 @@ def auth_refresh(ctx, as_json):
             if not is_token_usable(entry):
                 return True  # cached but expired
             exp = (entry or {}).get('expiresOn')
-            if exp is None:
-                return False
+            if not exp:  # expiresOn missing or 0 → treat as expired
+                return True
             return (exp - __import__('time').time()) < REFRESH_THRESHOLD_MIN * 60
 
         errors = []
@@ -291,6 +291,13 @@ def auth_refresh(ctx, as_json):
                 ensure_spo_token('sap.sharepoint.com')
             except Exception as e:
                 errors.append(f'sharepoint: {e}')
+
+        for spo_host in ['sap-my.sharepoint.com', 'sapnam-my.sharepoint.com']:
+            if _needs_refresh(f'spo:{spo_host}'):
+                try:
+                    ensure_spo_token(spo_host)
+                except Exception as e:
+                    errors.append(f'spo:{spo_host}: {e}')
 
         # Refresh graph_chat only if expired or expiring soon — not unconditionally.
         # Opening a foreground Outlook tab every refresh poll is very disruptive.

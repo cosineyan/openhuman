@@ -104,7 +104,7 @@ pub fn base_tool_specs() -> Vec<McpToolSpec> {
         McpToolSpec {
             name: "tree.read_chunk",
             title: "Read Memory Chunk",
-            description: "Read one memory-tree chunk by id. Use this to inspect the source text behind search or recall results.",
+            description: "Read one memory-tree chunk by id. Use this to inspect the source text behind search or recall results. The response includes a `body` field with the full original text (not truncated), and a `chunk` field with metadata.",
             rpc_method: Some("openhuman.memory_tree_get_chunk"),
             input_schema: json!({
                 "type": "object",
@@ -118,6 +118,58 @@ pub fn base_tool_specs() -> Vec<McpToolSpec> {
                 "additionalProperties": false
             }),
             annotations: read_only_local_annotations(),
+        },
+        McpToolSpec {
+            name: "tree.suppress_chunk",
+            title: "Suppress Memory Chunk",
+            description: "Mark a memory chunk as suppressed so it is excluded from all future search and recall results. \
+                          Use this when you identify that a chunk contains incorrect or unwanted information. \
+                          The data is preserved and can be restored with tree.restore_chunk. \
+                          First use memory.recall or tree.browse to find the chunk_id, then call this tool.",
+            rpc_method: Some("openhuman.memory_tree_suppress_chunk"),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "chunk_id": {
+                        "type": "string",
+                        "description": "The chunk id to suppress (32 hex chars)."
+                    }
+                },
+                "required": ["chunk_id"],
+                "additionalProperties": false
+            }),
+            annotations: json!({
+                "title": "Suppress Memory Chunk",
+                "readOnlyHint": false,
+                "destructiveHint": false,
+                "idempotentHint": true,
+                "openWorldHint": false
+            }),
+        },
+        McpToolSpec {
+            name: "tree.restore_chunk",
+            title: "Restore Memory Chunk",
+            description: "Restore a previously suppressed memory chunk back to active status, \
+                          making it visible in search and recall again. Use this to undo a suppress_chunk call.",
+            rpc_method: Some("openhuman.memory_tree_restore_chunk"),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "chunk_id": {
+                        "type": "string",
+                        "description": "The chunk id to restore (32 hex chars)."
+                    }
+                },
+                "required": ["chunk_id"],
+                "additionalProperties": false
+            }),
+            annotations: json!({
+                "title": "Restore Memory Chunk",
+                "readOnlyHint": false,
+                "destructiveHint": false,
+                "idempotentHint": true,
+                "openWorldHint": false
+            }),
         },
         McpToolSpec {
             name: "tree.browse",

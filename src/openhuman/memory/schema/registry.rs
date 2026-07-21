@@ -14,6 +14,8 @@ pub fn all_controller_schemas() -> Vec<ControllerSchema> {
         schemas("ingest"),
         schemas("list_chunks"),
         schemas("get_chunk"),
+        schemas("suppress_chunk"),
+        schemas("restore_chunk"),
         schemas("memory_backfill_status"),
         schemas("list_sources"),
         schemas("search"),
@@ -54,6 +56,14 @@ pub fn all_registered_controllers() -> Vec<RegisteredController> {
         RegisteredController {
             schema: schemas("get_chunk"),
             handler: handle_get_chunk,
+        },
+        RegisteredController {
+            schema: schemas("suppress_chunk"),
+            handler: handle_suppress_chunk,
+        },
+        RegisteredController {
+            schema: schemas("restore_chunk"),
+            handler: handle_restore_chunk,
         },
         RegisteredController {
             schema: schemas("memory_backfill_status"),
