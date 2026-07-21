@@ -584,16 +584,17 @@ fn profile_person_blocking(
 
         for chunk_id in mention_ids.iter().take(limit * 3) {
             // Check if this chunk has To/CC match for the person
-            let row: Option<(String, String, String, String, i64)> = conn.query_row(
-                &format!(
-                    "SELECT id, source_kind, source_id, substr(content,1,300), timestamp_ms \
+            let row: Option<(String, String, String, String, i64)> = conn
+                .query_row(
+                    &format!(
+                        "SELECT id, source_kind, source_id, substr(content,1,300), timestamp_ms \
                      FROM mem_tree_chunks \
                      WHERE id=?1 AND timestamp_ms >= ?2 AND {source_kind_filter}"
-                ),
-                [chunk_id, &since_ms.to_string()],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
-            )
-            .ok();
+                    ),
+                    [chunk_id, &since_ms.to_string()],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+                )
+                .ok();
 
             if let Some(row) = row {
                 let content = &row.3;

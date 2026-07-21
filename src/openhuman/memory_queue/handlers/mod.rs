@@ -280,22 +280,28 @@ async fn prepare_extract(config: &Config, job: &Job) -> Result<Option<PreparedEx
     // crucially — keeps `PreparedExtract` holding only the small preview rather
     // than the full body, so a batch of N prepared items doesn't retain N full
     // bodies in memory before finalize.
-    let body = content_read::read_chunk_body(config, &chunk.id)
+    let body = match content_read::read_chunk_body(config, &chunk.id)
         .with_context(|| format!("read full body for extract chunk_id={}", chunk.id))
-        .map_err(|e| {
-            // Chunks with no content_path and no raw_refs will never be readable.
-            // Wrap as unrecoverable so worker tombstones them immediately instead
-            // of burning the retry budget and appearing as Degraded in the UI.
+    {
+        Ok(b) => b,
+        Err(e) => {
             let msg = e.to_string();
-            if msg.contains("empty content_path") || msg.contains("no raw_refs") {
-                anyhow::Error::new(crate::openhuman::memory_tree::health::PipelineFailure::new(
-                    crate::openhuman::memory_tree::health::FailureCode::EmptyInputRefused,
-                ))
-                .context(msg)
-            } else {
-                e
+            if msg.contains("empty content_path")
+                || msg.contains("no raw_refs")
+                || msg.contains("no content_path or raw_refs")
+            {
+                // Chunk has no resolvable body — skip silently instead of
+                // failing so the job queue stays clean and Degraded is not
+                // triggered for a permanently unreadable row.
+                log::debug!(
+                    "[memory::jobs] extract_chunk: skipping chunk {} — no body source",
+                    chunk.id
+                );
+                return Ok(None);
             }
-        })?;
+            return Err(e);
+        }
+    };
     let preview = std::mem::replace(&mut chunk.content, body);
 
     emit_build_progress(
@@ -504,7 +510,9 @@ async fn handle_append_buffer(config: &Config, job: &Job) -> Result<JobOutcome> 
                         );
                         return Ok(JobOutcome::Done);
                     }
-                    return Err(e.context(format!("read chunk body in append_buffer chunk_id={chunk_id}")));
+                    return Err(e.context(format!(
+                        "read chunk body in append_buffer chunk_id={chunk_id}"
+                    )));
                 }
             };
             let leaf = LeafRef {

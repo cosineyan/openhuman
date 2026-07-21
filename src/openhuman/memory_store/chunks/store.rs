@@ -422,7 +422,7 @@ pub fn upsert_chunks(config: &Config, chunks: &[Chunk]) -> Result<usize> {
                     content = excluded.content,
                     token_count = excluded.token_count,
                     seq_in_source = excluded.seq_in_source",
-                    // created_at_ms intentionally NOT updated on conflict
+                // created_at_ms intentionally NOT updated on conflict
             )?;
             upsert_chunks_with_statement(&mut stmt, chunks)?;
         }
