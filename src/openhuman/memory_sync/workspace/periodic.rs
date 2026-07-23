@@ -271,10 +271,13 @@ pub(crate) async fn run_one_tick() -> Result<(), String> {
                         // before the sync worker reads it. auth_refresh is async and
                         // the Python subprocess may still be writing tokens.json.
                         tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-                        // Re-check token after refresh to confirm it's actually valid.
-                        if !crate::openhuman::m365::ops::m365_token_usable_for(
+                        // Re-check with a minimal margin (30s) — we just refreshed, so
+                        // the token is fresh. Using the full 10-min margin here would
+                        // incorrectly skip sync if the token has < 10 min remaining.
+                        if !crate::openhuman::m365::ops::m365_token_usable_for_margin(
                             &config,
                             source.kind.as_str(),
+                            30,
                         ) {
                             tracing::warn!(
                                 source_id = %source_id,
