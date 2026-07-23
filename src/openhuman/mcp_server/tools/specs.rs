@@ -174,12 +174,14 @@ pub fn base_tool_specs() -> Vec<McpToolSpec> {
         McpToolSpec {
             name: "tree.browse",
             title: "Browse Memory",
-            description: "Paginated listing of memory-tree chunks in reverse-chronological order, \
+            description: "Paginated listing of raw memory-tree chunks in reverse-chronological order, \
                           with optional filters by source kind, source id, entity id, time window, \
-                          and substring keyword. Use this when the user wants to enumerate (\"what's \
-                          recent in my Gmail\", \"show me everything from last week about Alice\") \
-                          rather than search by query. Returns chunks plus a total match count for \
-                          pagination.",
+                          and substring keyword. Returns individual chunks — NOTE: one meeting or email \
+                          is split into many chunks, so a k=30 limit may only cover a few sources. \
+                          Use this to inspect specific chunk content or search within a known source. \
+                          For listing meetings/emails/chats by date or type (e.g. \"what meetings \
+                          happened yesterday\"), prefer `memory.query_source` which returns one summary \
+                          per source (one per meeting) instead of raw chunks.",
             rpc_method: Some("openhuman.memory_tree_list_chunks"),
             input_schema: tree_browse_schema(),
             annotations: read_only_local_annotations(),
@@ -225,9 +227,15 @@ pub fn base_tool_specs() -> Vec<McpToolSpec> {
             name: "memory.query_source",
             title: "Query Memory Source Tree",
             description: "Return summaries from the wiki summary tree, filtered by source type \
-                          (chat, email, document) and optionally by source_id or time window. \
-                          Use this to query the LLM-generated wiki layer rather than raw chunks. \
-                          Good for \"what happened in my Teams chats this week\" type questions.",
+                          (chat, email, document, transcript, calendar) and optionally by source_id \
+                          or time window. Returns ONE summary per source (one per meeting, one per \
+                          email thread, one per chat conversation) — ideal for listing meetings by \
+                          date, finding emails from a person, or getting an overview of activity. \
+                          Use `time_window_days=1` for yesterday, `time_window_days=7` for last week. \
+                          Add `query` for semantic rerank. For meeting transcripts use \
+                          source_kind='transcript'; for calendar events use source_kind='calendar'. \
+                          Good for: \"what meetings happened yesterday\", \"summarise my Teams chats \
+                          this week\", \"emails about project X last month\".",
             rpc_method: Some("openhuman.memory_tree_query_source"),
             input_schema: memory_query_source_schema(),
             annotations: read_only_local_annotations(),
