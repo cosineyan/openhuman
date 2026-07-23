@@ -128,6 +128,39 @@ fn since_date(days: u32) -> String {
     dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()
 }
 
+/// Parse a Graph API datetime string to milliseconds since epoch.
+///
+/// Graph API returns `start.dateTime` as `"2026-06-29T13:00:00.0000000"` — 7
+/// fractional-second digits, which is not valid RFC 3339 (chrono only accepts
+/// 0, 3, 6, or 9 digits). We truncate to millisecond precision (3 digits)
+/// before parsing to handle this format robustly.
+fn parse_graph_datetime_ms(s: &str) -> Option<i64> {
+    // Normalise fractional seconds to exactly 3 digits, then append 'Z' if missing
+    let normalised = if let Some(dot_pos) = s.find('.') {
+        let frac = &s[dot_pos + 1..];
+        let frac_digits: String = frac.chars().take_while(|c| c.is_ascii_digit()).collect();
+        let frac3 = if frac_digits.len() >= 3 {
+            frac_digits[..3].to_string()
+        } else {
+            format!("{:0<3}", frac_digits)
+        };
+        let rest_after_frac = &frac[frac_digits.len()..]; // e.g. "Z" or ""
+        let suffix = if rest_after_frac.is_empty() || rest_after_frac == "0000000" {
+            "Z"
+        } else {
+            rest_after_frac
+        };
+        format!("{}.{}{}", &s[..dot_pos], frac3, suffix)
+    } else if s.ends_with('Z') || s.contains('+') || s.contains('-') {
+        s.to_string()
+    } else {
+        format!("{}Z", s)
+    };
+    chrono::DateTime::parse_from_rfc3339(&normalised)
+        .ok()
+        .map(|dt| dt.timestamp_millis())
+}
+
 // ---------------------------------------------------------------------------
 // OutlookMailReader
 // ---------------------------------------------------------------------------
@@ -163,9 +196,7 @@ impl SourceReader for OutlookMailReader {
                 let id = m["id"].as_str().unwrap_or("").to_string();
                 let subject = m["subject"].as_str().unwrap_or("(no subject)").to_string();
                 let received = m["receivedDateTime"].as_str().unwrap_or("").to_string();
-                let updated_at_ms = chrono::DateTime::parse_from_rfc3339(&received)
-                    .ok()
-                    .map(|dt| dt.timestamp_millis());
+                let updated_at_ms = parse_graph_datetime_ms(&received);
                 SourceItem {
                     id,
                     title: subject,
@@ -370,9 +401,7 @@ impl SourceReader for OutlookCalendarReader {
                 let id = e["id"].as_str().unwrap_or("").to_string();
                 let subject = e["subject"].as_str().unwrap_or("(no title)").to_string();
                 let start = e["start"]["dateTime"].as_str().unwrap_or("").to_string();
-                let updated_at_ms = chrono::DateTime::parse_from_rfc3339(&start)
-                    .ok()
-                    .map(|dt| dt.timestamp_millis());
+                let updated_at_ms = parse_graph_datetime_ms(&start);
                 SourceItem {
                     id,
                     title: subject,
@@ -587,9 +616,7 @@ impl SourceReader for TeamsMessagesReader {
                                 continue;
                             }
                             let created = msg["createdDateTime"].as_str().unwrap_or("").to_string();
-                            let ts = chrono::DateTime::parse_from_rfc3339(&created)
-                                .ok()
-                                .map(|dt| dt.timestamp_millis());
+                            let ts = parse_graph_datetime_ms(&created);
                             if let Some(t) = ts {
                                 if t < since_ms {
                                     // This message (and all following, since desc order)
@@ -814,9 +841,7 @@ impl SourceReader for TeamsTranscriptReader {
                     return None;
                 }
 
-                let updated_at_ms = chrono::DateTime::parse_from_rfc3339(&start_dt)
-                    .ok()
-                    .map(|dt| dt.timestamp_millis());
+                let updated_at_ms = parse_graph_datetime_ms(&start_dt);
 
                 // Item id: prefer join URL, fall back to event ID
                 let lookup_key = if !join_url.is_empty() {
