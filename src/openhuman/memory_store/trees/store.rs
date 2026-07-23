@@ -430,6 +430,20 @@ pub fn get_summary_embedding(config: &Config, summary_id: &str) -> Result<Option
     get_summary_embedding_for_signature(config, summary_id, &signature)
 }
 
+/// Update the stored `content_sha256` for a summary after its file has been
+/// rewritten (e.g. by `update_summary_tags`). Without this, the next call to
+/// `verify_summary_file` or `read_summary_body` will see a sha256 mismatch
+/// and fall back to a truncated preview.
+pub fn update_summary_sha256(config: &Config, summary_id: &str, sha256: &str) -> Result<()> {
+    with_connection(config, |conn| {
+        conn.execute(
+            "UPDATE mem_tree_summaries SET content_sha256 = ?1 WHERE id = ?2",
+            rusqlite::params![sha256, summary_id],
+        )?;
+        Ok(())
+    })
+}
+
 /// Core upsert into `mem_tree_summary_embeddings` over an arbitrary
 /// `&Connection`. Shared by the standalone
 /// ([`set_summary_embedding_for_signature`]) and in-transaction

@@ -188,6 +188,17 @@ pub fn update_summary_tags(config: &Config, summary_id: &str) -> anyhow::Result<
         tags.len(),
         tags.len()
     );
+
+    // Update the stored sha256 to match the rewritten file — the full-file
+    // sha256 is what verify_summary_file checks, so we need to recompute it
+    // over the complete new content (front-matter + body), not just the body.
+    let full_sha = super::atomic::sha256_hex(&verify_bytes);
+    crate::openhuman::memory_store::trees::store::update_summary_sha256(
+        config,
+        summary_id,
+        &full_sha,
+    )?;
+
     Ok(())
 }
 
