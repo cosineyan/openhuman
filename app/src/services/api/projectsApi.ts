@@ -54,6 +54,8 @@ export interface Task {
   parent_task_id: string | null;
   created: string;
   updated: string;
+  archived: boolean;
+  archived_at: string | null;
 }
 
 export interface BucketWithTasks {
@@ -179,6 +181,20 @@ export async function deleteTask(task_id: string): Promise<void> {
     method: 'openhuman.projects_delete_task',
     params: { task_id },
   });
+}
+
+/** List archived tasks with optional search and date filters. */
+export async function listArchivedTasks(params?: {
+  search?: string;
+  created_after?: string; // ISO 8601
+  created_before?: string; // ISO 8601
+}): Promise<Task[]> {
+  log('listArchivedTasks');
+  const res = await callCoreRpc<RpcEnvelope<Task[]>>({
+    method: 'openhuman.projects_list_archived_tasks',
+    params: params ?? {},
+  });
+  return res.result;
 }
 
 /** Apply a partial patch to a bucket (rename, reorder, done-status). */

@@ -100,6 +100,8 @@ pub fn with_connection<T>(config: &Config, f: impl FnOnce(&Connection) -> Result
     add_column_if_missing(&conn, "project_tasks", "assignee", "TEXT")?;
     add_column_if_missing(&conn, "project_tasks", "ai_plan", "TEXT")?;
     add_column_if_missing(&conn, "project_tasks", "parent_task_id", "TEXT")?;
+    add_column_if_missing(&conn, "project_tasks", "archived", "INTEGER NOT NULL DEFAULT 0")?;
+    add_column_if_missing(&conn, "project_tasks", "archived_at", "TEXT")?;
 
     // Fix tasks that are marked done=1 but live in a non-done bucket — can
     // happen when a task was moved back from a done bucket via a code path that
@@ -180,6 +182,7 @@ fn row_to_task(row: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
     let due_date_raw: Option<String> = row.get(8)?;
     let created_raw: String = row.get(12)?;
     let updated_raw: String = row.get(13)?;
+    let archived_at_raw: Option<String> = row.get(18)?;
     Ok(Task {
         id: row.get(0)?,
         project_id: row.get(1)?,
@@ -206,6 +209,12 @@ fn row_to_task(row: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
         parent_task_id: row.get(16)?,
         created: parse_rfc3339(&created_raw).map_err(sql_err)?,
         updated: parse_rfc3339(&updated_raw).map_err(sql_err)?,
+        archived: row.get::<_, i64>(17).unwrap_or(0) != 0,
+        archived_at: archived_at_raw
+            .as_deref()
+            .map(parse_rfc3339)
+            .transpose()
+            .map_err(sql_err)?,
     })
 }
 
@@ -449,7 +458,8 @@ pub fn get_task(config: &Config, task_id: &str) -> Result<Task> {
             "SELECT id, project_id, bucket_id, title, description,
                     done, done_at, priority, due_date, hex_color,
                     position, idx, created, updated,
-                    assignee, ai_plan, parent_task_id
+                    assignee, ai_plan, parent_task_id,
+                    archived, archived_at
              FROM project_tasks WHERE id = ?1",
             params![task_id],
             row_to_task,
@@ -466,9 +476,11 @@ pub fn list_tasks(config: &Config, project_id: &str, bucket_id: Option<&str>) ->
                 "SELECT id, project_id, bucket_id, title, description,
                         done, done_at, priority, due_date, hex_color,
                         position, idx, created, updated,
-                        assignee, ai_plan, parent_task_id
+                        assignee, ai_plan, parent_task_id,
+                    archived, archived_at
                  FROM project_tasks
                  WHERE project_id = ?1 AND bucket_id = ?2 AND parent_task_id IS NULL
+                   AND (archived = 0 OR archived IS NULL)
                  ORDER BY position ASC",
             )?;
             let rows = stmt.query_map(params![project_id, bid], row_to_task)?;
@@ -480,9 +492,11 @@ pub fn list_tasks(config: &Config, project_id: &str, bucket_id: Option<&str>) ->
                 "SELECT id, project_id, bucket_id, title, description,
                         done, done_at, priority, due_date, hex_color,
                         position, idx, created, updated,
-                        assignee, ai_plan, parent_task_id
+                        assignee, ai_plan, parent_task_id,
+                    archived, archived_at
                  FROM project_tasks
                  WHERE project_id = ?1 AND parent_task_id IS NULL
+                   AND (archived = 0 OR archived IS NULL)
                  ORDER BY position ASC",
             )?;
             let rows = stmt.query_map(params![project_id], row_to_task)?;
@@ -494,13 +508,93 @@ pub fn list_tasks(config: &Config, project_id: &str, bucket_id: Option<&str>) ->
     })
 }
 
+/// List archived tasks for a project, optionally filtered by search text and created date range.
+pub fn list_archived_tasks(
+    config: &Config,
+    project_id: &str,
+    search: Option<&str>,
+    created_after: Option<DateTime<Utc>>,
+    created_before: Option<DateTime<Utc>>,
+) -> Result<Vec<Task>> {
+    with_connection(config, |conn| {
+        let search_pat = search.map(|s| format!("%{}%", s.to_lowercase()));
+        let after_str = created_after.map(|d| d.to_rfc3339());
+        let before_str = created_before.map(|d| d.to_rfc3339());
+
+        // Build params in order: project_id always first, then optional ones in declaration order
+        let mut bound: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(project_id.to_string())];
+
+        let mut sql = "SELECT id, project_id, bucket_id, title, description,
+                    done, done_at, priority, due_date, hex_color,
+                    position, idx, created, updated,
+                    assignee, ai_plan, parent_task_id,
+                    archived, archived_at
+             FROM project_tasks
+             WHERE project_id = ?1 AND archived = 1 AND parent_task_id IS NULL"
+            .to_string();
+
+        let mut idx = 2usize;
+
+        if let Some(ref pat) = search_pat {
+            sql.push_str(&format!(
+                " AND (lower(title) LIKE ?{idx} OR lower(coalesce(description,'')) LIKE ?{idx})"
+            ));
+            bound.push(Box::new(pat.clone()));
+            idx += 1;
+        }
+        if let Some(ref after) = after_str {
+            sql.push_str(&format!(" AND created >= ?{idx}"));
+            bound.push(Box::new(after.clone()));
+            idx += 1;
+        }
+        if let Some(ref before) = before_str {
+            sql.push_str(&format!(" AND created <= ?{idx}"));
+            bound.push(Box::new(before.clone()));
+        }
+
+        sql.push_str(" ORDER BY archived_at DESC");
+
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map(
+            rusqlite::params_from_iter(bound.iter().map(|b| b.as_ref())),
+            row_to_task,
+        )?;
+        let mut tasks = Vec::new();
+        for row in rows {
+            tasks.push(row?);
+        }
+        Ok(tasks)
+    })
+}
+
+/// Mark tasks as archived if they haven't been updated for more than `stale_days` days.
+/// Returns the number of tasks archived.
+pub fn auto_archive_stale_tasks(config: &Config, project_id: &str, stale_days: u32) -> Result<usize> {
+    with_connection(config, |conn| {
+        let threshold = (Utc::now() - chrono::Duration::days(stale_days as i64)).to_rfc3339();
+        let now_str = Utc::now().to_rfc3339();
+        let count = conn.execute(
+            "UPDATE project_tasks
+             SET archived = 1, archived_at = ?1, updated = ?1
+             WHERE project_id = ?2
+               AND (archived = 0 OR archived IS NULL)
+               AND done = 1
+               AND updated < ?3
+               AND parent_task_id IS NULL",
+            params![now_str, project_id, threshold],
+        )?;
+        Ok(count)
+    })
+}
+
 pub fn list_subtasks(config: &Config, parent_task_id: &str) -> Result<Vec<Task>> {
     with_connection(config, |conn| {
         let mut stmt = conn.prepare(
             "SELECT id, project_id, bucket_id, title, description,
                     done, done_at, priority, due_date, hex_color,
                     position, idx, created, updated,
-                    assignee, ai_plan, parent_task_id
+                    assignee, ai_plan, parent_task_id,
+                    archived, archived_at
              FROM project_tasks
              WHERE parent_task_id = ?1
              ORDER BY created ASC",
@@ -578,7 +672,8 @@ pub fn create_task(
             "SELECT id, project_id, bucket_id, title, description,
                     done, done_at, priority, due_date, hex_color,
                     position, idx, created, updated,
-                    assignee, ai_plan, parent_task_id
+                    assignee, ai_plan, parent_task_id,
+                    archived, archived_at
              FROM project_tasks WHERE id = ?1",
             params![task_id],
             row_to_task,
@@ -615,7 +710,8 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch, actor: &st
                 "SELECT id, project_id, bucket_id, title, description,
                         done, done_at, priority, due_date, hex_color,
                         position, idx, created, updated,
-                        assignee, ai_plan, parent_task_id
+                        assignee, ai_plan, parent_task_id,
+                    archived, archived_at
                  FROM project_tasks WHERE id = ?1",
                 params![task_id],
                 row_to_task,
@@ -713,12 +809,23 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch, actor: &st
             None => task.ai_plan.as_deref(),
         };
 
+        // Resolve archived: explicit patch wins, else keep existing value.
+        let new_archived = patch.archived.unwrap_or(task.archived);
+        let new_archived_at: Option<DateTime<Utc>> = if new_archived && !task.archived {
+            Some(now) // just archived
+        } else if !new_archived {
+            None // un-archived
+        } else {
+            task.archived_at
+        };
+        let archived_at_str = new_archived_at.map(|d| d.to_rfc3339());
+
         conn.execute(
             "UPDATE project_tasks
              SET bucket_id = ?1, title = ?2, description = ?3,
                  done = ?4, done_at = ?5, priority = ?6, due_date = ?7,
                  hex_color = ?8, position = ?9, updated = ?10,
-                 ai_plan = ?12
+                 ai_plan = ?12, archived = ?13, archived_at = ?14
              WHERE id = ?11",
             params![
                 new_bucket_id,
@@ -733,6 +840,8 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch, actor: &st
                 now.to_rfc3339(),
                 task_id,
                 new_ai_plan,
+                if new_archived { 1_i64 } else { 0 },
+                archived_at_str,
             ],
         )
         .context("Failed to update task")?;
@@ -751,7 +860,8 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch, actor: &st
             "SELECT id, project_id, bucket_id, title, description,
                     done, done_at, priority, due_date, hex_color,
                     position, idx, created, updated,
-                    assignee, ai_plan, parent_task_id
+                    assignee, ai_plan, parent_task_id,
+                    archived, archived_at
              FROM project_tasks WHERE id = ?1",
             params![task_id],
             row_to_task,

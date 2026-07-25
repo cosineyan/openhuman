@@ -90,7 +90,7 @@ const PRIORITIES = [
 const ASSIGNEES = [
   { value: '', label: '— Unassigned' },
   { value: 'me', label: 'Me' },
-  { value: 'ai', label: 'AI (Wukong)' },
+  { value: 'ai', label: 'AI' },
 ];
 
 const FIELD_LABELS: Record<string, string> = {

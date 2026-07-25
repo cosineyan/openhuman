@@ -394,7 +394,7 @@ export function NewTaskInput({ open: openProp, onOpenChange, addTaskColor, onAdd
           <PersonIcon />
           {assignee ? (
             <span className="text-stone-700 dark:text-neutral-200">
-              {assignee === 'ai' ? 'AI (Wukong)' : 'Me'}
+              {assignee === 'ai' ? 'AI' : 'Me'}
             </span>
           ) : (
             <span>Add assignee</span>
@@ -424,7 +424,7 @@ export function NewTaskInput({ open: openProp, onOpenChange, addTaskColor, onAdd
             style={{ top: popoverAnchor.top, left: popoverAnchor.left }}>
             {[
               { value: 'me', label: 'Me' },
-              { value: 'ai', label: 'AI (Wukong)' },
+              { value: 'ai', label: 'AI' },
             ].map(a => (
               <button
                 key={a.value}

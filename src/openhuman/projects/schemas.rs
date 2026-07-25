@@ -19,6 +19,7 @@ pub fn all_controller_schemas() -> Vec<ControllerSchema> {
         schemas("update_task"),
         schemas("move_task"),
         schemas("delete_task"),
+        schemas("list_archived_tasks"),
         schemas("update_bucket"),
         schemas("list_task_events"),
         schemas("add_comment"),
@@ -55,6 +56,10 @@ pub fn all_registered_controllers() -> Vec<RegisteredController> {
         RegisteredController {
             schema: schemas("delete_task"),
             handler: handle_delete_task,
+        },
+        RegisteredController {
+            schema: schemas("list_archived_tasks"),
+            handler: handle_list_archived_tasks,
         },
         RegisteredController {
             schema: schemas("update_bucket"),
@@ -241,6 +246,37 @@ pub fn schemas(function: &str) -> ControllerSchema {
                     ],
                 },
                 comment: "Deletion confirmation payload.",
+                required: true,
+            }],
+        },
+        "list_archived_tasks" => ControllerSchema {
+            namespace: "projects",
+            function: "list_archived_tasks",
+            description: "List archived tasks for the default project, with optional full-text search and created-date range filter.",
+            inputs: vec![
+                FieldSchema {
+                    name: "search",
+                    ty: TypeSchema::Option(Box::new(TypeSchema::String)),
+                    comment: "Free-text search over task title and description.",
+                    required: false,
+                },
+                FieldSchema {
+                    name: "created_after",
+                    ty: TypeSchema::Option(Box::new(TypeSchema::String)),
+                    comment: "ISO 8601 lower bound on task creation time (inclusive).",
+                    required: false,
+                },
+                FieldSchema {
+                    name: "created_before",
+                    ty: TypeSchema::Option(Box::new(TypeSchema::String)),
+                    comment: "ISO 8601 upper bound on task creation time (inclusive).",
+                    required: false,
+                },
+            ],
+            outputs: vec![FieldSchema {
+                name: "tasks",
+                ty: TypeSchema::Json,
+                comment: "Archived tasks matching the filter, ordered by archived_at descending.",
                 required: true,
             }],
         },
@@ -516,6 +552,29 @@ fn handle_delete_task(params: Map<String, Value>) -> ControllerFuture {
             result,
             format!("task deleted: {task_id}"),
         ))
+    })
+}
+
+fn handle_list_archived_tasks(params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let config = config_rpc::load_config_with_timeout().await?;
+        let search = params.get("search").and_then(|v| v.as_str()).map(str::to_string);
+        let created_after = params
+            .get("created_after")
+            .and_then(|v| v.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|d| d.with_timezone(&chrono::Utc));
+        let created_before = params
+            .get("created_before")
+            .and_then(|v| v.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|d| d.with_timezone(&chrono::Utc));
+        to_json(ops::list_archived_tasks(
+            &config,
+            search.as_deref(),
+            created_after,
+            created_before,
+        )?)
     })
 }
 

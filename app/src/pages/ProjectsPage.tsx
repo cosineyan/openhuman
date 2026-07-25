@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import { SidebarContent } from '../components/layout/shell/SidebarSlot';
+import TwoPaneNav from '../components/layout/TwoPaneNav';
+import { ArchivedView } from '../components/projects/ArchivedView';
+import { EmailAutomationPanel } from '../components/projects/EmailAutomationPanel';
 import { KanbanBoard } from '../components/projects/KanbanBoard';
-import { ListView } from '../components/projects/ListView';
-import { TableView } from '../components/projects/TableView';
 import { TaskDetailDrawer } from '../components/projects/TaskDetailDrawer';
 import { useT } from '../lib/i18n/I18nContext';
 import {
@@ -16,42 +18,19 @@ import {
   updateTask,
 } from '../services/api/projectsApi';
 
-type ViewMode = 'board' | 'list' | 'table';
+type ViewMode = 'board' | 'archived' | 'email_automation';
 
-function BoardIcon() {
+function NavIcon({ path }: { path: string }) {
   return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-      <rect x="1" y="1" width="6" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
-      <rect x="9" y="1" width="6" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
-    </svg>
-  );
-}
-function ListIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-      <path
-        d="M1 4h14M1 8h14M1 12h14"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-function TableIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-      <rect x="1" y="1" width="14" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M1 5.5h14M6 5.5v9.5" stroke="currentColor" strokeWidth="1.2" />
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d={path} />
     </svg>
   );
 }
 
-const VIEWS: { key: ViewMode; label: string; Icon: () => React.ReactElement }[] = [
-  { key: 'board', label: 'Board', Icon: BoardIcon },
-  { key: 'list', label: 'List', Icon: ListIcon },
-  { key: 'table', label: 'Table', Icon: TableIcon },
-];
+const BOARD_ICON_PATH = 'M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18';
+const ARCHIVED_ICON_PATH = 'M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4';
+const EMAIL_ICON_PATH = 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z';
 
 export function ProjectsPage() {
   const { t } = useT();
@@ -230,49 +209,57 @@ export function ProjectsPage() {
   if (!board) return null;
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="px-4 pt-3 border-b border-stone-200 dark:border-neutral-800 shrink-0">
-        <h1 className="text-base font-semibold text-stone-900 dark:text-neutral-100 mb-2.5">
-          {board.project.title}
-        </h1>
-        {/* View tabs */}
-        <div className="flex items-center gap-1">
-          {VIEWS.map(({ key, label, Icon }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setViewMode(key)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-t-md border-b-2 -mb-px transition-colors ${
-                viewMode === key
-                  ? 'border-primary-500 text-primary-600 dark:text-primary-400 bg-white dark:bg-neutral-950'
-                  : 'border-transparent text-stone-500 dark:text-neutral-500 hover:text-stone-700 dark:hover:text-neutral-300'
-              }`}>
-              <Icon />
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+    <div className="flex h-full">
+      {/* Left sidebar */}
+      <SidebarContent>
+        <TwoPaneNav
+          ariaLabel="Projects navigation"
+          selected={viewMode}
+          onSelect={value => setViewMode(value as ViewMode)}
+          header={
+            <div className="px-1 pb-2 pt-1">
+              <h2 className="text-sm font-semibold text-stone-800 dark:text-neutral-100">
+                {board.project.title}
+              </h2>
+            </div>
+          }
+          groups={[
+            {
+              label: 'Views',
+              items: [
+                { value: 'board', label: 'Board', icon: <NavIcon path={BOARD_ICON_PATH} /> },
+                { value: 'archived', label: 'Archived', icon: <NavIcon path={ARCHIVED_ICON_PATH} /> },
+              ],
+            },
+            {
+              label: 'Automation',
+              items: [
+                { value: 'email_automation', label: 'Email → Task', icon: <NavIcon path={EMAIL_ICON_PATH} /> },
+              ],
+            },
+          ]}
+        />
+      </SidebarContent>
 
-      {/* Content */}
-      <div
-        className={`flex-1 min-h-0 ${viewMode === 'board' ? 'overflow-auto p-4' : 'overflow-auto p-4'}`}>
+      {/* Main content — flex-1 to fill remaining space after sidebar */}
+      <div className="flex-1 min-w-0 flex flex-col h-full overflow-hidden p-4">
         {viewMode === 'board' && (
-          <div className="h-full">
-            <KanbanBoard
-              board={board}
-              onTaskClick={setSelectedTask}
-              onAddTask={handleAddTask}
-              onAddViaModal={setCreateBucketId}
-              onMoveTask={handleMoveTask}
-              onRenameColumn={handleRenameColumn}
-              boardVersion={boardVersion}
-            />
+          <div className="h-full overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-soft dark:border-neutral-800 dark:bg-neutral-900">
+            <div className="flex-1 min-h-0 overflow-auto p-4 h-full">
+              <KanbanBoard
+                board={board}
+                onTaskClick={setSelectedTask}
+                onAddTask={handleAddTask}
+                onAddViaModal={setCreateBucketId}
+                onMoveTask={handleMoveTask}
+                onRenameColumn={handleRenameColumn}
+                boardVersion={boardVersion}
+              />
+            </div>
           </div>
         )}
-        {viewMode === 'list' && <ListView board={board} onTaskClick={setSelectedTask} />}
-        {viewMode === 'table' && <TableView board={board} onTaskClick={setSelectedTask} />}
+        {viewMode === 'archived' && <ArchivedView onTaskClick={setSelectedTask} />}
+        {viewMode === 'email_automation' && <EmailAutomationPanel />}
       </div>
 
       <TaskDetailDrawer

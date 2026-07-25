@@ -123,6 +123,10 @@ pub struct Task {
     pub parent_task_id: Option<String>,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
+    /// When true this task is hidden from the active board and shown only in the Archived view.
+    #[serde(default)]
+    pub archived: bool,
+    pub archived_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
@@ -162,6 +166,7 @@ pub struct TaskPatch {
     pub position: Option<f64>,
     pub done: Option<bool>,
     pub ai_plan: Option<String>,
+    pub archived: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]

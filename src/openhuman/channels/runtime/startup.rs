@@ -116,6 +116,10 @@ pub async fn start_channels(mut config: Config) -> Result<()> {
     crate::openhuman::agent::task_dispatcher::start_board_poller();
     // Projects AI runner: event-driven pickup of project tasks assigned to AI.
     crate::openhuman::projects::register_project_ai_runner(std::sync::Arc::new(config.clone()));
+    // Email-to-task automation: creates tasks from emails matching user-defined rules.
+    crate::openhuman::email_automation::register_email_automation_subscriber(
+        std::sync::Arc::new(config.clone()),
+    );
     // Native request handlers. Re-registering is safe (latest wins) so
     // this is idempotent even if `bootstrap_core_runtime` also runs.
     // Must happen before `run_message_dispatch_loop` begins, because
