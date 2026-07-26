@@ -178,6 +178,11 @@ export function EmailAutomationPanel() {
               <div style={{ marginTop: 4, fontSize: 12, color: '#444' }}>
                 → Create task: <em>{rule.task_title_template}</em>
                 {rule.assignee === 'ai' && <span style={{ marginLeft: 8, color: '#888' }}>assigned to AI</span>}
+                {rule.parse_script && (
+                  <span style={{ marginLeft: 8, fontSize: 11, padding: '1px 5px', background: '#e8f5e9', color: '#2e7d32', borderRadius: 8 }}>
+                    ⚙ parse script
+                  </span>
+                )}
               </div>
             </div>
           ))}

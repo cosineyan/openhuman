@@ -37,6 +37,7 @@ fn with_connection<T>(config: &Config, f: impl FnOnce(&Connection) -> Result<T>)
             assignee                  TEXT NOT NULL DEFAULT 'ai',
             bucket_id                 TEXT,
             llm_fallback_enabled      INTEGER NOT NULL DEFAULT 0,
+            parse_script              TEXT,
             created_at                TEXT NOT NULL,
             updated_at                TEXT NOT NULL
         );
@@ -44,6 +45,9 @@ fn with_connection<T>(config: &Config, f: impl FnOnce(&Connection) -> Result<T>)
             ON email_automation_rules(enabled);",
     )
     .context("migrate email_automation DB")?;
+
+    // Migrate existing DBs that don't have parse_script column
+    let _ = conn.execute("ALTER TABLE email_automation_rules ADD COLUMN parse_script TEXT", []);
 
     f(&conn)
 }
@@ -61,8 +65,9 @@ fn row_to_rule(row: &rusqlite::Row<'_>) -> rusqlite::Result<EmailAutomationRule>
         assignee: row.get(8)?,
         bucket_id: row.get(9)?,
         llm_fallback_enabled: row.get::<_, i64>(10)? != 0,
-        created_at: row.get(11)?,
-        updated_at: row.get(12)?,
+        parse_script: row.get(11)?,
+        created_at: row.get(12)?,
+        updated_at: row.get(13)?,
     })
 }
 
@@ -71,7 +76,7 @@ pub fn list_rules(config: &Config) -> Result<Vec<EmailAutomationRule>> {
         let mut stmt = conn.prepare(
             "SELECT id, name, enabled, sender_contains, subject_contains, body_contains,
                     task_title_template, task_description_template, assignee, bucket_id,
-                    llm_fallback_enabled, created_at, updated_at
+                    llm_fallback_enabled, parse_script, created_at, updated_at
              FROM email_automation_rules
              ORDER BY created_at ASC",
         )?;
@@ -87,7 +92,7 @@ pub fn list_enabled_rules(config: &Config) -> Result<Vec<EmailAutomationRule>> {
         let mut stmt = conn.prepare(
             "SELECT id, name, enabled, sender_contains, subject_contains, body_contains,
                     task_title_template, task_description_template, assignee, bucket_id,
-                    llm_fallback_enabled, created_at, updated_at
+                    llm_fallback_enabled, parse_script, created_at, updated_at
              FROM email_automation_rules
              WHERE enabled = 1
              ORDER BY created_at ASC",
@@ -104,7 +109,7 @@ pub fn get_rule(config: &Config, id: &str) -> Result<Option<EmailAutomationRule>
         let mut stmt = conn.prepare(
             "SELECT id, name, enabled, sender_contains, subject_contains, body_contains,
                     task_title_template, task_description_template, assignee, bucket_id,
-                    llm_fallback_enabled, created_at, updated_at
+                    llm_fallback_enabled, parse_script, created_at, updated_at
              FROM email_automation_rules WHERE id = ?1",
         )?;
         let mut rows = stmt.query_map(params![id], row_to_rule)?;
@@ -120,8 +125,8 @@ pub fn create_rule(config: &Config, input: CreateRuleInput) -> Result<EmailAutom
             "INSERT INTO email_automation_rules
              (id, name, enabled, sender_contains, subject_contains, body_contains,
               task_title_template, task_description_template, assignee, bucket_id,
-              llm_fallback_enabled, created_at, updated_at)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)",
+              llm_fallback_enabled, parse_script, created_at, updated_at)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)",
             params![
                 id,
                 input.name,
@@ -134,6 +139,7 @@ pub fn create_rule(config: &Config, input: CreateRuleInput) -> Result<EmailAutom
                 input.assignee,
                 input.bucket_id,
                 input.llm_fallback_enabled as i64,
+                input.parse_script,
                 now,
                 now,
             ],
@@ -147,64 +153,37 @@ pub fn update_rule(config: &Config, id: &str, patch: RulePatch) -> Result<EmailA
     let now = chrono::Utc::now().to_rfc3339();
     with_connection(config, |conn| {
         if let Some(v) = patch.name {
-            conn.execute(
-                "UPDATE email_automation_rules SET name=?1, updated_at=?2 WHERE id=?3",
-                params![v, now, id],
-            )?;
+            conn.execute("UPDATE email_automation_rules SET name=?1, updated_at=?2 WHERE id=?3", params![v, now, id])?;
         }
         if let Some(v) = patch.enabled {
-            conn.execute(
-                "UPDATE email_automation_rules SET enabled=?1, updated_at=?2 WHERE id=?3",
-                params![v as i64, now, id],
-            )?;
+            conn.execute("UPDATE email_automation_rules SET enabled=?1, updated_at=?2 WHERE id=?3", params![v as i64, now, id])?;
         }
         if let Some(v) = patch.sender_contains {
-            conn.execute(
-                "UPDATE email_automation_rules SET sender_contains=?1, updated_at=?2 WHERE id=?3",
-                params![v, now, id],
-            )?;
+            conn.execute("UPDATE email_automation_rules SET sender_contains=?1, updated_at=?2 WHERE id=?3", params![v, now, id])?;
         }
         if let Some(v) = patch.subject_contains {
-            conn.execute(
-                "UPDATE email_automation_rules SET subject_contains=?1, updated_at=?2 WHERE id=?3",
-                params![v, now, id],
-            )?;
+            conn.execute("UPDATE email_automation_rules SET subject_contains=?1, updated_at=?2 WHERE id=?3", params![v, now, id])?;
         }
         if let Some(v) = patch.body_contains {
-            conn.execute(
-                "UPDATE email_automation_rules SET body_contains=?1, updated_at=?2 WHERE id=?3",
-                params![v, now, id],
-            )?;
+            conn.execute("UPDATE email_automation_rules SET body_contains=?1, updated_at=?2 WHERE id=?3", params![v, now, id])?;
         }
         if let Some(v) = patch.task_title_template {
-            conn.execute(
-                "UPDATE email_automation_rules SET task_title_template=?1, updated_at=?2 WHERE id=?3",
-                params![v, now, id],
-            )?;
+            conn.execute("UPDATE email_automation_rules SET task_title_template=?1, updated_at=?2 WHERE id=?3", params![v, now, id])?;
         }
         if let Some(v) = patch.task_description_template {
-            conn.execute(
-                "UPDATE email_automation_rules SET task_description_template=?1, updated_at=?2 WHERE id=?3",
-                params![v, now, id],
-            )?;
+            conn.execute("UPDATE email_automation_rules SET task_description_template=?1, updated_at=?2 WHERE id=?3", params![v, now, id])?;
         }
         if let Some(v) = patch.assignee {
-            conn.execute(
-                "UPDATE email_automation_rules SET assignee=?1, updated_at=?2 WHERE id=?3",
-                params![v, now, id],
-            )?;
+            conn.execute("UPDATE email_automation_rules SET assignee=?1, updated_at=?2 WHERE id=?3", params![v, now, id])?;
         }
         if let Some(v) = patch.bucket_id {
-            conn.execute(
-                "UPDATE email_automation_rules SET bucket_id=?1, updated_at=?2 WHERE id=?3",
-                params![v, now, id],
-            )?;
+            conn.execute("UPDATE email_automation_rules SET bucket_id=?1, updated_at=?2 WHERE id=?3", params![v, now, id])?;
         }
         if let Some(v) = patch.llm_fallback_enabled {
-            conn.execute(
-                "UPDATE email_automation_rules SET llm_fallback_enabled=?1, updated_at=?2 WHERE id=?3",
-                params![v as i64, now, id],
-            )?;
+            conn.execute("UPDATE email_automation_rules SET llm_fallback_enabled=?1, updated_at=?2 WHERE id=?3", params![v as i64, now, id])?;
+        }
+        if let Some(v) = patch.parse_script {
+            conn.execute("UPDATE email_automation_rules SET parse_script=?1, updated_at=?2 WHERE id=?3", params![v, now, id])?;
         }
         Ok(())
     })?;
@@ -213,10 +192,7 @@ pub fn update_rule(config: &Config, id: &str, patch: RulePatch) -> Result<EmailA
 
 pub fn delete_rule(config: &Config, id: &str) -> Result<()> {
     with_connection(config, |conn| {
-        conn.execute(
-            "DELETE FROM email_automation_rules WHERE id = ?1",
-            params![id],
-        )?;
+        conn.execute("DELETE FROM email_automation_rules WHERE id = ?1", params![id])?;
         Ok(())
     })
 }

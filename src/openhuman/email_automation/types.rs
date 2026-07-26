@@ -11,7 +11,7 @@ pub struct EmailAutomationRule {
     pub subject_contains: Option<String>,
     /// Case-insensitive substring match on body preview.
     pub body_contains: Option<String>,
-    /// Task title template. Supports {{subject}}, {{sender}}, {{body_preview}}.
+    /// Task title template. Supports {{subject}}, {{sender}}, and any vars from parse_script.
     pub task_title_template: String,
     /// Optional task description template. Same placeholder support.
     pub task_description_template: Option<String>,
@@ -22,6 +22,10 @@ pub struct EmailAutomationRule {
     /// When true, if no rule matches the email is also passed to the LLM
     /// to decide whether a task should be created.
     pub llm_fallback_enabled: bool,
+    /// Python script that parses the email body and returns a JSON dict.
+    /// The script receives `email_body` as sys.argv[1] and must print a JSON dict to stdout.
+    /// Variables from the dict are available as {{var_name}} in templates.
+    pub parse_script: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -41,6 +45,7 @@ pub struct CreateRuleInput {
     pub bucket_id: Option<String>,
     #[serde(default)]
     pub llm_fallback_enabled: bool,
+    pub parse_script: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -55,6 +60,7 @@ pub struct RulePatch {
     pub assignee: Option<String>,
     pub bucket_id: Option<Option<String>>,
     pub llm_fallback_enabled: Option<bool>,
+    pub parse_script: Option<Option<String>>,
 }
 
 /// Extracted fields from an email's body_preview.
@@ -87,4 +93,15 @@ fn default_true() -> bool {
 
 fn default_assignee() -> String {
     "ai".to_string()
+}
+
+/// A lightweight summary of an email chunk for the picker UI.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmailChunkSummary {
+    pub chunk_id: String,
+    pub subject: String,
+    pub sender: String,
+    pub date: String,
+    /// First ~120 chars of the body after the prefix line.
+    pub preview: String,
 }

@@ -145,6 +145,71 @@ fn schemas(function: &'static str) -> ControllerSchema {
                 },
             ],
         },
+        "search_email_chunks" => ControllerSchema {
+            namespace: NAMESPACE,
+            function: "search_email_chunks",
+            description: "List recent email chunks for the rule picker, optionally filtered by sender or subject keyword.",
+            inputs: vec![
+                FieldSchema {
+                    name: "sender_filter",
+                    ty: TypeSchema::Option(Box::new(TypeSchema::String)),
+                    comment: "Case-insensitive substring match on sender name/email.",
+                    required: false,
+                },
+                FieldSchema {
+                    name: "subject_filter",
+                    ty: TypeSchema::Option(Box::new(TypeSchema::String)),
+                    comment: "Case-insensitive substring match on subject.",
+                    required: false,
+                },
+                FieldSchema {
+                    name: "limit",
+                    ty: TypeSchema::Option(Box::new(TypeSchema::U64)),
+                    comment: "Max results (default 20).",
+                    required: false,
+                },
+            ],
+            outputs: vec![FieldSchema {
+                name: "chunks",
+                ty: TypeSchema::Json,
+                comment: "List of EmailChunkSummary objects.",
+                required: true,
+            }],
+        },
+        "generate_rule_from_email" => ControllerSchema {
+            namespace: NAMESPACE,
+            function: "generate_rule_from_email",
+            description: "Use LLM to generate a rule suggestion from a specific email chunk.",
+            inputs: vec![FieldSchema {
+                name: "chunk_id",
+                ty: TypeSchema::String,
+                comment: "Chunk id of the email to analyze.",
+                required: true,
+            }],
+            outputs: vec![FieldSchema {
+                name: "rule",
+                ty: TypeSchema::Json,
+                comment: "Suggested CreateRuleInput fields.",
+                required: true,
+            }],
+        },
+        "generate_rule_from_emails" => ControllerSchema {
+            namespace: NAMESPACE,
+            function: "generate_rule_from_emails",
+            description: "Use LLM to generate a rule suggestion from multiple email chunks (reduces overfitting).",
+            inputs: vec![FieldSchema {
+                name: "chunk_ids",
+                ty: TypeSchema::Array(Box::new(TypeSchema::String)),
+                comment: "List of chunk ids to analyze together.",
+                required: true,
+            }],
+            outputs: vec![FieldSchema {
+                name: "rule",
+                ty: TypeSchema::Json,
+                comment: "Suggested CreateRuleInput fields.",
+                required: true,
+            }],
+        },
         other => panic!("unknown email_automation schema function: {other}"),
     }
 }
@@ -219,6 +284,62 @@ fn handle_run_now(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
+fn handle_search_email_chunks(params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let config = config_rpc::load_config_with_timeout()
+            .await
+            .map_err(|e| e.to_string())?;
+        let sender_filter = params
+            .get("sender_filter")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let subject_filter = params
+            .get("subject_filter")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let limit = params
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(20) as usize;
+        to_json(ops::search_email_chunks_rpc(
+            &config,
+            sender_filter.as_deref(),
+            subject_filter.as_deref(),
+            limit,
+        )?)
+    })
+}
+
+fn handle_generate_rule_from_email(params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let config = config_rpc::load_config_with_timeout()
+            .await
+            .map_err(|e| e.to_string())?;
+        let chunk_id = params
+            .get("chunk_id")
+            .and_then(|v| v.as_str())
+            .ok_or("missing chunk_id")?
+            .to_string();
+        to_json(ops::generate_rule_from_email_rpc(&config, &chunk_id).await?)
+    })
+}
+
+fn handle_generate_rule_from_emails(params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let config = config_rpc::load_config_with_timeout()
+            .await
+            .map_err(|e| e.to_string())?;
+        let chunk_ids: Vec<String> = params
+            .get("chunk_ids")
+            .and_then(|v| v.as_array())
+            .ok_or("missing chunk_ids")?
+            .iter()
+            .filter_map(|v| v.as_str().map(str::to_string))
+            .collect();
+        to_json(ops::generate_rule_from_emails_rpc(&config, &chunk_ids).await?)
+    })
+}
+
 // ── Registry ────────────────────────────────────────────────────────────────
 
 pub fn all_controller_schemas() -> Vec<ControllerSchema> {
@@ -228,15 +349,21 @@ pub fn all_controller_schemas() -> Vec<ControllerSchema> {
         schemas("update_rule"),
         schemas("delete_rule"),
         schemas("run_now"),
+        schemas("search_email_chunks"),
+        schemas("generate_rule_from_email"),
+        schemas("generate_rule_from_emails"),
     ]
 }
 
 pub fn all_registered_controllers() -> Vec<RegisteredController> {
     vec![
-        RegisteredController { schema: schemas("list_rules"),   handler: handle_list_rules   },
-        RegisteredController { schema: schemas("create_rule"),  handler: handle_create_rule  },
-        RegisteredController { schema: schemas("update_rule"),  handler: handle_update_rule  },
-        RegisteredController { schema: schemas("delete_rule"),  handler: handle_delete_rule  },
-        RegisteredController { schema: schemas("run_now"),      handler: handle_run_now      },
+        RegisteredController { schema: schemas("list_rules"),                  handler: handle_list_rules                  },
+        RegisteredController { schema: schemas("create_rule"),                 handler: handle_create_rule                 },
+        RegisteredController { schema: schemas("update_rule"),                 handler: handle_update_rule                 },
+        RegisteredController { schema: schemas("delete_rule"),                 handler: handle_delete_rule                 },
+        RegisteredController { schema: schemas("run_now"),                     handler: handle_run_now                     },
+        RegisteredController { schema: schemas("search_email_chunks"),         handler: handle_search_email_chunks         },
+        RegisteredController { schema: schemas("generate_rule_from_email"),    handler: handle_generate_rule_from_email    },
+        RegisteredController { schema: schemas("generate_rule_from_emails"),   handler: handle_generate_rule_from_emails   },
     ]
 }
