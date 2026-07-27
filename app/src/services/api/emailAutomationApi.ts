@@ -108,10 +108,10 @@ export async function deleteRule(id: string): Promise<void> {
   });
 }
 
-export async function runNow(lastN = 50): Promise<RunNowResult> {
+export async function runNow(lastN = 50, hours?: number): Promise<RunNowResult> {
   const res = await callCoreRpc<RpcEnvelope<RunNowResult>>({
     method: 'openhuman.email_automation_run_now',
-    params: { last_n: lastN },
+    params: { last_n: lastN, ...(hours !== undefined ? { hours } : {}) },
   });
   return res.result;
 }
@@ -140,6 +140,41 @@ export async function generateRuleFromEmails(chunkIds: string[]): Promise<Create
   const res = await callCoreRpc<RpcEnvelope<CreateRuleInput>>({
     method: 'openhuman.email_automation_generate_rule_from_emails',
     params: { chunk_ids: chunkIds },
+  });
+  return res.result;
+}
+
+export interface DryRunResult {
+  title: string;
+  description: string | null;
+  parsed_vars: Record<string, unknown>;
+  script_error: string | null;
+}
+
+export async function dryRunRule(params: {
+  task_title_template: string;
+  task_description_template?: string | null;
+  parse_script?: string | null;
+  email_body?: string;
+  chunk_id?: string;
+}): Promise<DryRunResult> {
+  const res = await callCoreRpc<RpcEnvelope<DryRunResult>>({
+    method: 'openhuman.email_automation_dry_run',
+    params,
+  });
+  return res.result;
+}
+
+export async function refineRule(params: {
+  task_title_template: string;
+  task_description_template?: string | null;
+  parse_script?: string | null;
+  email_body: string;
+  user_feedback: string;
+}): Promise<CreateRuleInput> {
+  const res = await callCoreRpc<RpcEnvelope<CreateRuleInput>>({
+    method: 'openhuman.email_automation_refine_rule',
+    params,
   });
   return res.result;
 }

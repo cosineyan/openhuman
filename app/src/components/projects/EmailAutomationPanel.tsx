@@ -54,12 +54,12 @@ export function EmailAutomationPanel() {
     reload();
   };
 
-  const handleScanNow = async () => {
+  const handleScanNow = async (hours?: number) => {
     setScanning(true);
     setScanResult(null);
     try {
-      const result = await runNow(50);
-      setScanResult(`${result.tasks_created} task(s) created from ${result.emails_scanned} emails scanned`);
+      const result = await runNow(50, hours);
+      setScanResult(`${result.tasks_created} task(s) created from ${result.emails_scanned} emails scanned${hours ? ` (last ${hours}h)` : ''}`);
     } catch (err: unknown) {
       setScanResult(`Error: ${err instanceof Error ? err.message : 'unknown error'}`);
     } finally {
@@ -77,7 +77,7 @@ export function EmailAutomationPanel() {
 
   if (formOpen) {
     return (
-      <div style={{ padding: 24, maxWidth: 520 }}>
+      <div style={{ padding: 24, width: '100%', height: '100%', overflowY: 'auto', boxSizing: 'border-box' }}>
         <h3 style={{ margin: '0 0 16px', fontSize: 15 }}>
           {editingRule ? 'Edit rule' : 'New rule'}
         </h3>
@@ -107,6 +107,13 @@ export function EmailAutomationPanel() {
             style={{ padding: '6px 14px', borderRadius: 4, border: '1px solid #ccc', background: '#fff', cursor: scanning ? 'not-allowed' : 'pointer', fontSize: 13 }}
           >
             {scanning ? 'Scanning…' : 'Scan now'}
+          </button>
+          <button
+            onClick={() => handleScanNow(24)}
+            disabled={scanning}
+            style={{ padding: '6px 14px', borderRadius: 4, border: '1px solid #4A83DD', background: '#EBF3FF', color: '#1967d2', cursor: scanning ? 'not-allowed' : 'pointer', fontSize: 13 }}
+          >
+            {scanning ? 'Scanning…' : 'Force scan 24h'}
           </button>
           <button
             onClick={() => { setEditingRule(null); setFormOpen(true); }}

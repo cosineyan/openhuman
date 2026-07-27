@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
-import type { CreateRuleInput, EmailAutomationRule, RulePatch } from '../../services/api/emailAutomationApi';
+import type { CreateRuleInput, DryRunResult, EmailAutomationRule, RulePatch } from '../../services/api/emailAutomationApi';
+import { dryRunRule, refineRule, searchEmailChunks } from '../../services/api/emailAutomationApi';
 import { EmailPickerModal } from './EmailPickerModal';
 
 interface Props {
@@ -17,13 +18,98 @@ export function EmailRuleForm({ rule, onSave, onCancel }: Props) {
   const [bodyContains, setBodyContains] = useState(rule?.body_contains ?? '');
   const [taskTitle, setTaskTitle] = useState(rule?.task_title_template ?? '');
   const [taskDesc, setTaskDesc] = useState(rule?.task_description_template ?? '');
-  const [llmFallback, setLlmFallback] = useState(rule?.llm_fallback_enabled ?? false);
   const [parseScript, setParseScript] = useState(rule?.parse_script ?? '');
   const [showScript, setShowScript] = useState(!!(rule?.parse_script));
   const [saving, setSaving] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
+
+  // Dry run state
+  const [showDryRun, setShowDryRun] = useState(false);
+  const [dryRunMode, setDryRunMode] = useState<'manual' | 'pick'>('manual');
+  const [dryRunBody, setDryRunBody] = useState('');
+  const [dryRunRunning, setDryRunRunning] = useState(false);
+  const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null);
+  const [dryRunError, setDryRunError] = useState('');
+  const [refineFeedback, setRefineFeedback] = useState('');
+  const [refining, setRefining] = useState(false);
+
+  const handleDryRun = async () => {
+    if (!dryRunBody.trim()) { setDryRunError('Paste an email body first'); return; }
+    setDryRunRunning(true);
+    setDryRunError('');
+    setDryRunResult(null);
+    try {
+      const result = await dryRunRule({
+        task_title_template: taskTitle,
+        task_description_template: taskDesc || null,
+        parse_script: parseScript || null,
+        email_body: dryRunBody,
+      });
+      setDryRunResult(result);
+    } catch (err: unknown) {
+      setDryRunError(err instanceof Error ? err.message : 'Dry run failed');
+    } finally {
+      setDryRunRunning(false);
+    }
+  };
+
+  const handlePickForDryRun = async (chunk: import('../../services/api/emailAutomationApi').EmailChunkSummary) => {
+    // Load full body via search — use chunk_id to find it
+    // For now use preview as body (full body not exposed in summary)
+    // We'll use the chunk subject+sender+preview as a placeholder
+    const body = `[Subject: ${chunk.subject}] [From: ${chunk.sender}] [Date: ${chunk.date}]\n${chunk.preview}`;
+    setDryRunBody(body);
+    setDryRunMode('manual');
+  };
+
+  const handleRefine = async () => {
+    const body = dryRunBody.trim();
+    if (!body || !refineFeedback.trim()) return;
+    setRefining(true);
+    setDryRunError('');
+    try {
+      const refined = await refineRule({
+        task_title_template: taskTitle,
+        task_description_template: taskDesc || null,
+        parse_script: parseScript || null,
+        email_body: body,
+        user_feedback: refineFeedback,
+      });
+      // Apply refined values back to form
+      if (refined.name) setName(refined.name);
+      if (refined.sender_contains != null) setSenderContains(refined.sender_contains ?? '');
+      if (refined.subject_contains != null) setSubjectContains(refined.subject_contains ?? '');
+      if (refined.task_title_template) setTaskTitle(refined.task_title_template);
+      if (refined.task_description_template != null) setTaskDesc(refined.task_description_template ?? '');
+      if (refined.parse_script != null) {
+        setParseScript(refined.parse_script ?? '');
+        if (refined.parse_script) setShowScript(true);
+      }
+      setRefineFeedback('');
+      // Auto re-run dry run with updated values — use refined values directly (state updates async)
+      setDryRunRunning(true);
+      setDryRunResult(null);
+      setDryRunMode('manual');
+      setShowDryRun(true);
+      try {
+        const result = await dryRunRule({
+          task_title_template: refined.task_title_template || taskTitle,
+          task_description_template: refined.task_description_template || taskDesc || null,
+          parse_script: refined.parse_script || parseScript || null,
+          email_body: body,
+        });
+        setDryRunResult(result);
+      } finally {
+        setDryRunRunning(false);
+      }
+    } catch (err: unknown) {
+      setDryRunError(err instanceof Error ? err.message : 'Refinement failed');
+    } finally {
+      setRefining(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +128,6 @@ export function EmailRuleForm({ rule, onSave, onCancel }: Props) {
         task_title_template: taskTitle.trim(),
         task_description_template: taskDesc.trim() || null,
         assignee: 'ai',
-        llm_fallback_enabled: llmFallback,
         parse_script: parseScript.trim() || null,
       });
     } catch (err: unknown) {
@@ -164,22 +249,6 @@ export function EmailRuleForm({ rule, onSave, onCancel }: Props) {
         </div>
       </div>
 
-      {/* LLM fallback */}
-      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
-        <input
-          type="checkbox"
-          checked={llmFallback}
-          onChange={e => setLlmFallback(e.target.checked)}
-          style={{ marginTop: 2 }}
-        />
-        <div>
-          <div style={{ fontSize: 13 }}>Use AI when no rule matches</div>
-          <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
-            When no condition matches, the AI decides whether this email needs a task.
-          </div>
-        </div>
-      </label>
-
       {/* Parse script */}
       <div style={{ background: '#f7f8fa', borderRadius: 6, padding: 12 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
@@ -220,6 +289,186 @@ export function EmailRuleForm({ rule, onSave, onCancel }: Props) {
         )}
       </div>
 
+      {/* Dry Run */}
+      <div style={{ background: '#f7f8fa', borderRadius: 6, padding: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#444' }}>Dry Run</div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              type="button"
+              onClick={() => { setDryRunMode('pick'); setShowDryRun(true); }}
+              style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, border: '1px solid #ccc', background: '#fff', cursor: 'pointer' }}
+            >
+              Pick email
+            </button>
+            <button
+              type="button"
+              onClick={() => { setDryRunMode('manual'); setShowDryRun(v => !v); }}
+              style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, border: '1px solid #ccc', background: '#fff', cursor: 'pointer' }}
+            >
+              {showDryRun && dryRunMode === 'manual' ? 'Hide' : 'Paste body'}
+            </button>
+          </div>
+        </div>
+
+        {showDryRun && dryRunMode === 'manual' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <textarea
+              value={dryRunBody}
+              onChange={e => setDryRunBody(e.target.value)}
+              placeholder="Paste email body here to test…"
+              rows={6}
+              style={{
+                width: '100%', padding: '6px 8px', borderRadius: 4,
+                border: '1px solid #ddd', fontSize: 12, fontFamily: 'inherit',
+                resize: 'vertical', boxSizing: 'border-box',
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleDryRun}
+              disabled={dryRunRunning || !dryRunBody.trim()}
+              style={{
+                alignSelf: 'flex-end', padding: '5px 14px', borderRadius: 4,
+                border: 'none', background: '#4A83DD', color: '#fff',
+                cursor: dryRunRunning ? 'not-allowed' : 'pointer', fontSize: 12,
+              }}
+            >
+              {dryRunRunning ? 'Running…' : '▶ Run'}
+            </button>
+          </div>
+        )}
+
+        {dryRunMode === 'pick' && showDryRun && (
+          <div style={{ fontSize: 12, color: '#888' }}>Select an email from the picker above.</div>
+        )}
+
+        {dryRunError && (
+          <div style={{ marginTop: 6, fontSize: 12, color: '#d32f2f', padding: '4px 6px', background: '#fff0f0', borderRadius: 4 }}>
+            {dryRunError}
+          </div>
+        )}
+
+        {dryRunResult && (
+          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#555', marginBottom: 2 }}>Task Title</div>
+              <div style={{ fontSize: 13, padding: '6px 8px', background: '#fff', border: '1px solid #e0e0e0', borderRadius: 4 }}>
+                {dryRunResult.title}
+              </div>
+            </div>
+            {dryRunResult.description && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#555', marginBottom: 2 }}>Task Description</div>
+                <pre style={{
+                  fontSize: 12, padding: '6px 8px', background: '#fff', border: '1px solid #e0e0e0',
+                  borderRadius: 4, margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'inherit',
+                }}>
+                  {dryRunResult.description}
+                </pre>
+              </div>
+            )}
+            {dryRunResult.parsed_vars && Object.keys(dryRunResult.parsed_vars).length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#555', marginBottom: 2 }}>Extracted variables</div>
+                <pre style={{
+                  fontSize: 11, padding: '6px 8px', background: '#f0f4ff', border: '1px solid #c5d0e8',
+                  borderRadius: 4, margin: 0, whiteSpace: 'pre-wrap',
+                }}>
+                  {JSON.stringify(dryRunResult.parsed_vars, null, 2)}
+                </pre>
+              </div>
+            )}
+            {dryRunResult.script_error && (
+              <div style={{ fontSize: 12, color: '#d32f2f', padding: '4px 6px', background: '#fff0f0', borderRadius: 4 }}>
+                Script error: {dryRunResult.script_error}
+              </div>
+            )}
+
+            {/* Refinement chat */}
+            <div style={{ marginTop: 10, borderTop: '1px solid #e8e8e8', paddingTop: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#555', marginBottom: 6 }}>
+                Refine with AI
+              </div>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+                <textarea
+                  value={refineFeedback}
+                  onChange={e => setRefineFeedback(e.target.value)}
+                  onKeyDown={async e => {
+                    if (e.key === 'Enter' && !e.shiftKey && refineFeedback.trim() && !refining) {
+                      e.preventDefault();
+                      await handleRefine();
+                    }
+                  }}
+                  placeholder="e.g. 'include the leave dates', 'shorten the title'…&#10;Press Enter to send, Shift+Enter for new line"
+                  disabled={refining}
+                  rows={2}
+                  style={{
+                    flex: 1, padding: '5px 8px', borderRadius: 4,
+                    border: '1px solid #ddd', fontSize: 12,
+                    resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.4,
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleRefine}
+                  disabled={refining || !refineFeedback.trim()}
+                  style={{
+                    padding: '5px 12px', borderRadius: 4, border: 'none',
+                    background: refineFeedback.trim() ? '#4A83DD' : '#ccc',
+                    color: '#fff', cursor: refining ? 'not-allowed' : 'pointer', fontSize: 12,
+                    whiteSpace: 'nowrap', alignSelf: 'flex-end',
+                  }}
+                >
+                  {refining ? 'Refining…' : '↑ Apply'}
+                </button>
+              </div>
+              <div style={{ fontSize: 11, color: '#aaa', marginTop: 3 }}>
+                Press Enter or click Apply — the rule will be updated and re-run automatically.
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Email picker for dry run */}
+      {dryRunMode === 'pick' && showDryRun && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 24, width: 560, maxWidth: '95vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column', gap: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <h3 style={{ margin: 0, fontSize: 15 }}>Pick email for dry run</h3>
+              <button onClick={() => setShowDryRun(false)} style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: '#888' }}>×</button>
+            </div>
+            <p style={{ margin: 0, fontSize: 12, color: '#888' }}>Select an email — its full body will be used for the dry run.</p>
+            <div style={{ flex: 1, overflowY: 'auto', border: '1px solid #eee', borderRadius: 8, maxHeight: 320 }}>
+              <DryRunEmailList onSelect={async (chunkId) => {
+                setShowDryRun(false);
+                setDryRunMode('manual');
+                setDryRunRunning(true);
+                setDryRunResult(null);
+                setDryRunError('');
+                try {
+                  const { dryRunRule: drr } = await import('../../services/api/emailAutomationApi');
+                  const result = await drr({
+                    task_title_template: taskTitle,
+                    task_description_template: taskDesc || null,
+                    parse_script: parseScript || null,
+                    chunk_id: chunkId,
+                  });
+                  setDryRunResult(result);
+                  setShowDryRun(true);
+                } catch (err: unknown) {
+                  setDryRunError(err instanceof Error ? err.message : 'Dry run failed');
+                  setShowDryRun(true);
+                } finally {
+                  setDryRunRunning(false);
+                }
+              }} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {error && (
         <div style={{ fontSize: 12, color: '#d32f2f', padding: '6px 8px', background: '#fff0f0', borderRadius: 4 }}>
           {error}
@@ -244,5 +493,44 @@ export function EmailRuleForm({ rule, onSave, onCancel }: Props) {
       </div>
     </form>
     </>
+  );
+}
+
+function DryRunEmailList({ onSelect }: { onSelect: (chunkId: string) => void }) {
+  const [emails, setEmails] = useState<import('../../services/api/emailAutomationApi').EmailChunkSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [senderFilter, setSenderFilter] = useState('');
+  const [subjectFilter, setSubjectFilter] = useState('');
+
+  const load = async (sender?: string, subject?: string) => {
+    setLoading(true);
+    try {
+      const result = await searchEmailChunks({ sender_filter: sender?.trim() || undefined, subject_filter: subject?.trim() || undefined, limit: 10 });
+      setEmails(result);
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  };
+
+  useState(() => { load(); });
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ display: 'flex', gap: 6, padding: 8, borderBottom: '1px solid #eee' }}>
+        <input value={senderFilter} onChange={e => setSenderFilter(e.target.value)} onKeyDown={e => e.key === 'Enter' && load(senderFilter, subjectFilter)} placeholder="Sender…" style={{ flex: 1, padding: '4px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }} />
+        <input value={subjectFilter} onChange={e => setSubjectFilter(e.target.value)} onKeyDown={e => e.key === 'Enter' && load(senderFilter, subjectFilter)} placeholder="Subject…" style={{ flex: 1, padding: '4px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }} />
+        <button type="button" onClick={() => load(senderFilter, subjectFilter)} style={{ padding: '4px 10px', borderRadius: 4, border: 'none', background: '#4A83DD', color: '#fff', cursor: 'pointer', fontSize: 12 }}>Go</button>
+      </div>
+      {loading ? (
+        <div style={{ padding: 16, textAlign: 'center', color: '#888', fontSize: 12 }}>Loading…</div>
+      ) : emails.map(e => (
+        <div key={e.chunk_id} onClick={() => onSelect(e.chunk_id)} style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }} onMouseEnter={ev => (ev.currentTarget as HTMLDivElement).style.background = '#f8f9fa'} onMouseLeave={ev => (ev.currentTarget as HTMLDivElement).style.background = ''}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 12, fontWeight: 600 }}>{e.subject || '(no subject)'}</span>
+            <span style={{ fontSize: 11, color: '#999' }}>{e.date}</span>
+          </div>
+          <div style={{ fontSize: 11, color: '#666' }}>{e.sender}</div>
+        </div>
+      ))}
+    </div>
   );
 }

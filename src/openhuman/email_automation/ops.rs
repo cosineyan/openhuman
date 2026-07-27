@@ -329,15 +329,21 @@ async fn llm_classify_email(config: &Config, ctx: &EmailContext) -> Option<(Stri
 // Manual scan (run_now)
 // ---------------------------------------------------------------------------
 
-pub async fn run_now(config: Arc<Config>, last_n: usize) -> Result<RpcOutcome<RunNowResult>, String> {
+pub async fn run_now(config: Arc<Config>, last_n: usize, hours: Option<u64>) -> Result<RpcOutcome<RunNowResult>, String> {
     use std::collections::HashSet;
 
     let config_ref = &*config;
+    // If hours is given, use time-based filter; otherwise fall back to last_n
+    let since_ms = hours.map(|h| {
+        (chrono::Utc::now() - chrono::Duration::hours(h as i64)).timestamp_millis()
+    });
+
     let chunks = list_chunks(
         config_ref,
         &ListChunksQuery {
             source_kind: Some(SourceKind::Email),
-            limit: Some(last_n * 5),
+            since_ms,
+            limit: if since_ms.is_some() { Some(10_000) } else { Some(last_n * 5) },
             ..ListChunksQuery::default()
         },
     )
@@ -361,7 +367,7 @@ pub async fn run_now(config: Arc<Config>, last_n: usize) -> Result<RpcOutcome<Ru
 
     let tasks_created = hits.len();
     log::info!(
-        "[email_automation] run_now scanned={emails_scanned} created={tasks_created}"
+        "[email_automation] run_now scanned={emails_scanned} created={tasks_created} hours={hours:?}"
     );
 
     Ok(RpcOutcome::single_log(
@@ -405,100 +411,230 @@ pub fn delete_rule_rpc(config: &Config, id: &str) -> Result<RpcOutcome<serde_jso
 // ---------------------------------------------------------------------------
 
 /// List recent email chunks, optionally filtered by sender or subject keyword.
+/// Uses direct SQL LIKE query on the content field for full coverage.
 pub fn search_email_chunks_rpc(
     config: &Config,
     sender_filter: Option<&str>,
     subject_filter: Option<&str>,
     limit: usize,
 ) -> Result<RpcOutcome<Vec<EmailChunkSummary>>, String> {
-    use crate::openhuman::memory_store::content::read::read_chunk_body;
+    use crate::openhuman::memory_store::chunks::store::with_connection;
+    use anyhow::Context as _;
 
-    let fetch_limit = (limit * 8).max(150);
-    let chunks = list_chunks(
-        config,
-        &ListChunksQuery {
-            source_kind: Some(SourceKind::Email),
-            limit: Some(fetch_limit),
-            ..ListChunksQuery::default()
-        },
-    )
-    .map_err(|e| format!("list_chunks: {e}"))?;
+    let sender_pat = sender_filter
+        .filter(|s| !s.is_empty())
+        .map(|s| format!("%{}%", s.to_lowercase()));
+    let subject_pat = subject_filter
+        .filter(|s| !s.is_empty())
+        .map(|s| format!("%{}%", s.to_lowercase()));
+    let sql_limit = (limit * 3) as i64;
 
-    let sender_lower = sender_filter.map(|s| s.to_lowercase());
-    let subject_lower = subject_filter.map(|s| s.to_lowercase());
+    let rows: Vec<(String, String)> = with_connection(config, |conn| {
+        let mut sql = "SELECT id, content FROM mem_tree_chunks \
+            WHERE source_kind='email' AND seq_in_source=0".to_string();
+        let mut bound: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+        if let Some(ref sp) = sender_pat {
+            sql.push_str(" AND lower(content) LIKE ?");
+            bound.push(Box::new(sp.clone()));
+        }
+        if let Some(ref sp) = subject_pat {
+            sql.push_str(" AND lower(content) LIKE ?");
+            bound.push(Box::new(sp.clone()));
+        }
+        sql.push_str(" ORDER BY timestamp_ms DESC LIMIT ?");
+        bound.push(Box::new(sql_limit));
+
+        let mut stmt = conn.prepare(&sql)
+            .context("prepare search_email_chunks")?;
+        let rows = stmt.query_map(
+            rusqlite::params_from_iter(bound.iter().map(|b| b.as_ref())),
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+        )?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("query search_email_chunks")?;
+        Ok(rows)
+    })
+    .map_err(|e| e.to_string())?;
 
     let mut results: Vec<EmailChunkSummary> = Vec::new();
-    let mut seen_sources: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for (id, content) in rows {
+        if results.len() >= limit { break; }
+        let ctx = extract_email_context(&content);
+        if ctx.subject.is_empty() && ctx.sender.is_empty() { continue; }
 
-    for chunk in chunks {
-        if results.len() >= limit {
-            break;
-        }
-        // Deduplicate by source_id (message ID) — each email is one source
-        if !seen_sources.insert(chunk.metadata.source_id.clone()) {
-            continue;
-        }
-
-        // Read the full body to get the [Subject:] [From:] prefix
-        let body = match read_chunk_body(config, &chunk.id) {
-            Ok(b) => b,
-            Err(_) => {
-                // Fallback: use content preview (may already have [Subject:] prefix)
-                chunk.content.clone()
-            }
-        };
-
-        let ctx = extract_email_context(&body);
-
-        // Skip chunks where we couldn't extract any identifying info
-        if ctx.subject.is_empty() && ctx.sender.is_empty() {
-            continue;
-        }
-
-        // Apply filters
-        if let Some(ref sf) = sender_lower {
-            if !ctx.sender.to_lowercase().contains(sf.as_str()) {
-                continue;
-            }
-        }
-        if let Some(ref sf) = subject_lower {
-            if !ctx.subject.to_lowercase().contains(sf.as_str()) {
-                continue;
-            }
-        }
-
-        // Extract date from body prefix
         let date = extract_bracketed(&ctx.body_preview, "Date: ")
             .and_then(|d| d.get(..10).map(str::to_string))
             .unwrap_or_default();
-
-        // Extract body preview (first non-prefix line)
-        let preview = body
+        let preview = content
             .lines()
             .find(|l| !l.trim_start().starts_with('[') && !l.trim().is_empty())
             .unwrap_or("")
-            .chars()
-            .take(120)
-            .collect::<String>();
+            .chars().take(120).collect::<String>();
 
-        results.push(EmailChunkSummary {
-            chunk_id: chunk.id,
-            subject: ctx.subject,
-            sender: ctx.sender,
-            date,
-            preview,
-        });
+        results.push(EmailChunkSummary { chunk_id: id, subject: ctx.subject, sender: ctx.sender, date, preview });
     }
 
+    Ok(RpcOutcome::single_log(results, "email_automation: search_email_chunks"))
+}
+
+// ---------------------------------------------------------------------------
+// Dry run — preview what a rule would generate for a given email body
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct DryRunResult {
+    pub title: String,
+    pub description: Option<String>,
+    pub parsed_vars: serde_json::Value,
+    pub script_error: Option<String>,
+}
+
+pub fn dry_run_rpc(
+    config: &Config,
+    task_title_template: &str,
+    task_description_template: Option<&str>,
+    parse_script: Option<&str>,
+    email_body: &str,
+    chunk_id: Option<&str>,
+) -> Result<RpcOutcome<DryRunResult>, String> {
+    use crate::openhuman::memory_store::content::read::read_chunk_body;
+
+    // If chunk_id provided, read full body from disk
+    let body_owned;
+    let body = if let Some(cid) = chunk_id {
+        match read_chunk_body(config, cid) {
+            Ok(b) => { body_owned = b; &body_owned }
+            Err(e) => {
+                log::warn!("[email_automation] dry_run: read_chunk_body failed: {e}");
+                body_owned = email_body.to_string();
+                &body_owned
+            }
+        }
+    } else {
+        body_owned = email_body.to_string();
+        &body_owned
+    };
+
+    let ctx = extract_email_context(body);
+
+    let (vars, script_error) = if let Some(script) = parse_script {
+        if script.trim().is_empty() {
+            (serde_json::Value::Null, None)
+        } else {
+            let v = run_parse_script(script, body);
+            if v.is_null() {
+                (serde_json::Value::Null, Some("Parse script returned no output or failed. Check the script.".to_string()))
+            } else {
+                (v, None)
+            }
+        }
+    } else {
+        (serde_json::Value::Null, None)
+    };
+
+    let title = render_template_with_vars(task_title_template, &ctx, &vars);
+    let description = task_description_template
+        .map(|t| render_template_with_vars(t, &ctx, &vars));
+
     Ok(RpcOutcome::single_log(
-        results,
-        "email_automation: search_email_chunks",
+        DryRunResult { title, description, parsed_vars: vars, script_error },
+        "email_automation: dry_run",
     ))
 }
 
 // ---------------------------------------------------------------------------
 // Generate rule suggestion from a specific email chunk
 // ---------------------------------------------------------------------------
+
+pub async fn refine_rule_rpc(
+    config: &Config,
+    current_title_template: &str,
+    current_description_template: Option<&str>,
+    current_parse_script: Option<&str>,
+    email_body: &str,
+    user_feedback: &str,
+) -> Result<RpcOutcome<CreateRuleInput>, String> {
+    use crate::openhuman::inference::provider::factory::create_chat_provider;
+    use crate::openhuman::inference::provider::traits::{ChatMessage, ChatRequest};
+
+    let (provider, model) = create_chat_provider("chat", config)
+        .map_err(|e| format!("create_chat_provider: {e}"))?;
+
+    let script_section = current_parse_script
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| format!("\nCurrent parse_script:\n```python\n{s}\n```"))
+        .unwrap_or_default();
+
+    let desc_section = current_description_template
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| format!("\nCurrent task_description_template:\n{s}"))
+        .unwrap_or_default();
+
+    let prompt = format!(
+        "You are refining an email automation rule based on user feedback.\n\n\
+         Email body:\n{email_body}\n\n\
+         Current rule:\n\
+         task_title_template: {current_title_template}{desc_section}{script_section}\n\n\
+         User feedback: {user_feedback}\n\n\
+         Apply the feedback and produce an improved rule. Keep what works, fix what the user pointed out.\n\
+         Rules:\n\
+         - task_title_template: use {{{{subject}}}}, {{{{sender}}}}, or {{{{var_name}}}} placeholders. No hard-coded names.\n\
+         - task_description_template: same placeholder support.\n\
+         - parse_script: Python script receiving email_body as sys.argv[1], printing JSON dict to stdout.\n\
+         - Only include parse_script if variables are needed. If no variables, set to empty string.\n\n\
+         Respond with JSON only:\n\
+         {{\n\
+           \"name\": \"<rule name>\",\n\
+           \"sender_contains\": \"<sender keyword or empty>\",\n\
+           \"subject_contains\": \"<subject keyword>\",\n\
+           \"task_title_template\": \"<improved title>\",\n\
+           \"task_description_template\": \"<improved description>\",\n\
+           \"parse_script\": \"<improved Python script or empty string>\"\n\
+         }}"
+    );
+
+    let messages = vec![ChatMessage::user(&prompt)];
+    let request = ChatRequest {
+        messages: &messages,
+        tools: None,
+        max_tokens: Some(2048),
+        stream: None,
+        hint_thread_id: None,
+    };
+
+    let response = provider
+        .chat(request, &model, 0.0)
+        .await
+        .map_err(|e| format!("LLM call failed: {e}"))?;
+
+    let text = response.text.unwrap_or_default();
+    let json_str = if text.trim().starts_with("```") {
+        text.trim().lines().skip(1).take_while(|l| !l.starts_with("```")).collect::<Vec<_>>().join("\n")
+    } else {
+        text.trim().to_string()
+    };
+
+    let json: serde_json::Value = serde_json::from_str(&json_str)
+        .map_err(|e| format!("parse LLM response: {e}\nRaw: {json_str}"))?;
+
+    let result = CreateRuleInput {
+        name: json.get("name").and_then(|v| v.as_str()).unwrap_or("Refined rule").to_string(),
+        enabled: true,
+        sender_contains: json.get("sender_contains").and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(str::to_string),
+        subject_contains: json.get("subject_contains").and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(str::to_string),
+        body_contains: None,
+        task_title_template: json.get("task_title_template").and_then(|v| v.as_str()).unwrap_or(current_title_template).to_string(),
+        task_description_template: json.get("task_description_template").and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(str::to_string),
+        assignee: "ai".to_string(),
+        bucket_id: None,
+        llm_fallback_enabled: false,
+        parse_script: json.get("parse_script").and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(str::to_string),
+    };
+
+    log::info!("[email_automation] refined rule: {:?}", result.name);
+    Ok(RpcOutcome::single_log(result, "email_automation: refine_rule"))
+}
 
 pub async fn generate_rule_from_email_rpc(
     config: &Config,
