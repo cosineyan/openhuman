@@ -2189,6 +2189,39 @@ fn register_domain_subscribers(
         crate::openhuman::agent::task_dispatcher::start_board_poller();
         // Projects AI runner: event-driven pickup of project tasks assigned to AI.
         crate::openhuman::projects::register_project_ai_runner(std::sync::Arc::new(config.clone()));
+        // Clean up any cron runs left in 'queued' state from a previous app crash/restart.
+        if let Ok(n) = crate::openhuman::cron::cleanup_stale_queued_runs(&config) {
+            if n > 0 {
+                log::info!("[cron] cleaned up {} stale queued runs on startup", n);
+            }
+        }
+        // Email-to-task automation subscriber + startup scan for emails that
+        // arrived while the app was closed.
+        crate::openhuman::email_automation::register_email_automation_subscriber(
+            std::sync::Arc::new(config.clone()),
+        );
+        {
+            let config_arc = std::sync::Arc::new(config.clone());
+            tokio::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                match crate::openhuman::email_automation::run_now(config_arc, 100, None).await {
+                    Ok(_) => log::info!("[email_automation] startup scan complete"),
+                    Err(e) => log::warn!("[email_automation] startup scan failed: {e}"),
+                }
+            });
+        }
+        // Periodic batch queue drain (every 5 minutes)
+        {
+            let config_drain = config.clone();
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(std::time::Duration::from_secs(300));
+                interval.tick().await; // skip the immediate first tick
+                loop {
+                    interval.tick().await;
+                    crate::openhuman::email_automation::ops::drain_batch_queue(&config_drain);
+                }
+            });
+        }
         // Seed memory_sources with active Composio connections so the
         // user sees their connected integrations as memory sources by
         // default. Best-effort: failure is logged but does not block startup.

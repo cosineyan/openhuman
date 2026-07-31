@@ -85,6 +85,29 @@ pub(crate) async fn graph_get(token: &str, url: &str) -> Result<serde_json::Valu
         .map_err(|e| format!("parse graph response: {e}"))
 }
 
+pub(crate) async fn graph_post(token: &str, url: &str, body: serde_json::Value) -> Result<serde_json::Value, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("build http client: {e}"))?;
+    let resp = client
+        .post(url)
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("graph post failed: {e}"))?;
+    let status = resp.status();
+    if !status.is_success() {
+        let body_text = resp.text().await.unwrap_or_default();
+        return Err(format!("graph API POST returned {status}: {body_text}"));
+    }
+    resp.json::<serde_json::Value>()
+        .await
+        .map_err(|e| format!("parse graph post response: {e}"))
+}
+
 /// Extract a Teams meeting join URL from a calendar event body (HTML or plain text).
 /// Teams meeting URLs look like: https://teams.microsoft.com/l/meetup-join/...
 fn extract_teams_join_url_from_body(body: &str) -> Option<String> {

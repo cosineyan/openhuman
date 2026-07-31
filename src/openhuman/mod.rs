@@ -41,6 +41,7 @@ pub mod council_registry;
 pub mod credentials;
 pub mod cron;
 pub mod email_automation;
+pub mod local_skills;
 pub mod cwd_jail;
 pub mod dashboard;
 pub mod desktop_companion;

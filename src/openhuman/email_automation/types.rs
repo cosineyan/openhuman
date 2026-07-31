@@ -1,5 +1,15 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum BatchParseMode {
+    /// Run parse_script only on the first queued email; use its vars for the combined task.
+    #[default]
+    FirstOnly,
+    /// Run parse_script on every queued email; merge results into an `{{items}}` list.
+    All,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmailAutomationRule {
     pub id: String,
@@ -23,9 +33,16 @@ pub struct EmailAutomationRule {
     /// to decide whether a task should be created.
     pub llm_fallback_enabled: bool,
     /// Python script that parses the email body and returns a JSON dict.
-    /// The script receives `email_body` as sys.argv[1] and must print a JSON dict to stdout.
-    /// Variables from the dict are available as {{var_name}} in templates.
     pub parse_script: Option<String>,
+    /// When true, matching emails are queued and combined into a single task after batch_window_secs.
+    #[serde(default)]
+    pub batch_mode: bool,
+    /// Seconds to accumulate emails before draining the queue. Default 21600 (6h).
+    #[serde(default = "default_batch_window_secs")]
+    pub batch_window_secs: u64,
+    /// Whether to run parse_script on only the first queued email or all of them.
+    #[serde(default)]
+    pub batch_parse_mode: BatchParseMode,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -46,6 +63,12 @@ pub struct CreateRuleInput {
     #[serde(default)]
     pub llm_fallback_enabled: bool,
     pub parse_script: Option<String>,
+    #[serde(default)]
+    pub batch_mode: bool,
+    #[serde(default = "default_batch_window_secs")]
+    pub batch_window_secs: u64,
+    #[serde(default)]
+    pub batch_parse_mode: BatchParseMode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -61,16 +84,23 @@ pub struct RulePatch {
     pub bucket_id: Option<Option<String>>,
     pub llm_fallback_enabled: Option<bool>,
     pub parse_script: Option<Option<String>>,
+    pub batch_mode: Option<bool>,
+    pub batch_window_secs: Option<u64>,
+    pub batch_parse_mode: Option<BatchParseMode>,
 }
 
 /// Extracted fields from an email's body_preview.
-/// The m365 OutlookMailReader always prefixes bodies with:
-/// `[Subject: ...] [From: name <email>] [Date: ...]`
 #[derive(Debug, Clone, Default)]
 pub struct EmailContext {
     pub subject: String,
     pub sender: String,
     pub body_preview: String,
+    /// Full email body (may be empty if only preview is available).
+    pub full_body: String,
+    /// The memory tree chunk_id for the first chunk of this email.
+    pub chunk_id: String,
+    /// The memory tree source_id (unique per email, used for deduplication).
+    pub source_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,12 +117,26 @@ pub struct RunNowResult {
     pub hits: Vec<RuleHit>,
 }
 
+/// An entry in the batch queue.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchQueueEntry {
+    pub id: String,
+    pub rule_id: String,
+    pub source_id: String,
+    pub email_body: String,
+    pub matched_at: String,
+}
+
 fn default_true() -> bool {
     true
 }
 
 fn default_assignee() -> String {
     "ai".to_string()
+}
+
+pub fn default_batch_window_secs() -> u64 {
+    21600
 }
 
 /// A lightweight summary of an email chunk for the picker UI.

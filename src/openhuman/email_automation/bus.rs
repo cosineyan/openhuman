@@ -26,7 +26,9 @@ impl EventHandler for EmailAutomationSubscriber {
     async fn handle(&self, event: &DomainEvent) {
         let DomainEvent::DocumentCanonicalized {
             source_kind,
+            source_id,
             body_preview,
+            chunk_ids,
             ..
         } = event
         else {
@@ -42,10 +44,27 @@ impl EventHandler for EmailAutomationSubscriber {
             _ => return,
         };
 
-        let ctx = ops::extract_email_context(&preview);
+        let first_chunk_id = chunk_ids.first().cloned();
         let config = Arc::clone(&self.config);
-        // Spawn so the event handler never blocks the dispatch loop
+        let preview_clone = preview.clone();
+        let source_id_clone = source_id.clone();
+
         tokio::spawn(async move {
+            // Try to read full body so parse_script gets complete email content.
+            // If read_chunk_body returns ≤500 chars it's a truncated preview — fall back to Graph API.
+            let full_body = match first_chunk_id.as_deref() {
+                Some(id) => {
+                    match crate::openhuman::memory_store::content::read::read_chunk_body(&config, id) {
+                        Ok(b) if b.len() > 500 => b,
+                        _ => ops::fetch_full_email_body_pub(&config, &source_id_clone, &preview_clone).await,
+                    }
+                }
+                None => ops::fetch_full_email_body_pub(&config, &source_id_clone, &preview_clone).await,
+            };
+
+            let mut ctx = ops::extract_email_context(&preview_clone);
+            ctx.full_body = full_body;
+            ctx.source_id = source_id_clone;
             ops::process_email(&config, &ctx);
         });
     }

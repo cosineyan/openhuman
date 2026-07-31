@@ -124,6 +124,7 @@ fn build_registered_controllers() -> Vec<RegisteredController> {
     controllers.extend(crate::openhuman::task_sources::all_task_sources_registered_controllers());
     // Email-to-task automation rules
     controllers.extend(crate::openhuman::email_automation::all_email_automation_registered_controllers());
+    controllers.extend(crate::openhuman::local_skills::all_local_skills_registered_controllers());
     controllers.extend(crate::openhuman::dashboard::all_dashboard_registered_controllers());
     // MCP client subsystem: Smithery registry browser, local server install/connect, tool dispatch
     controllers.extend(crate::openhuman::mcp_registry::all_mcp_registry_registered_controllers());
@@ -358,6 +359,7 @@ fn build_declared_controller_schemas() -> Vec<ControllerSchema> {
     schemas.extend(crate::openhuman::m365::all_m365_controller_schemas());
     schemas.extend(crate::openhuman::task_sources::all_task_sources_controller_schemas());
     schemas.extend(crate::openhuman::email_automation::all_email_automation_controller_schemas());
+    schemas.extend(crate::openhuman::local_skills::all_local_skills_controller_schemas());
     schemas.extend(crate::openhuman::dashboard::all_dashboard_controller_schemas());
     schemas.extend(crate::openhuman::mcp_registry::all_mcp_registry_controller_schemas());
     schemas.extend(crate::openhuman::webview_apis::all_webview_apis_controller_schemas());

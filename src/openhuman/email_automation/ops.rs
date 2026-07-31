@@ -29,6 +29,9 @@ pub fn extract_email_context(body_preview: &str) -> EmailContext {
         subject,
         sender,
         body_preview: body_preview.to_string(),
+        full_body: body_preview.to_string(),
+        chunk_id: String::new(),
+        source_id: String::new(),
     }
 }
 
@@ -86,6 +89,10 @@ fn render_template(template: &str, ctx: &EmailContext) -> String {
 /// Variables are substituted as {{key}} in the template.
 fn render_template_with_vars(template: &str, ctx: &EmailContext, vars: &serde_json::Value) -> String {
     let mut result = render_template(template, ctx);
+    // Add chunk_id as a built-in variable for linking back to the original email
+    if !ctx.chunk_id.is_empty() {
+        result = result.replace("{{chunk_id}}", &ctx.chunk_id);
+    }
     if let Some(obj) = vars.as_object() {
         for (key, val) in obj {
             let placeholder = format!("{{{{{}}}}}", key);
@@ -108,6 +115,7 @@ fn render_template_with_vars(template: &str, ctx: &EmailContext, vars: &serde_js
 /// Returns a JSON Value with extracted variables, or Null on failure.
 fn run_parse_script(script: &str, email_body: &str) -> serde_json::Value {
     use std::io::Write;
+    use std::process::{Command, Stdio};
 
     // Write script to a temp file
     let mut tmp = match tempfile::NamedTempFile::new() {
@@ -122,12 +130,56 @@ fn run_parse_script(script: &str, email_body: &str) -> serde_json::Value {
         return serde_json::Value::Null;
     }
     let tmp_path = tmp.path().to_path_buf();
-    // Keep temp file alive until after execution
+    let _ = tmp_path; // kept for lifetime (tempfile must stay alive)
     let _ = tmp.flush();
 
-    let output = match std::process::Command::new("python3")
-        .arg(&tmp_path)
-        .arg(email_body)
+    // Write email_body to a separate temp file and pass its path as sys.argv[1].
+    // This avoids shell argument length limits and quoting issues with HTML bodies.
+    let mut body_tmp = match tempfile::NamedTempFile::new() {
+        Ok(f) => f,
+        Err(e) => {
+            log::warn!("[email_automation] parse_script: failed to create body tempfile: {e}");
+            return serde_json::Value::Null;
+        }
+    };
+    if let Err(e) = body_tmp.write_all(email_body.as_bytes()) {
+        log::warn!("[email_automation] parse_script: failed to write body tempfile: {e}");
+        return serde_json::Value::Null;
+    }
+    let body_tmp_path = body_tmp.path().to_path_buf();
+    let _ = body_tmp.flush();
+
+    // Bootstrap wrapper: reads body from file into sys.argv[1], then exec()s the real script.
+    // Using exec() keeps the user script in its own scope so there are no name conflicts.
+    let script_path_str = tmp_path.to_string_lossy();
+    let body_path_str = body_tmp_path.to_string_lossy();
+    let wrapper = format!(
+        r#"import sys as _sys, runpy as _rp
+_sys.argv = ['{script_path}', open('{body_path}', encoding='utf-8').read()]
+_rp.run_path('{script_path}', run_name='__main__')
+"#,
+        script_path = script_path_str.replace('\'', "\\'"),
+        body_path = body_path_str.replace('\'', "\\'"),
+    );
+
+    let mut wrapper_tmp = match tempfile::NamedTempFile::new() {
+        Ok(f) => f,
+        Err(e) => {
+            log::warn!("[email_automation] parse_script: failed to create wrapper tempfile: {e}");
+            return serde_json::Value::Null;
+        }
+    };
+    if let Err(e) = wrapper_tmp.write_all(wrapper.as_bytes()) {
+        log::warn!("[email_automation] parse_script: failed to write wrapper: {e}");
+        return serde_json::Value::Null;
+    }
+    let wrapper_path = wrapper_tmp.path().to_path_buf();
+    let _ = wrapper_tmp.flush();
+
+    let output = match Command::new("python3")
+        .arg(&wrapper_path)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .output()
     {
         Ok(o) => o,
@@ -146,7 +198,7 @@ fn run_parse_script(script: &str, email_body: &str) -> serde_json::Value {
     let stdout = String::from_utf8_lossy(&output.stdout);
     match serde_json::from_str(stdout.trim()) {
         Ok(v) => {
-            log::debug!("[email_automation] parse_script returned: {}", stdout.trim());
+            log::info!("[email_automation] parse_script returned: {}", &stdout.trim()[..stdout.trim().len().min(500)]);
             v
         }
         Err(e) => {
@@ -208,9 +260,36 @@ pub fn process_email(config: &Config, ctx: &EmailContext) -> Option<RuleHit> {
 
     for rule in &rules {
         if evaluate_rule(rule, ctx) {
+            // Check if this email has already been processed by this rule
+            if !ctx.source_id.is_empty() && store::is_email_processed(config, &ctx.source_id, &rule.id) {
+                log::debug!(
+                    "[email_automation] skipping duplicate: source_id='{}' rule='{}'",
+                    &ctx.source_id[..ctx.source_id.len().min(30)], rule.name
+                );
+                return None;
+            }
+
+            // Batch mode: enqueue and defer task creation
+            if rule.batch_mode {
+                let body = if !ctx.full_body.is_empty() { &ctx.full_body } else { &ctx.body_preview };
+                match store::enqueue_batch_email(config, &rule.id, &ctx.source_id, body) {
+                    Ok(_) => log::info!(
+                        "[email_automation] rule '{}' batch-queued source_id='{}'",
+                        rule.name, &ctx.source_id[..ctx.source_id.len().min(30)]
+                    ),
+                    Err(e) => log::warn!("[email_automation] enqueue_batch_email failed: {e}"),
+                }
+                return Some(RuleHit {
+                    rule_id: rule.id.clone(),
+                    rule_name: rule.name.clone(),
+                    task_title: format!("[batch queued] {}", rule.name),
+                });
+            }
+
             // Run parse_script if present to extract email-specific variables
+            // Use full_body if available (has complete email content), fall back to body_preview
             let vars = if let Some(script) = &rule.parse_script {
-                let body = &ctx.body_preview;
+                let body = if !ctx.full_body.is_empty() { &ctx.full_body } else { &ctx.body_preview };
                 let v = run_parse_script(script, body);
                 log::debug!("[email_automation] parse_script vars: {:?}", v);
                 v
@@ -238,7 +317,20 @@ pub fn process_email(config: &Config, ctx: &EmailContext) -> Option<RuleHit> {
                 &rule.assignee,
                 rule.bucket_id.as_deref(),
             ) {
-                Ok(_) => {
+                Ok(task) => {
+                    if !ctx.source_id.is_empty() {
+                        if let Err(e) = store::mark_email_processed(config, &ctx.source_id, &rule.id, &task.id) {
+                            log::warn!("[email_automation] mark_email_processed failed: {e}");
+                        }
+                        // Move email to ai-processed folder (best-effort, async)
+                        if rule.assignee == "ai" {
+                            let config_mv = config.clone();
+                            let source_id_mv = ctx.source_id.clone();
+                            tokio::spawn(async move {
+                                move_email_to_ai_processed(&config_mv, &source_id_mv).await;
+                            });
+                        }
+                    }
                     return Some(RuleHit {
                         rule_id: rule.id.clone(),
                         rule_name: rule.name.clone(),
@@ -329,37 +421,264 @@ async fn llm_classify_email(config: &Config, ctx: &EmailContext) -> Option<(Stri
 // Manual scan (run_now)
 // ---------------------------------------------------------------------------
 
+/// Fetch the full email body for a given source_id.
+fn regex_replace_all_simple_html(html: &str) -> String {
+    // Remove HTML tags, decode common entities
+    let no_tags: String = {
+        let mut result = String::with_capacity(html.len());
+        let mut in_tag = false;
+        for ch in html.chars() {
+            match ch {
+                '<' => { in_tag = true; }
+                '>' => { in_tag = false; result.push(' '); }
+                _ if !in_tag => { result.push(ch); }
+                _ => {}
+            }
+        }
+        result
+    };
+    no_tags
+        .replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+}
+/// Tries Graph API first (best quality), then chunk concatenation, then content fallback.
+pub async fn fetch_full_email_body_pub(config: &Config, source_id: &str, content_fallback: &str) -> String {
+    fetch_full_email_body(config, source_id, content_fallback).await
+}
+
+/// Move an email to the "ai-processed" folder in Outlook via Graph API.
+/// Creates the folder if it doesn't exist. Best-effort: errors are logged but not propagated.
+pub async fn move_email_to_ai_processed(config: &Config, source_id: &str) {
+    use crate::openhuman::memory_sources::readers::m365::{graph_get, graph_post, read_graph_token_public};
+
+    // source_id format: mem_src:{src_id}:{message_id}
+    let msg_id = {
+        let parts: Vec<&str> = source_id.splitn(3, ':').collect();
+        if parts.len() == 3 {
+            let raw = parts[2];
+            let decoded = urlencoding::decode(raw).map(|s| s.into_owned()).unwrap_or_else(|_| raw.to_string());
+            if !decoded.is_empty() { Some(decoded) } else { None }
+        } else { None }
+    };
+    let Some(msg_id) = msg_id else {
+        log::debug!("[email_automation] move_email: cannot parse message_id from source_id={}", &source_id[..source_id.len().min(30)]);
+        return;
+    };
+
+    let token = match read_graph_token_public(config) {
+        Ok(t) if !t.is_empty() => t,
+        _ => { log::debug!("[email_automation] move_email: no graph token"); return; }
+    };
+
+    // Find or create "ai-processed" folder
+    let folders_url = "https://graph.microsoft.com/v1.0/me/mailFolders?$top=50";
+    let folder_id = match graph_get(&token, folders_url).await {
+        Ok(data) => {
+            let existing = data.get("value")
+                .and_then(|v| v.as_array())
+                .and_then(|arr| arr.iter().find(|f| {
+                    f.get("displayName").and_then(|n| n.as_str()) == Some("ai-processed")
+                }))
+                .and_then(|f| f.get("id").and_then(|v| v.as_str()).map(str::to_string));
+            if let Some(id) = existing {
+                id
+            } else {
+                // Create the folder
+                let create_url = "https://graph.microsoft.com/v1.0/me/mailFolders";
+                match graph_post(&token, create_url, serde_json::json!({ "displayName": "ai-processed" })).await {
+                    Ok(f) => match f.get("id").and_then(|v| v.as_str()).map(str::to_string) {
+                        Some(id) => { log::info!("[email_automation] created ai-processed folder"); id }
+                        None => { log::warn!("[email_automation] move_email: created folder but no id in response"); return; }
+                    },
+                    Err(e) => { log::warn!("[email_automation] move_email: create folder failed: {e}"); return; }
+                }
+            }
+        }
+        Err(e) => { log::warn!("[email_automation] move_email: list folders failed: {e}"); return; }
+    };
+
+    // Move the message
+    let move_url = format!(
+        "https://graph.microsoft.com/v1.0/me/messages/{}/move",
+        urlencoding::encode(&msg_id)
+    );
+    match graph_post(&token, &move_url, serde_json::json!({ "destinationId": folder_id })).await {
+        Ok(_) => log::info!("[email_automation] moved message {} to ai-processed", &msg_id[..msg_id.len().min(20)]),
+        Err(e) => log::warn!("[email_automation] move_email: move failed: {e}"),
+    }
+}
+
+async fn fetch_full_email_body(config: &Config, source_id: &str, content_fallback: &str) -> String {
+    use crate::openhuman::memory_sources::readers::m365::graph_get;
+
+    // source_id format: mem_src:{src_id}:{message_id}
+    // message_id can contain ':' so we split on the first two ':' only
+    let msg_id = {
+        let parts: Vec<&str> = source_id.splitn(3, ':').collect();
+        if parts.len() == 3 {
+            let raw = parts[2];
+            let decoded = urlencoding::decode(raw).map(|s| s.into_owned()).unwrap_or_else(|_| raw.to_string());
+            // Accept any non-empty message id — let Graph API reject invalid ones
+            if !decoded.is_empty() { Some(decoded) } else { None }
+        } else {
+            None
+        }
+    };
+
+    if let Some(msg_id) = msg_id {
+        let token = crate::openhuman::memory_sources::readers::m365::read_graph_token_public(config)
+            .unwrap_or_default();
+        if !token.is_empty() {
+            let url = format!(
+                "https://graph.microsoft.com/v1.0/me/messages/{}?$select=subject,body,from,receivedDateTime,toRecipients",
+                urlencoding::encode(&msg_id)
+            );
+            if let Ok(data) = graph_get(&token, &url).await {
+                let body_content = data.get("body")
+                    .and_then(|b| b.get("content"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let content_type = data.get("body")
+                    .and_then(|b| b.get("contentType"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("text");
+
+                // Keep HTML as-is so parse_script can use href/URL patterns.
+                // Plain-text conversion is done by parse_script itself when needed.
+                let plain = body_content.to_string();
+                log::info!("[email_automation] fetch_full_email_body: content_type={} body_len={} contains_href_launchpad={}",
+                    content_type, plain.len(), plain.contains("launchpad"));
+
+                if !plain.is_empty() {
+                    // Reconstruct the prefix format
+                    let subject = data.get("subject").and_then(|v| v.as_str()).unwrap_or("");
+                    let from = data.get("from")
+                        .and_then(|f| f.get("emailAddress"))
+                        .map(|e| {
+                            let name = e.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                            let addr = e.get("address").and_then(|v| v.as_str()).unwrap_or("");
+                            if name.is_empty() { addr.to_string() } else { format!("{name} <{addr}>") }
+                        })
+                        .unwrap_or_default();
+                    let date = data.get("receivedDateTime").and_then(|v| v.as_str()).unwrap_or("");
+                    let prefix = format!("[Subject: {subject}] [From: {from}] [Date: {date}]\n");
+                    log::debug!("[email_automation] fetch_full_email_body: got {} chars via Graph API", plain.len());
+                    return format!("{prefix}{plain}");
+                }
+            }
+        }
+    }
+
+    // Fallback: concatenate all chunks
+    use crate::openhuman::memory_store::chunks::store::with_connection;
+    use anyhow::Context as _;
+    with_connection(config, |conn| {
+        let mut stmt = conn.prepare(
+            "SELECT content FROM mem_tree_chunks \
+             WHERE source_id=?1 AND source_kind='email' \
+             ORDER BY seq_in_source ASC"
+        ).context("prepare full body")?;
+        let parts = stmt.query_map(rusqlite::params![source_id], |row| row.get::<_, String>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .context("query full body")?;
+        Ok(parts.join(""))
+    }).unwrap_or_else(|_| content_fallback.to_string())
+}
+
 pub async fn run_now(config: Arc<Config>, last_n: usize, hours: Option<u64>) -> Result<RpcOutcome<RunNowResult>, String> {
-    use std::collections::HashSet;
+    use crate::openhuman::memory_store::chunks::store::with_connection;
+    use anyhow::Context as _;
 
     let config_ref = &*config;
-    // If hours is given, use time-based filter; otherwise fall back to last_n
+
     let since_ms = hours.map(|h| {
         (chrono::Utc::now() - chrono::Duration::hours(h as i64)).timestamp_millis()
     });
 
-    let chunks = list_chunks(
-        config_ref,
-        &ListChunksQuery {
-            source_kind: Some(SourceKind::Email),
-            since_ms,
-            limit: if since_ms.is_some() { Some(10_000) } else { Some(last_n * 5) },
-            ..ListChunksQuery::default()
-        },
-    )
-    .map_err(|e| format!("list_chunks: {e}"))?;
+    // Use direct SQL to get seq_in_source=0 chunks (one per email, with [Subject:][From:] prefix)
+    let rows: Vec<(String, String, String, String)> = with_connection(config_ref, |conn| {
+        let mut sql = "SELECT id, source_id, coalesce(content_path,''), content FROM mem_tree_chunks \
+            WHERE source_kind='email' AND seq_in_source=0".to_string();
+        let mut bound: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
-    let mut seen_sources: HashSet<String> = HashSet::new();
+        if let Some(ms) = since_ms {
+            sql.push_str(" AND timestamp_ms >= ?");
+            bound.push(Box::new(ms));
+        }
+        sql.push_str(" ORDER BY timestamp_ms DESC LIMIT ?");
+        let lim = if since_ms.is_some() { 10_000i64 } else { (last_n * 5) as i64 };
+        bound.push(Box::new(lim));
+
+        let mut stmt = conn.prepare(&sql).context("prepare run_now")?;
+        let rows = stmt.query_map(
+            rusqlite::params_from_iter(bound.iter().map(|b| b.as_ref())),
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?)),
+        )?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("query run_now")?;
+        Ok(rows)
+    })
+    .map_err(|e| e.to_string())?;
+
+    let mut seen_sources: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut emails_scanned = 0usize;
     let mut hits: Vec<RuleHit> = Vec::new();
 
-    for chunk in chunks {
-        if !seen_sources.insert(chunk.metadata.source_id.clone()) {
+    for (chunk_id, source_id, content_path, content) in rows {
+        if !seen_sources.insert(source_id.clone()) {
             continue;
         }
         emails_scanned += 1;
 
-        let ctx = extract_email_context(&chunk.content);
+        // Phase 1: quick rule matching using content preview (no API call)
+        let preview_ctx = {
+            let mut c = extract_email_context(&content);
+            c.source_id = source_id.clone();
+            c.chunk_id = chunk_id.clone();
+            c
+        };
+
+        // Check dedup first with preview ctx
+        let rules = match store::list_enabled_rules(config_ref) {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+        let matching_rule = rules.iter().find(|r| evaluate_rule(r, &preview_ctx));
+        if matching_rule.is_none() {
+            continue; // no rule matches — skip expensive body fetch
+        }
+        let matching_rule = matching_rule.unwrap();
+
+        // Check dedup
+        if store::is_email_processed(config_ref, &source_id, &matching_rule.id) {
+            log::debug!("[email_automation] run_now: skipping duplicate source_id={}", &source_id[..source_id.len().min(30)]);
+            continue;
+        }
+
+        // Phase 2: fetch full body only for matching emails
+        let full_body = if !content_path.is_empty() {
+            match crate::openhuman::memory_store::content::read::read_chunk_body(config_ref, &chunk_id) {
+                Ok(b) if b.len() > 500 => b,
+                // read_chunk_body returned truncated/empty content — fall through to Graph API
+                Ok(_) => fetch_full_email_body(config_ref, &source_id, &content).await,
+                Err(_) => fetch_full_email_body(config_ref, &source_id, &content).await,
+            }
+        } else {
+            fetch_full_email_body(config_ref, &source_id, &content).await
+        };
+
+        let mut ctx = extract_email_context(&full_body);
+        ctx.full_body = full_body.clone();
+        ctx.chunk_id = chunk_id.clone();
+        ctx.source_id = source_id.clone();
+        log::debug!(
+            "[email_automation] run_now chunk={} sender='{}' subject='{}'",
+            &chunk_id[..8.min(chunk_id.len())], ctx.sender, ctx.subject
+        );
         if let Some(hit) = process_email(config_ref, &ctx) {
             hits.push(hit);
         }
@@ -379,6 +698,30 @@ pub async fn run_now(config: Arc<Config>, last_n: usize, hours: Option<u64>) -> 
 // ---------------------------------------------------------------------------
 // RpcOutcome wrappers
 // ---------------------------------------------------------------------------
+
+pub fn list_processed_emails_rpc(config: &Config, limit: usize) -> Result<RpcOutcome<Vec<store::ProcessedEmailEntry>>, String> {
+    let entries = store::list_processed_emails(config, limit).map_err(|e| e.to_string())?;
+    Ok(RpcOutcome::single_log(entries, "email_automation: list_processed_emails"))
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct EmailContentResult {
+    pub subject: String,
+    pub from: String,
+    pub to: String,
+    pub date: String,
+    pub body: String,
+}
+
+pub fn get_email_content_rpc(config: &Config, source_id: &str) -> Result<RpcOutcome<Option<EmailContentResult>>, String> {
+    match store::get_email_for_display(config, source_id).map_err(|e| e.to_string())? {
+        Some((subject, from, to, date, body)) => Ok(RpcOutcome::single_log(
+            Some(EmailContentResult { subject, from, to, date, body }),
+            "email_automation: get_email_content",
+        )),
+        None => Ok(RpcOutcome::single_log(None, "email_automation: get_email_content not found")),
+    }
+}
 
 pub fn list_rules_rpc(config: &Config) -> Result<RpcOutcome<Vec<EmailAutomationRule>>, String> {
     let rules = store::list_rules(config).map_err(|e| e.to_string())?;
@@ -630,6 +973,9 @@ pub async fn refine_rule_rpc(
         bucket_id: None,
         llm_fallback_enabled: false,
         parse_script: json.get("parse_script").and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(str::to_string),
+        batch_mode: false,
+        batch_window_secs: super::types::default_batch_window_secs(),
+        batch_parse_mode: super::types::BatchParseMode::FirstOnly,
     };
 
     log::info!("[email_automation] refined rule: {:?}", result.name);
@@ -749,9 +1095,135 @@ pub async fn generate_rule_from_emails_rpc(
         bucket_id: None,
         llm_fallback_enabled: false,
         parse_script: json.get("parse_script").and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(str::to_string),
+        batch_mode: false,
+        batch_window_secs: super::types::default_batch_window_secs(),
+        batch_parse_mode: super::types::BatchParseMode::FirstOnly,
     };
 
     log::info!("[email_automation] generated rule from {} email(s): {:?}", email_count, suggestion.name);
 
     Ok(RpcOutcome::single_log(suggestion, "email_automation: generate_rule_from_emails"))
+}
+
+// ---------------------------------------------------------------------------
+// Batch queue drain
+// ---------------------------------------------------------------------------
+
+/// Drain all ready batch queues: for each rule with batch_mode=true, check if
+/// the window has elapsed and if so create a combined task.
+pub fn drain_batch_queue(config: &Config) {
+    use super::types::BatchParseMode;
+
+    let rules = match store::list_enabled_rules(config) {
+        Ok(r) => r,
+        Err(e) => { log::warn!("[email_automation] drain_batch_queue: list_rules failed: {e}"); return; }
+    };
+
+    let batch_rules: Vec<_> = rules.into_iter().filter(|r| r.batch_mode).collect();
+    if batch_rules.is_empty() { return; }
+
+    let rule_ids = match store::list_batch_rule_ids(config) {
+        Ok(ids) => ids,
+        Err(e) => { log::warn!("[email_automation] drain_batch_queue: list_batch_rule_ids failed: {e}"); return; }
+    };
+
+    for rule in &batch_rules {
+        if !rule_ids.contains(&rule.id) { continue; }
+
+        let entries = match store::pop_ready_batch_entries(config, &rule.id, rule.batch_window_secs) {
+            Ok(e) => e,
+            Err(e) => { log::warn!("[email_automation] drain_batch_queue: pop_ready failed rule={}: {e}", rule.id); continue; }
+        };
+        if entries.is_empty() { continue; }
+
+        log::info!(
+            "[email_automation] drain_batch_queue: rule='{}' draining {} emails",
+            rule.name, entries.len()
+        );
+
+        // Build a synthetic EmailContext from the first entry for template rendering
+        let first_body = &entries[0].email_body;
+        let first_ctx = extract_email_context(first_body);
+
+        let vars = match rule.batch_parse_mode {
+            BatchParseMode::FirstOnly => {
+                if let Some(script) = &rule.parse_script {
+                    run_parse_script(script, first_body)
+                } else {
+                    serde_json::Value::Null
+                }
+            }
+            BatchParseMode::All => {
+                // Run parse_script on every email, collect results into {{items}} array
+                if let Some(script) = &rule.parse_script {
+                    let item_list: Vec<serde_json::Value> = entries.iter().map(|e| {
+                        run_parse_script(script, &e.email_body)
+                    }).collect();
+                    // Build vars with an "items" key containing the list as a formatted string
+                    let items_str = item_list.iter().enumerate().map(|(i, v)| {
+                        // Format each item as "N. key1: val1 | key2: val2 ..."
+                        if let Some(obj) = v.as_object() {
+                            let fields: Vec<String> = obj.iter()
+                                .map(|(k, v)| format!("{}: {}", k, v.as_str().unwrap_or(&v.to_string())))
+                                .collect();
+                            format!("{}. {}", i + 1, fields.join(" | "))
+                        } else {
+                            format!("{}. {}", i + 1, v)
+                        }
+                    }).collect::<Vec<_>>().join("\n");
+                    serde_json::json!({ "items": items_str, "count": entries.len() })
+                } else {
+                    // No parse_script: just list subjects
+                    let items_str = entries.iter().enumerate().map(|(i, e)| {
+                        let ctx = extract_email_context(&e.email_body);
+                        format!("{}. Subject: {} | From: {}", i + 1, ctx.subject, ctx.sender)
+                    }).collect::<Vec<_>>().join("\n");
+                    serde_json::json!({ "items": items_str, "count": entries.len() })
+                }
+            }
+        };
+
+        // Inject count into vars
+        let vars = if let serde_json::Value::Object(mut map) = vars {
+            map.insert("count".to_string(), serde_json::json!(entries.len()));
+            serde_json::Value::Object(map)
+        } else {
+            serde_json::json!({ "count": entries.len() })
+        };
+
+        let title = render_template_with_vars(&rule.task_title_template, &first_ctx, &vars);
+        let description = rule.task_description_template.as_deref()
+            .map(|t| render_template_with_vars(t, &first_ctx, &vars));
+
+        match create_task_from_rule(config, &title, description.as_deref(), &rule.assignee, rule.bucket_id.as_deref()) {
+            Ok(task) => {
+                // Mark all source_ids as processed
+                for entry in &entries {
+                    let _ = store::mark_email_processed(config, &entry.source_id, &rule.id, &task.id);
+                }
+                // Move all emails to ai-processed folder (best-effort)
+                if rule.assignee == "ai" {
+                    let config_mv = config.clone();
+                    let source_ids: Vec<String> = entries.iter().map(|e| e.source_id.clone()).collect();
+                    tokio::spawn(async move {
+                        for source_id in source_ids {
+                            move_email_to_ai_processed(&config_mv, &source_id).await;
+                        }
+                    });
+                }
+                // Remove from queue
+                let ids: Vec<String> = entries.iter().map(|e| e.id.clone()).collect();
+                if let Err(e) = store::delete_batch_entries(config, &ids) {
+                    log::warn!("[email_automation] drain_batch_queue: delete_batch_entries failed: {e}");
+                }
+                log::info!(
+                    "[email_automation] drain_batch_queue: created task '{}' for {} emails",
+                    title, entries.len()
+                );
+            }
+            Err(e) => {
+                log::warn!("[email_automation] drain_batch_queue: create_task failed: {e}");
+            }
+        }
+    }
 }
