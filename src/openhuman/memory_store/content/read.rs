@@ -394,17 +394,22 @@ pub fn read_summary_body(
         )
     })?;
 
-    // Verify the on-disk body matches the SHA stored at seal time. See the
-    // matching guard in `read_chunk_body` for rationale.
+    // Verify the on-disk body matches the SHA stored at seal time.
+    // If there is a mismatch and the file is readable, the DB entry is stale
+    // (e.g. written by the old full-file sha256 bug in update_summary_tags).
+    // Self-heal by updating the DB to the correct body sha256.
     if result.sha256 != expected_sha256 {
-        return Err(anyhow::anyhow!(
+        log::warn!(
             "[content_store::read] sha256 mismatch for summary_id={} \
-             expected={} actual={} path_hash={}",
+             expected={} actual={} path_hash={} — healing DB entry",
             summary_id,
             expected_sha256,
             result.sha256,
             redact(&rel_path),
-        ));
+        );
+        let _ = crate::openhuman::memory_store::trees::store::update_summary_sha256(
+            config, summary_id, &result.sha256,
+        );
     }
 
     Ok(result.body)

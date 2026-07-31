@@ -189,12 +189,17 @@ pub fn update_summary_tags(config: &Config, summary_id: &str) -> anyhow::Result<
         tags.len()
     );
 
-    // Update the stored sha256 to match the rewritten file — the full-file
-    // sha256 is what verify_summary_file checks, so we need to recompute it
-    // over the complete new content (front-matter + body), not just the body.
-    let full_sha = super::atomic::sha256_hex(&verify_bytes);
+    // Update the stored sha256 — read_summary_body compares against the BODY sha256
+    // (front-matter stripped), matching how read_chunk_file computes it.
+    let body_after_rewrite = split_front_matter(
+        std::str::from_utf8(&verify_bytes)
+            .map_err(|e| anyhow::anyhow!("UTF-8 after sha recompute {:?}: {e}", abs_path))?,
+    )
+    .ok_or_else(|| anyhow::anyhow!("no front-matter after sha recompute {:?}", abs_path))?
+    .1;
+    let body_sha = super::atomic::sha256_hex(body_after_rewrite.as_bytes());
     crate::openhuman::memory_store::trees::store::update_summary_sha256(
-        config, summary_id, &full_sha,
+        config, summary_id, &body_sha,
     )?;
 
     Ok(())
