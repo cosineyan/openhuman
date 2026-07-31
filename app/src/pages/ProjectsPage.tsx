@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 
 import { SidebarContent } from '../components/layout/shell/SidebarSlot';
 import TwoPaneNav from '../components/layout/TwoPaneNav';
 import { ArchivedView } from '../components/projects/ArchivedView';
 import { EmailAutomationPanel } from '../components/projects/EmailAutomationPanel';
+import { ScheduledTaskPanel } from '../components/projects/ScheduledTaskPanel';
 import { KanbanBoard } from '../components/projects/KanbanBoard';
 import { TaskDetailDrawer } from '../components/projects/TaskDetailDrawer';
 import { useT } from '../lib/i18n/I18nContext';
@@ -18,7 +20,7 @@ import {
   updateTask,
 } from '../services/api/projectsApi';
 
-type ViewMode = 'board' | 'archived' | 'email_automation';
+type ViewMode = 'board' | 'archived' | 'email_automation' | 'scheduled_tasks';
 
 function NavIcon({ path }: { path: string }) {
   return (
@@ -34,6 +36,7 @@ const EMAIL_ICON_PATH = 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V
 
 export function ProjectsPage() {
   const { t } = useT();
+  const { pathname } = useLocation();
   const [board, setBoard] = useState<BoardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +70,19 @@ export function ProjectsPage() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  // Reload when the window regains focus (user navigates away and comes back).
+  useEffect(() => {
+    const onFocus = () => void reload();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [reload]);
+
+  // Reload when navigating back to this page via route change.
+  useEffect(() => {
+    void reload();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   // Poll every 5s while any task with assignee=ai is in a non-terminal bucket
   // (i.e. AI may be actively working). This keeps the board + open drawer fresh.
@@ -235,6 +251,7 @@ export function ProjectsPage() {
               label: 'Automation',
               items: [
                 { value: 'email_automation', label: 'Email → Task', icon: <NavIcon path={EMAIL_ICON_PATH} /> },
+                { value: 'scheduled_tasks', label: 'Scheduling Task', icon: <NavIcon path={EMAIL_ICON_PATH} /> },
               ],
             },
           ]}
@@ -259,7 +276,25 @@ export function ProjectsPage() {
           </div>
         )}
         {viewMode === 'archived' && <ArchivedView onTaskClick={setSelectedTask} />}
-        {viewMode === 'email_automation' && <EmailAutomationPanel />}
+        {viewMode === 'email_automation' && (
+          <EmailAutomationPanel
+            onOpenTask={(taskId) => {
+              const task = board?.buckets.flatMap(b => b.tasks).find(t => t.id === taskId);
+              if (task) {
+                setSelectedTask(task);
+                setTaskStack([]);
+              }
+            }}
+          />
+        )}
+        {viewMode === 'scheduled_tasks' && (
+          <ScheduledTaskPanel
+            onOpenTask={(title) => {
+              const task = board?.buckets.flatMap(b => b.tasks).find(t => t.title === title);
+              if (task) { setSelectedTask(task); setTaskStack([]); }
+            }}
+          />
+        )}
       </div>
 
       <TaskDetailDrawer

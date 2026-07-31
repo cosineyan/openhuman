@@ -11,6 +11,8 @@ import PanelPage from '../components/layout/PanelPage';
 import { SidebarContent } from '../components/layout/shell/SidebarSlot';
 import TwoPaneNav from '../components/layout/TwoPaneNav';
 import { useT } from '../lib/i18n/I18nContext';
+import { listLocalSkills, type LocalSkill } from '../services/api/localSkillsApi';
+import { BubbleMarkdown } from './conversations/components/AgentMessageBubble';
 import {
   getM365TokenStatus,
   getMcpChromeStatus,
@@ -1035,12 +1037,92 @@ function ModulesTab() {
 }
 
 function SkillsTab() {
-  const { t } = useT();
+  const [skills, setSkills] = useState<LocalSkill[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<LocalSkill | null>(null);
+
+  useEffect(() => {
+    listLocalSkills()
+      .then(setSkills)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
   return (
-    <EmptyState
-      title={t('sap.tabs.skills.emptyTitle')}
-      description={t('sap.tabs.skills.emptyDesc')}
-    />
+    <div className="p-6">
+      {/* Skill detail modal */}
+      {selected && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setSelected(null)}
+        >
+          <div
+            className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-3 border-b border-stone-200 dark:border-neutral-700">
+              <div>
+                <h3 className="text-sm font-bold text-stone-800 dark:text-neutral-100">{selected.name}</h3>
+                <p className="text-xs text-stone-500 dark:text-neutral-400 mt-0.5">
+                  {selected.plugin_name} · v{selected.version}
+                  {selected.author ? ` · ${selected.author}` : ''}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelected(null)}
+                className="text-stone-400 hover:text-stone-600 dark:hover:text-neutral-200 text-xl leading-none px-1"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-4 text-sm">
+              {selected.description && (
+                <p className="text-stone-600 dark:text-neutral-300 mb-4 italic">{selected.description}</p>
+              )}
+              <BubbleMarkdown content={selected.body} tone="agent" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <p className="text-sm text-stone-400 dark:text-neutral-500">Loading skills…</p>
+      ) : skills.length === 0 ? (
+        <EmptyState
+          title="No local skills found"
+          description="Install skills via Claude Code to see them here."
+        />
+      ) : (
+        <>
+          <p className="text-xs text-stone-500 dark:text-neutral-400 mb-4">
+            {skills.length} skill{skills.length !== 1 ? 's' : ''} installed (user scope)
+          </p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {skills.map(skill => (
+              <button
+                key={`${skill.plugin_name}:${skill.name}`}
+                onClick={() => setSelected(skill)}
+                className="flex flex-col items-start gap-1.5 rounded-xl border border-stone-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-3 text-left hover:border-primary-400 hover:shadow-sm transition-all"
+              >
+                <span className="text-xs font-semibold text-stone-800 dark:text-neutral-100 break-all leading-tight">
+                  {skill.name}
+                </span>
+                {skill.description && (
+                  <span className="text-[11px] text-stone-500 dark:text-neutral-400 line-clamp-2 leading-relaxed">
+                    {skill.description}
+                  </span>
+                )}
+                {skill.author && (
+                  <span className="text-[10px] text-stone-400 dark:text-neutral-500 mt-auto">
+                    {skill.author}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

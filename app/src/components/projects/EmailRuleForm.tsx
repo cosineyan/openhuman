@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import type { CreateRuleInput, DryRunResult, EmailAutomationRule, RulePatch } from '../../services/api/emailAutomationApi';
+import type { BatchParseMode, CreateRuleInput, DryRunResult, EmailAutomationRule, RulePatch } from '../../services/api/emailAutomationApi';
 import { dryRunRule, refineRule, searchEmailChunks } from '../../services/api/emailAutomationApi';
 import { EmailPickerModal } from './EmailPickerModal';
 
@@ -20,6 +20,9 @@ export function EmailRuleForm({ rule, onSave, onCancel }: Props) {
   const [taskDesc, setTaskDesc] = useState(rule?.task_description_template ?? '');
   const [parseScript, setParseScript] = useState(rule?.parse_script ?? '');
   const [showScript, setShowScript] = useState(!!(rule?.parse_script));
+  const [batchMode, setBatchMode] = useState(rule?.batch_mode ?? false);
+  const [batchWindowHours, setBatchWindowHours] = useState(Math.round((rule?.batch_window_secs ?? 21600) / 3600));
+  const [batchParseMode, setBatchParseMode] = useState<BatchParseMode>(rule?.batch_parse_mode ?? 'first_only');
   const [saving, setSaving] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -29,6 +32,7 @@ export function EmailRuleForm({ rule, onSave, onCancel }: Props) {
   const [showDryRun, setShowDryRun] = useState(false);
   const [dryRunMode, setDryRunMode] = useState<'manual' | 'pick'>('manual');
   const [dryRunBody, setDryRunBody] = useState('');
+  const [dryRunChunkId, setDryRunChunkId] = useState<string | undefined>(undefined);
   const [dryRunRunning, setDryRunRunning] = useState(false);
   const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null);
   const [dryRunError, setDryRunError] = useState('');
@@ -56,17 +60,17 @@ export function EmailRuleForm({ rule, onSave, onCancel }: Props) {
   };
 
   const handlePickForDryRun = async (chunk: import('../../services/api/emailAutomationApi').EmailChunkSummary) => {
-    // Load full body via search — use chunk_id to find it
-    // For now use preview as body (full body not exposed in summary)
-    // We'll use the chunk subject+sender+preview as a placeholder
+    // Store chunk_id so refine can use full body via RPC; also set preview as fallback body
     const body = `[Subject: ${chunk.subject}] [From: ${chunk.sender}] [Date: ${chunk.date}]\n${chunk.preview}`;
     setDryRunBody(body);
+    setDryRunChunkId(chunk.chunk_id);
     setDryRunMode('manual');
   };
 
   const handleRefine = async () => {
     const body = dryRunBody.trim();
-    if (!body || !refineFeedback.trim()) return;
+    // Allow refine if we have a chunk_id (full body via RPC) or manual body text
+    if ((!body && !dryRunChunkId) || !refineFeedback.trim()) return;
     setRefining(true);
     setDryRunError('');
     try {
@@ -74,7 +78,8 @@ export function EmailRuleForm({ rule, onSave, onCancel }: Props) {
         task_title_template: taskTitle,
         task_description_template: taskDesc || null,
         parse_script: parseScript || null,
-        email_body: body,
+        email_body: body || undefined,
+        chunk_id: dryRunChunkId,
         user_feedback: refineFeedback,
       });
       // Apply refined values back to form
@@ -129,6 +134,9 @@ export function EmailRuleForm({ rule, onSave, onCancel }: Props) {
         task_description_template: taskDesc.trim() || null,
         assignee: 'ai',
         parse_script: parseScript.trim() || null,
+        batch_mode: batchMode,
+        batch_window_secs: batchWindowHours * 3600,
+        batch_parse_mode: batchParseMode,
       });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save rule');
@@ -289,6 +297,50 @@ export function EmailRuleForm({ rule, onSave, onCancel }: Props) {
         )}
       </div>
 
+      {/* Batch mode */}
+      <div style={{ background: '#f7f8fa', borderRadius: 6, padding: 12 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: batchMode ? 10 : 0 }}>
+          <input type="checkbox" checked={batchMode} onChange={e => setBatchMode(e.target.checked)} />
+          <span style={{ fontSize: 13, fontWeight: 600 }}>Batch mode</span>
+          <span style={{ fontSize: 11, color: '#888' }}>Accumulate emails and create one combined task</span>
+        </label>
+        {batchMode && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <label style={{ fontSize: 12, color: '#444', whiteSpace: 'nowrap' }}>Time window (hours)</label>
+              <input
+                type="number"
+                min={1}
+                max={168}
+                value={batchWindowHours}
+                onChange={e => setBatchWindowHours(Math.max(1, parseInt(e.target.value) || 1))}
+                style={{ width: 70, padding: '4px 8px', borderRadius: 4, border: '1px solid #ddd', fontSize: 13 }}
+              />
+              <span style={{ fontSize: 11, color: '#888' }}>After the first match, wait this long before creating the task</span>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, color: '#444', marginBottom: 4 }}>Parse mode</label>
+              <div style={{ display: 'flex', gap: 12 }}>
+                {([['first_only', 'First email only', 'Run parse_script on the first matched email; use its vars for the task'], ['all', 'All emails', 'Run parse_script on every email; merge results into {{items}} list']] as [BatchParseMode, string, string][]).map(([val, label, desc]) => (
+                  <label key={val} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, cursor: 'pointer', flex: 1, padding: '6px 8px', border: `1px solid ${batchParseMode === val ? '#4A83DD' : '#ddd'}`, borderRadius: 6, background: batchParseMode === val ? '#EBF3FF' : '#fff' }}>
+                    <input type="radio" name="batchParseMode" value={val} checked={batchParseMode === val} onChange={() => setBatchParseMode(val)} style={{ marginTop: 2 }} />
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600 }}>{label}</div>
+                      <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{desc}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+              {batchParseMode === 'all' && (
+                <div style={{ marginTop: 6, fontSize: 11, color: '#666', background: '#f0f4ff', padding: '4px 8px', borderRadius: 4 }}>
+                  Use <code>{'{{items}}'}</code> in your description template to include the merged list, and <code>{'{{count}}'}</code> for the number of emails.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Dry Run */}
       <div style={{ background: '#f7f8fa', borderRadius: 6, padding: 12 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
@@ -444,6 +496,7 @@ export function EmailRuleForm({ rule, onSave, onCancel }: Props) {
               <DryRunEmailList onSelect={async (chunkId) => {
                 setShowDryRun(false);
                 setDryRunMode('manual');
+                setDryRunChunkId(chunkId);
                 setDryRunRunning(true);
                 setDryRunResult(null);
                 setDryRunError('');

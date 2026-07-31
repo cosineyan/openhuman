@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import Markdown, { defaultUrlTransform } from 'react-markdown';
 import rehypeKatex from 'rehype-katex';
+import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 
 import { OPENHUMAN_LINK_EVENT } from '../../../components/OpenhumanLinkModal';
@@ -16,9 +17,9 @@ import {
   parseBubbleSegments,
 } from '../utils/format';
 
-const MATH_REMARK_PLUGINS = [remarkMath];
+const MATH_REMARK_PLUGINS = [remarkGfm, remarkMath];
 const MATH_REHYPE_PLUGINS = [rehypeKatex];
-const EMPTY_PLUGINS: [] = [];
+const EMPTY_PLUGINS = [remarkGfm];
 type ParsedMarkdownTable = NonNullable<ReturnType<typeof parseMarkdownTable>>;
 
 /**

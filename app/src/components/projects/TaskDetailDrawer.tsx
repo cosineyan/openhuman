@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { BubbleMarkdown } from '../../pages/conversations/components/AgentMessageBubble';
 import { formatFileSize } from '../../lib/attachments';
 import {
   addAttachment,
@@ -169,6 +170,7 @@ export function TaskDetailDrawer({
   const [eventsLoading, setEventsLoading] = useState(false);
   const [feedFilter, setFeedFilter] = useState<FeedFilter>('all');
   const [commentDraft, setCommentDraft] = useState('');
+  const [expandedComment, setExpandedComment] = useState<string | null>(null);
   const [submittingComment, setSubmittingComment] = useState(false);
   const feedEndRef = useRef<HTMLDivElement>(null);
 
@@ -224,25 +226,28 @@ export function TaskDetailDrawer({
 
   useEffect(() => {
     if (task) {
-      setTitle(task.title);
-      setDescription(task.description ?? '');
-      setPriority(task.priority);
-      setDueDate(task.due_date ? task.due_date.slice(0, 10) : '');
-      setAssignee(task.assignee ?? '');
-      setBucketId(task.bucket_id);
-
-      // Only reset and reload data when the task ID changes (different task opened).
-      // When the same task object is refreshed by the board poller we skip the reload
-      // to avoid resetting scroll position and form state.
+      // Only reset form fields when the task ID changes (different task opened).
+      // Skipping resets on poll-refresh avoids clearing user's in-progress edits.
       if (task.id !== prevTaskIdRef.current) {
         prevTaskIdRef.current = task.id;
         prevEventCountRef.current = 0;
+        setTitle(task.title);
+        setDescription(task.description ?? '');
+        setPriority(task.priority);
+        setDueDate(task.due_date ? task.due_date.slice(0, 10) : '');
+        setAssignee(task.assignee ?? '');
+        setBucketId(task.bucket_id);
         setConfirmDelete(false);
         setCommentDraft('');
         setNewSubtaskTitle('');
         void loadEvents(task.id);
         void loadAttachments(task.id);
         void loadSubtasks(task.id);
+      } else {
+        // On poll-refresh of the same task, update non-editable fields only.
+        setPriority(task.priority);
+        setAssignee(task.assignee ?? '');
+        setBucketId(task.bucket_id);
       }
     } else if (createBucketId) {
       setTitle('');
@@ -917,18 +922,23 @@ export function TaskDetailDrawer({
                       filteredEvents.map(ev => (
                         <div key={ev.id}>
                           {ev.kind === 'comment' ? (
-                            /* Comment — compact: actor badge + text inline */
+                            /* Comment — compact: actor badge + text inline, double-click to expand */
                             <div className="flex gap-2 text-xs">
                               <span
                                 className={`shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium self-start ${ev.actor === 'ai' ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300' : 'bg-primary-100 text-primary-800 dark:bg-primary-500/20 dark:text-primary-300'}`}>
                                 {ev.actor === 'ai' ? 'AI' : 'Me'}
                               </span>
-                              <div className="flex-1 min-w-0 bg-stone-50 dark:bg-neutral-800 rounded-lg border-l-2 border-primary-400 dark:border-primary-500 px-2.5 py-1.5">
-                                <p className="text-stone-800 dark:text-neutral-200 break-words">
+                              <div
+                                className="flex-1 min-w-0 bg-stone-50 dark:bg-neutral-800 rounded-lg border-l-2 border-primary-400 dark:border-primary-500 px-2.5 py-1.5 cursor-pointer group"
+                                onDoubleClick={() => setExpandedComment(ev.body ?? '')}
+                                title="Double-click to expand"
+                              >
+                                <p className="text-stone-800 dark:text-neutral-200 break-words line-clamp-6">
                                   {ev.body}
                                 </p>
-                                <p className="text-stone-400 dark:text-neutral-500 text-[10px] mt-0.5">
+                                <p className="text-stone-400 dark:text-neutral-500 text-[10px] mt-0.5 flex items-center gap-2">
                                   {formatTime(ev.created)}
+                                  <span className="opacity-0 group-hover:opacity-60 transition-opacity">双击展开</span>
                                 </p>
                               </div>
                             </div>
@@ -1113,6 +1123,30 @@ export function TaskDetailDrawer({
       </div>
       {showRunDrawer && task && (
         <AiRunDrawer task={task} run={activeRun} onClose={() => setShowRunDrawer(false)} />
+      )}
+      {expandedComment !== null && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={() => setExpandedComment(null)}
+        >
+          <div
+            className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-3 border-b border-stone-200 dark:border-neutral-700">
+              <span className="text-sm font-semibold text-stone-700 dark:text-neutral-200">Comment</span>
+              <button
+                onClick={() => setExpandedComment(null)}
+                className="text-stone-400 hover:text-stone-600 dark:hover:text-neutral-200 text-xl leading-none px-1"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              <BubbleMarkdown content={expandedComment} tone="agent" />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
