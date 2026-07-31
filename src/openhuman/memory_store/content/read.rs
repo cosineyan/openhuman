@@ -408,7 +408,9 @@ pub fn read_summary_body(
             redact(&rel_path),
         );
         let _ = crate::openhuman::memory_store::trees::store::update_summary_sha256(
-            config, summary_id, &result.sha256,
+            config,
+            summary_id,
+            &result.sha256,
         );
     }
 
