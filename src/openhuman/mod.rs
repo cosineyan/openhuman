@@ -122,6 +122,7 @@ pub mod tokenjuice;
 pub mod tool_registry;
 pub mod tool_timeout;
 pub mod tools;
+pub mod topic_threads;
 pub mod update;
 pub mod util;
 pub mod voice;

@@ -23,6 +23,61 @@ pub fn read_graph_token_public(config: &Config) -> Result<String, String> {
     read_token_by_key(config, "graph")
 }
 
+/// Resolve a Teams conversation's human-readable label from its conversation
+/// id (`19:...@thread.v2` / `@unq.gbl.spaces`), by fetching chat metadata via
+/// the Graph chat token. Returns `(label, chat_type)`. Used by the topic-thread
+/// "paste a Teams chat link" flow so a pasted conversation gets a real name
+/// without waiting for a full sync.
+pub async fn resolve_chat_label(
+    config: &Config,
+    chat_id: &str,
+) -> Result<(String, String), String> {
+    let token = read_chat_graph_token(config)?;
+    let url = format!("{GRAPH_BASE}/me/chats/{chat_id}?$select=id,topic,chatType&$expand=members");
+    let chat = graph_get(&token, &url).await?;
+    let chat_type = chat
+        .get("chatType")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown")
+        .to_string();
+    let label = if chat_type == "oneOnOne" {
+        let members = chat
+            .get("members")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+        let other = members
+            .iter()
+            .filter_map(|m| m.get("displayName").and_then(|v| v.as_str()))
+            .find(|name| !name.is_empty())
+            .unwrap_or("Unknown");
+        format!("1:1 with {other}")
+    } else {
+        let topic = chat.get("topic").and_then(|v| v.as_str()).unwrap_or("");
+        if topic.is_empty() {
+            let members = chat
+                .get("members")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
+            let names: Vec<&str> = members
+                .iter()
+                .filter_map(|m| m.get("displayName").and_then(|v| v.as_str()))
+                .filter(|n| !n.is_empty())
+                .take(3)
+                .collect();
+            if names.is_empty() {
+                "Group Chat".to_string()
+            } else {
+                names.join(", ")
+            }
+        } else {
+            topic.to_string()
+        }
+    };
+    Ok((label, chat_type))
+}
+
 fn read_graph_token(config: &Config) -> Result<String, String> {
     read_token_by_key(config, "graph")
 }
@@ -615,6 +670,24 @@ impl SourceReader for TeamsMessagesReader {
                     topic
                 }
             };
+            // Persist the conversation label so the topic-thread pin picker can
+            // list this chat by name. Best-effort — a write failure must not
+            // break sync. Keyed by (source.id, chat_id).
+            {
+                let now_ms = chrono::Utc::now().timestamp_millis();
+                if let Err(e) = crate::openhuman::topic_threads::store::upsert_conversation(
+                    config,
+                    &source.id,
+                    &chat_id,
+                    &chat_label,
+                    Some(chat_type),
+                    now_ms,
+                ) {
+                    log::warn!(
+                        "[teams_messages] failed to record conversation label chat_id={chat_id}: {e}"
+                    );
+                }
+            }
             // Fetch all messages within the sync window using pagination.
             // We fetch newest-first and stop as soon as we hit a message older
             // than the window — avoids pulling the full history of old chats.

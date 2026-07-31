@@ -467,6 +467,31 @@ fn finalize_extract(config: &Config, item: PreparedExtract) -> Result<JobOutcome
         }
     }
 
+    // Topic-thread routing: check the admitted chunk against every user-defined
+    // topic and enqueue an AppendBuffer(Topic) job per match. Best-effort — a
+    // matcher/enqueue failure must never fail the extract job. Runs after the
+    // entity index is committed above so `list_entity_ids_for_node` sees the
+    // freshly-indexed rows.
+    if result.kept {
+        let entity_ids =
+            score_store::list_entity_ids_for_node(config, &chunk.id).unwrap_or_default();
+        // Full body powers keyword matching; if it's unavailable (e.g. sha256
+        // mismatch after re-sync) fall back to empty so source/entity pins —
+        // which don't need the body — can still route the chunk.
+        let body = content_read::read_chunk_body(config, &chunk.id).unwrap_or_default();
+        if let Err(e) = crate::openhuman::topic_threads::maybe_link_chunk_to_topics(
+            config,
+            &chunk,
+            &entity_ids,
+            &body,
+        ) {
+            log::warn!(
+                "[topic_threads] maybe_link_chunk_to_topics failed chunk={}: {e}",
+                &chunk.id[..chunk.id.len().min(16)]
+            );
+        }
+    }
+
     if did_enqueue_source {
         super::worker::wake_workers();
     }

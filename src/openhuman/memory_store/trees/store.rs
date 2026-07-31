@@ -857,6 +857,33 @@ pub fn list_summaries_in_window(
     })
 }
 
+/// List every non-deleted summary in a tree across all levels, newest first.
+/// Ordered `level DESC, time_range_start_ms DESC` so the highest-level
+/// (most-condensed "current state") node leads and lower levels follow in
+/// reverse-chronological order — the shape a topic timeline renders directly.
+/// `content` here is the ≤500-char preview; callers needing the full body
+/// hydrate via `content::read::read_summary_body`.
+pub fn list_summaries_by_tree(config: &Config, tree_id: &str) -> Result<Vec<SummaryNode>> {
+    with_connection(config, |conn| {
+        let mut stmt = conn.prepare(
+            "SELECT id, tree_id, tree_kind, level, parent_id,
+                    child_ids_json, content, token_count,
+                    entities_json, topics_json,
+                    time_range_start_ms, time_range_end_ms,
+                    score, sealed_at_ms, deleted, embedding,
+                    doc_id, version_ms
+               FROM mem_tree_summaries
+              WHERE tree_id = ?1 AND deleted = 0
+              ORDER BY level DESC, time_range_start_ms DESC",
+        )?;
+        let rows = stmt
+            .query_map(params![tree_id], row_to_summary)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .context("Failed to collect summaries by tree")?;
+        Ok(rows)
+    })
+}
+
 /// Count summaries in a tree (diagnostic helper).
 pub fn count_summaries(config: &Config, tree_id: &str) -> Result<u64> {
     with_connection(config, |conn| {

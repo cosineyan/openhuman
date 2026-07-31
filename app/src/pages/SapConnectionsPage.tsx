@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import { TopicThreadsPanel } from '../components/intelligence/TopicThreadsPanel';
 import PanelPage from '../components/layout/PanelPage';
 import { SidebarContent } from '../components/layout/shell/SidebarSlot';
 import TwoPaneNav from '../components/layout/TwoPaneNav';
@@ -35,7 +36,7 @@ import { BubbleMarkdown } from './conversations/components/AgentMessageBubble';
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-type SapTab = 'systems' | 'credentials' | 'modules' | 'skills';
+type SapTab = 'systems' | 'credentials' | 'modules' | 'skills' | 'topics';
 type TileStatus = 'connected' | 'expired' | 'disconnected';
 
 const DEFAULT_TAB: SapTab = 'systems';
@@ -1166,7 +1167,13 @@ export default function SapConnectionsPage() {
 
   const activeTab = useMemo<SapTab>(() => {
     const raw = new URLSearchParams(location.search).get('tab');
-    if (raw === 'systems' || raw === 'credentials' || raw === 'modules' || raw === 'skills')
+    if (
+      raw === 'systems' ||
+      raw === 'credentials' ||
+      raw === 'modules' ||
+      raw === 'skills' ||
+      raw === 'topics'
+    )
       return raw;
     return DEFAULT_TAB;
   }, [location.search]);
@@ -1230,6 +1237,13 @@ export default function SapConnectionsPage() {
                       'M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664zM21 12a9 9 0 11-18 0 9 9 0 0118 0z'
                     ),
                   },
+                  {
+                    value: 'topics',
+                    label: t('topics.tab'),
+                    icon: navIcon(
+                      'M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z'
+                    ),
+                  },
                 ],
               },
             ]}
@@ -1242,6 +1256,7 @@ export default function SapConnectionsPage() {
         {activeTab === 'credentials' && <CredentialsTab />}
         {activeTab === 'modules' && <ModulesTab />}
         {activeTab === 'skills' && <SkillsTab />}
+        {activeTab === 'topics' && <TopicThreadsPanel />}
       </PanelPage>
     </div>
   );

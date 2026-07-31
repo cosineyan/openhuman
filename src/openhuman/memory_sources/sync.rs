@@ -23,6 +23,7 @@ use crate::openhuman::memory::ingest_pipeline::ingest_document_with_scope;
 use crate::openhuman::memory::sync::{emit_sync_stage, MemorySyncStage, MemorySyncTrigger};
 use crate::openhuman::memory_sources::readers;
 use crate::openhuman::memory_sources::types::{MemorySourceEntry, SourceKind};
+use crate::openhuman::memory_store::content::raw::{write_raw_items, RawItem, RawKind};
 use crate::openhuman::memory_sync::canonicalize::document::DocumentInput;
 use crate::openhuman::memory_sync::composio::{self, ComposioUsage, SyncReason};
 
@@ -373,6 +374,25 @@ async fn sync_items_individually(
                             return;
                         }
                     };
+
+                    // Write raw archive for Outlook mail so the original body is
+                    // preserved on disk (idempotent — same item_id → same file).
+                    if source_kind == SourceKind::OutlookMail {
+                        let content_root = config.memory_tree_content_root();
+                        let raw_item = RawItem {
+                            uid: &item.id,
+                            created_at_ms: item.updated_at_ms.unwrap_or(0),
+                            markdown: &content.body,
+                            kind: RawKind::Email,
+                        };
+                        if let Err(e) = write_raw_items(&content_root, &source_id, &[raw_item]) {
+                            tracing::warn!(
+                                item_id = %item.id,
+                                error = %e,
+                                "[memory_sources:sync] raw archive write failed for outlook mail"
+                            );
+                        }
+                    }
 
                     let doc = DocumentInput {
                     provider: format!("memory_sources:{kind_str}"),
