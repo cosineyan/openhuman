@@ -58,7 +58,7 @@ export function EmailAutomationPanel({ onOpenTask }: Props) {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this rule?')) return;
+    if (!window.confirm('Delete this rule?')) return;
     await deleteRule(id);
     reload();
   };
