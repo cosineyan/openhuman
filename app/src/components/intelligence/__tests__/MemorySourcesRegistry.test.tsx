@@ -378,6 +378,7 @@ describe('MemorySourcesRegistry', () => {
         chunks_synced: 5,
         chunks_pending: 0,
         last_chunk_at_ms: Date.now() - 2 * 60 * 60 * 1000,
+        last_sync_at_ms: Date.now() - 2 * 60 * 60 * 1000,
         freshness: 'recent',
       },
     ]);
