@@ -208,7 +208,7 @@ export function ScheduledTaskPanel({ onOpenTask }: { onOpenTask?: (title: string
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this scheduled task?')) return;
+    if (!window.confirm('Delete this scheduled task?')) return;
     try {
       await openhumanCronRemove(id);
       await reload();

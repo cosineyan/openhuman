@@ -1,13 +1,15 @@
 import { useState } from 'react';
 
-import type {
-  BatchParseMode,
-  CreateRuleInput,
-  DryRunResult,
-  EmailAutomationRule,
-  RulePatch,
+import {
+  type BatchParseMode,
+  type CreateRuleInput,
+  type DryRunResult,
+  type EmailAutomationRule,
+  type RulePatch,
+  dryRunRule,
+  refineRule,
+  searchEmailChunks,
 } from '../../services/api/emailAutomationApi';
-import { dryRunRule, refineRule, searchEmailChunks } from '../../services/api/emailAutomationApi';
 import { EmailPickerModal } from './EmailPickerModal';
 
 interface Props {
@@ -35,7 +37,7 @@ export function EmailRuleForm({ rule, onSave, onCancel }: Props) {
   );
   const [saving, setSaving] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
-  const [generating, setGenerating] = useState(false);
+  const generating = false;
   const [error, setError] = useState('');
 
   // Dry run state
@@ -70,16 +72,6 @@ export function EmailRuleForm({ rule, onSave, onCancel }: Props) {
     } finally {
       setDryRunRunning(false);
     }
-  };
-
-  const handlePickForDryRun = async (
-    chunk: import('../../services/api/emailAutomationApi').EmailChunkSummary
-  ) => {
-    // Store chunk_id so refine can use full body via RPC; also set preview as fallback body
-    const body = `[Subject: ${chunk.subject}] [From: ${chunk.sender}] [Date: ${chunk.date}]\n${chunk.preview}`;
-    setDryRunBody(body);
-    setDryRunChunkId(chunk.chunk_id);
-    setDryRunMode('manual');
   };
 
   const handleRefine = async () => {
