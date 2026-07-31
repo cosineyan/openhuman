@@ -25,6 +25,7 @@ import {
   m365SetAhaToken,
   m365SetGithubToolsToken,
   m365SetGithubWdfToken,
+  m365RefreshSharePoint,
   type M365TokenStatus,
   type MpcChromeStatus,
 } from '../services/api/m365Api';
@@ -554,6 +555,7 @@ function SystemsTab() {
         return status?.sharepoint?.valid && m != null ? `${m}m` : undefined;
       })(),
       icon: <SharePointLogoBadge />,
+      action: 'refresh-sharepoint' as const,
     },
     {
       key: 'jira',
@@ -657,21 +659,31 @@ function SystemsTab() {
               statusLabel={
                 tile.status === 'connected'
                   ? (tile.sublabel ?? t('sap.systems.valid'))
-                  : 'openUrl' in tile && tile.openUrl
+                  : 'action' in tile && tile.action === 'refresh-sharepoint'
                     ? t('sap.systems.clickToOpen')
-                    : tile.status === 'expired'
-                      ? t('sap.systems.expired')
-                      : t('sap.systems.notCached')
+                    : 'openUrl' in tile && tile.openUrl
+                      ? t('sap.systems.clickToOpen')
+                      : tile.status === 'expired'
+                        ? t('sap.systems.expired')
+                        : t('sap.systems.notCached')
               }
               icon={tile.icon}
               onClick={
-                'openUrl' in tile && (tile as { openUrl?: string }).openUrl
+                'action' in tile && tile.action === 'refresh-sharepoint'
                   ? () => {
-                      const url = (tile as { openUrl: string }).openUrl;
-                      console.log('[SAP] opening in chrome:', url);
-                      void m365OpenInChrome(url);
+                      setBusy('refresh');
+                      m365RefreshSharePoint()
+                        .then(() => load())
+                        .catch(e => setError(e instanceof Error ? e.message : String(e)))
+                        .finally(() => setBusy(null));
                     }
-                  : undefined
+                  : 'openUrl' in tile && (tile as { openUrl?: string }).openUrl
+                    ? () => {
+                        const url = (tile as { openUrl: string }).openUrl;
+                        console.log('[SAP] opening in chrome:', url);
+                        void m365OpenInChrome(url);
+                      }
+                    : undefined
               }
             />
           ))}
