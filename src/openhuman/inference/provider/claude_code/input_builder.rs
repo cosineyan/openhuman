@@ -25,6 +25,12 @@ pub fn build_stdin(messages: &[ChatMessage], is_new_session: bool) -> Vec<u8> {
         // opening assistant greeting (e.g. the agent's welcome message)
         // causes exit(1) with "Expected message role 'user', got 'assistant'".
         let filtered: Vec<&ChatMessage> = messages.iter().filter(|m| m.role != "system").collect();
+        log::debug!(
+            "[claude-code][input_builder] is_new=true messages={} filtered={} roles={:?}",
+            messages.len(),
+            filtered.len(),
+            filtered.iter().map(|m| m.role.as_str()).collect::<Vec<_>>()
+        );
         let first_user = filtered
             .iter()
             .position(|m| m.role == "user")
@@ -49,8 +55,9 @@ pub fn build_stdin(messages: &[ChatMessage], is_new_session: bool) -> Vec<u8> {
             // belong to the harness, not the CLI's input format.
             _ => continue,
         };
+        // stream-json format requires `type` to match the message role.
         let line = json!({
-            "type": "user",
+            "type": role,
             "message": {
                 "role": role,
                 "content": [{"type": "text", "text": msg.content}],

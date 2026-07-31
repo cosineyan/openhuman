@@ -23,6 +23,7 @@ pub use schemas::{
 pub use store::{
     add_agent_job, add_agent_job_with_definition, add_job, add_shell_job, clear_all_jobs,
     dedup_named_jobs, delete_queued_runs, due_jobs, get_job, list_jobs, list_runs, record_last_run,
+    cleanup_stale_queued_runs,
     record_run, remove_job, reschedule_after_run, update_job,
 };
 pub use types::{

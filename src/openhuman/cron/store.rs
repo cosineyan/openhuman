@@ -480,6 +480,18 @@ pub fn delete_queued_runs(config: &Config, job_id: &str) -> Result<usize> {
     })
 }
 
+/// On startup, mark any runs that were left in 'queued' state as 'interrupted'
+/// (caused by app restart while a background run was in progress).
+pub fn cleanup_stale_queued_runs(config: &Config) -> Result<usize> {
+    with_connection(config, |conn| {
+        let updated = conn.execute(
+            "UPDATE cron_runs SET status='interrupted', finished_at=started_at WHERE status='queued'",
+            [],
+        )?;
+        Ok(updated)
+    })
+}
+
 fn truncate_cron_output(output: &str) -> String {
     if output.len() <= MAX_CRON_OUTPUT_BYTES {
         return output.to_string();

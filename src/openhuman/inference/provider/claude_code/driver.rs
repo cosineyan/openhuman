@@ -158,6 +158,10 @@ pub struct TurnContext<'a> {
 /// stale and can be cleared so the next attempt starts a fresh session.
 fn is_stale_session_error(stderr: &str) -> bool {
     stderr.contains("No conversation found with session ID")
+        // Happens when a resumed session's stored history starts with an
+        // assistant turn — claude CLI requires the first input message to
+        // have role "user". Treat as stale so we retry as a fresh session.
+        || stderr.contains("Expected message role 'user'")
 }
 
 /// Write a CC `--mcp-config` JSON pointing at OpenHuman's in-process HTTP MCP

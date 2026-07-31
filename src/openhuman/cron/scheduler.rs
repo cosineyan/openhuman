@@ -568,6 +568,15 @@ async fn run_agent_job(config: &Config, job: &CronJob) -> (bool, String, Option<
                     // cron-triggered turns. `cron` is the channel so the
                     // event bus can filter from other flows (`cli`, `web`…).
                     agent.set_event_context(format!("cron:{}", job.id), "cron");
+                    // For cron jobs, each run must be a fresh claude-code session
+                    // (no --resume). Stamp the hint_thread_id with job_id +
+                    // current unix timestamp so the session_store never finds an
+                    // existing UUID for this key and `is_new=true` is guaranteed.
+                    let run_ts = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0);
+                    agent.set_hint_thread_id(format!("cron:{}:{}", job.id, run_ts));
                     // Scope a `TrustedAutomation { Cron }` origin around the
                     // turn. The approval gate treats this as user-authorized
                     // automation and lets external_effect tools run without
@@ -707,6 +716,59 @@ async fn deliver_if_configured(config: &Config, job: &CronJob, output: &str) -> 
 
     let mode = delivery.mode.trim().to_ascii_lowercase();
     match mode.as_str() {
+        // Task delivery — create a Projects task with the job's prompt as
+        // description and assign it to AI so it executes the briefing.
+        // The `output` arg (agent result) is intentionally ignored here;
+        // instead the *prompt* drives the task so AI produces the result.
+        "task" => {
+            let title = job.name.as_deref().unwrap_or("Scheduled Task");
+            let now = chrono::Utc::now().format("%Y-%m-%d").to_string();
+            let task_title = format!("{} — {}", title, now);
+            let prompt = job.prompt.clone().unwrap_or_default();
+            let create_result = crate::openhuman::projects::create_task(
+                config,
+                crate::openhuman::projects::CreateTaskInput {
+                    title: task_title.clone(),
+                    description: Some(prompt),
+                    bucket_id: None,
+                    priority: None,
+                    due_date: None,
+                    parent_task_id: None,
+                },
+                "cron",
+            );
+            match create_result {
+                Ok(outcome) => {
+                    let task_id = outcome.value.id.clone();
+                    // Assign to AI so it picks up and executes the prompt
+                    let _ = crate::openhuman::projects::update_task(
+                        config,
+                        &task_id,
+                        crate::openhuman::projects::TaskPatch {
+                            assignee: Some(Some("ai".to_string())),
+                            ..Default::default()
+                        },
+                        "cron",
+                    );
+                    tracing::info!(
+                        job_id = %job.id,
+                        task_id = %task_id,
+                        "[cron] created AI task for delivery task_title={:?}",
+                        task_title
+                    );
+                    push_cron_alert(config, job, &format!("Created task: {task_title}"));
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        job_id = %job.id,
+                        error = %e,
+                        "[cron] failed to create task for delivery"
+                    );
+                    return Err(anyhow::anyhow!(e));
+                }
+            }
+        }
+
         // Proactive delivery — the channels module decides where to send.
         // Used by morning briefings, welcome messages, and other
         // user-facing proactive agents.
