@@ -41,7 +41,7 @@ export function EmailPickerModal({ onGenerate, onCancel }: Props) {
 
   useEffect(() => {
     load();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const toggleSelect = (chunkId: string) => {
     setSelected(prev => {

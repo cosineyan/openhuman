@@ -22,10 +22,10 @@ import {
   m365ClearGithubToolsToken,
   m365ClearGithubWdfToken,
   m365OpenInChrome,
+  m365RefreshSharePoint,
   m365SetAhaToken,
   m365SetGithubToolsToken,
   m365SetGithubWdfToken,
-  m365RefreshSharePoint,
   type M365TokenStatus,
   type MpcChromeStatus,
 } from '../services/api/m365Api';

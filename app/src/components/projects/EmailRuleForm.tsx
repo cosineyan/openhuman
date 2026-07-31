@@ -4,10 +4,10 @@ import {
   type BatchParseMode,
   type CreateRuleInput,
   type DryRunResult,
-  type EmailAutomationRule,
-  type RulePatch,
   dryRunRule,
+  type EmailAutomationRule,
   refineRule,
+  type RulePatch,
   searchEmailChunks,
 } from '../../services/api/emailAutomationApi';
 import { EmailPickerModal } from './EmailPickerModal';
