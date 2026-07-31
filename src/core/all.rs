@@ -123,7 +123,8 @@ fn build_registered_controllers() -> Vec<RegisteredController> {
     // Proactive task ingestion from external tools (github/notion/linear/clickup)
     controllers.extend(crate::openhuman::task_sources::all_task_sources_registered_controllers());
     // Email-to-task automation rules
-    controllers.extend(crate::openhuman::email_automation::all_email_automation_registered_controllers());
+    controllers
+        .extend(crate::openhuman::email_automation::all_email_automation_registered_controllers());
     controllers.extend(crate::openhuman::local_skills::all_local_skills_registered_controllers());
     controllers.extend(crate::openhuman::dashboard::all_dashboard_registered_controllers());
     // MCP client subsystem: Smithery registry browser, local server install/connect, tool dispatch

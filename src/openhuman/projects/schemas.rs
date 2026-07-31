@@ -558,7 +558,10 @@ fn handle_delete_task(params: Map<String, Value>) -> ControllerFuture {
 fn handle_list_archived_tasks(params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
-        let search = params.get("search").and_then(|v| v.as_str()).map(str::to_string);
+        let search = params
+            .get("search")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
         let created_after = params
             .get("created_after")
             .and_then(|v| v.as_str())

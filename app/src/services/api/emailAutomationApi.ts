@@ -114,10 +114,7 @@ export async function updateRule(id: string, patch: RulePatch): Promise<EmailAut
 }
 
 export async function deleteRule(id: string): Promise<void> {
-  await callCoreRpc({
-    method: 'openhuman.email_automation_delete_rule',
-    params: { id },
-  });
+  await callCoreRpc({ method: 'openhuman.email_automation_delete_rule', params: { id } });
 }
 
 export async function runNow(lastN = 50, hours?: number): Promise<RunNowResult> {

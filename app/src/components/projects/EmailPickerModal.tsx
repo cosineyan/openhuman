@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 
 import {
-  generateRuleFromEmails,
-  searchEmailChunks,
   type CreateRuleInput,
   type EmailChunkSummary,
+  generateRuleFromEmails,
+  searchEmailChunks,
 } from '../../services/api/emailAutomationApi';
 
 interface Props {
@@ -39,7 +39,9 @@ export function EmailPickerModal({ onGenerate, onCancel }: Props) {
     }
   };
 
-  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    load();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleSelect = (chunkId: string) => {
     setSelected(prev => {
@@ -75,20 +77,30 @@ export function EmailPickerModal({ onGenerate, onCancel }: Props) {
   return (
     <div
       style={{
-        position: 'fixed', inset: 0, zIndex: 50,
+        position: 'fixed',
+        inset: 0,
+        zIndex: 50,
         background: 'rgba(0,0,0,0.4)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
       }}
-      onClick={e => { if (e.target === e.currentTarget) onCancel(); }}
-    >
+      onClick={e => {
+        if (e.target === e.currentTarget) onCancel();
+      }}>
       <div
         style={{
-          background: '#fff', borderRadius: 12, padding: 24,
-          width: 580, maxWidth: '95vw', maxHeight: '80vh',
-          display: 'flex', flexDirection: 'column', gap: 16,
+          background: '#fff',
+          borderRadius: 12,
+          padding: 24,
+          width: 580,
+          maxWidth: '95vw',
+          maxHeight: '80vh',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16,
           boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
-        }}
-      >
+        }}>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
@@ -99,8 +111,16 @@ export function EmailPickerModal({ onGenerate, onCancel }: Props) {
           </div>
           <button
             onClick={onCancel}
-            style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 20, color: '#888', lineHeight: 1 }}
-          >×</button>
+            style={{
+              border: 'none',
+              background: 'none',
+              cursor: 'pointer',
+              fontSize: 20,
+              color: '#888',
+              lineHeight: 1,
+            }}>
+            ×
+          </button>
         </div>
 
         {/* Filters */}
@@ -110,20 +130,39 @@ export function EmailPickerModal({ onGenerate, onCancel }: Props) {
             onChange={e => setSenderFilter(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && load(senderFilter, subjectFilter)}
             placeholder="Sender filter…"
-            style={{ flex: 1, padding: '6px 10px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13 }}
+            style={{
+              flex: 1,
+              padding: '6px 10px',
+              borderRadius: 6,
+              border: '1px solid #ddd',
+              fontSize: 13,
+            }}
           />
           <input
             value={subjectFilter}
             onChange={e => setSubjectFilter(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && load(senderFilter, subjectFilter)}
             placeholder="Subject filter…"
-            style={{ flex: 1, padding: '6px 10px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13 }}
+            style={{
+              flex: 1,
+              padding: '6px 10px',
+              borderRadius: 6,
+              border: '1px solid #ddd',
+              fontSize: 13,
+            }}
           />
           <button
             onClick={() => load(senderFilter, subjectFilter)}
             disabled={searching}
-            style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: '#4A83DD', color: '#fff', cursor: 'pointer', fontSize: 13 }}
-          >
+            style={{
+              padding: '6px 14px',
+              borderRadius: 6,
+              border: 'none',
+              background: '#4A83DD',
+              color: '#fff',
+              cursor: 'pointer',
+              fontSize: 13,
+            }}>
             {searching ? '…' : 'Search'}
           </button>
         </div>
@@ -146,7 +185,9 @@ export function EmailPickerModal({ onGenerate, onCancel }: Props) {
         {/* Email list */}
         <div style={{ flex: 1, overflowY: 'auto', border: '1px solid #eee', borderRadius: 8 }}>
           {loading ? (
-            <div style={{ padding: 24, textAlign: 'center', color: '#888', fontSize: 13 }}>Loading…</div>
+            <div style={{ padding: 24, textAlign: 'center', color: '#888', fontSize: 13 }}>
+              Loading…
+            </div>
           ) : emails.length === 0 ? (
             <div style={{ padding: 24, textAlign: 'center', color: '#888', fontSize: 13 }}>
               No emails found. Try a different filter or sync sap-mail first.
@@ -163,10 +204,11 @@ export function EmailPickerModal({ onGenerate, onCancel }: Props) {
                     borderBottom: '1px solid #f0f0f0',
                     cursor: 'pointer',
                     background: isSelected ? '#EBF3FF' : '#fff',
-                    display: 'flex', gap: 10, alignItems: 'flex-start',
+                    display: 'flex',
+                    gap: 10,
+                    alignItems: 'flex-start',
                     transition: 'background 0.1s',
-                  }}
-                >
+                  }}>
                   <input
                     type="checkbox"
                     checked={isSelected}
@@ -175,15 +217,34 @@ export function EmailPickerModal({ onGenerate, onCancel }: Props) {
                     style={{ marginTop: 3, cursor: 'pointer', flexShrink: 0 }}
                   />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#222', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div
+                      style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                      <span
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: '#222',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}>
                         {email.subject || '(no subject)'}
                       </span>
-                      <span style={{ fontSize: 11, color: '#999', flexShrink: 0, marginLeft: 8 }}>{email.date}</span>
+                      <span style={{ fontSize: 11, color: '#999', flexShrink: 0, marginLeft: 8 }}>
+                        {email.date}
+                      </span>
                     </div>
                     <div style={{ fontSize: 12, color: '#666' }}>{email.sender}</div>
                     {email.preview && (
-                      <div style={{ fontSize: 12, color: '#999', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: '#999',
+                          marginTop: 2,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}>
                         {email.preview}
                       </div>
                     )}
@@ -195,7 +256,14 @@ export function EmailPickerModal({ onGenerate, onCancel }: Props) {
         </div>
 
         {error && (
-          <div style={{ fontSize: 12, color: '#d32f2f', padding: '6px 8px', background: '#fff0f0', borderRadius: 4 }}>
+          <div
+            style={{
+              fontSize: 12,
+              color: '#d32f2f',
+              padding: '6px 8px',
+              background: '#fff0f0',
+              borderRadius: 4,
+            }}>
             {error}
           </div>
         )}
@@ -204,22 +272,31 @@ export function EmailPickerModal({ onGenerate, onCancel }: Props) {
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button
             onClick={onCancel}
-            style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #ccc', background: '#fff', cursor: 'pointer', fontSize: 13 }}
-          >
+            style={{
+              padding: '6px 14px',
+              borderRadius: 6,
+              border: '1px solid #ccc',
+              background: '#fff',
+              cursor: 'pointer',
+              fontSize: 13,
+            }}>
             Cancel
           </button>
           <button
             onClick={handleGenerate}
             disabled={selected.size === 0 || generating}
             style={{
-              padding: '6px 14px', borderRadius: 6, border: 'none',
+              padding: '6px 14px',
+              borderRadius: 6,
+              border: 'none',
               background: selected.size > 0 ? '#4A83DD' : '#ccc',
               color: '#fff',
               cursor: selected.size > 0 && !generating ? 'pointer' : 'not-allowed',
               fontSize: 13,
-            }}
-          >
-            {generating ? 'Generating…' : `Generate rule from ${selected.size} email${selected.size !== 1 ? 's' : ''}`}
+            }}>
+            {generating
+              ? 'Generating…'
+              : `Generate rule from ${selected.size} email${selected.size !== 1 ? 's' : ''}`}
           </button>
         </div>
       </div>

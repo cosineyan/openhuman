@@ -194,9 +194,7 @@ pub fn update_summary_tags(config: &Config, summary_id: &str) -> anyhow::Result<
     // over the complete new content (front-matter + body), not just the body.
     let full_sha = super::atomic::sha256_hex(&verify_bytes);
     crate::openhuman::memory_store::trees::store::update_summary_sha256(
-        config,
-        summary_id,
-        &full_sha,
+        config, summary_id, &full_sha,
     )?;
 
     Ok(())

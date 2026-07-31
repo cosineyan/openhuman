@@ -12,7 +12,6 @@ import { SidebarContent } from '../components/layout/shell/SidebarSlot';
 import TwoPaneNav from '../components/layout/TwoPaneNav';
 import { useT } from '../lib/i18n/I18nContext';
 import { listLocalSkills, type LocalSkill } from '../services/api/localSkillsApi';
-import { BubbleMarkdown } from './conversations/components/AgentMessageBubble';
 import {
   getM365TokenStatus,
   getMcpChromeStatus,
@@ -29,6 +28,7 @@ import {
   type M365TokenStatus,
   type MpcChromeStatus,
 } from '../services/api/m365Api';
+import { BubbleMarkdown } from './conversations/components/AgentMessageBubble';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -1054,15 +1054,15 @@ function SkillsTab() {
       {selected && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-          onClick={() => setSelected(null)}
-        >
+          onClick={() => setSelected(null)}>
           <div
             className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col"
-            onClick={e => e.stopPropagation()}
-          >
+            onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3 border-b border-stone-200 dark:border-neutral-700">
               <div>
-                <h3 className="text-sm font-bold text-stone-800 dark:text-neutral-100">{selected.name}</h3>
+                <h3 className="text-sm font-bold text-stone-800 dark:text-neutral-100">
+                  {selected.name}
+                </h3>
                 <p className="text-xs text-stone-500 dark:text-neutral-400 mt-0.5">
                   {selected.plugin_name} · v{selected.version}
                   {selected.author ? ` · ${selected.author}` : ''}
@@ -1070,14 +1070,15 @@ function SkillsTab() {
               </div>
               <button
                 onClick={() => setSelected(null)}
-                className="text-stone-400 hover:text-stone-600 dark:hover:text-neutral-200 text-xl leading-none px-1"
-              >
+                className="text-stone-400 hover:text-stone-600 dark:hover:text-neutral-200 text-xl leading-none px-1">
                 ×
               </button>
             </div>
             <div className="flex-1 overflow-y-auto px-5 py-4 text-sm">
               {selected.description && (
-                <p className="text-stone-600 dark:text-neutral-300 mb-4 italic">{selected.description}</p>
+                <p className="text-stone-600 dark:text-neutral-300 mb-4 italic">
+                  {selected.description}
+                </p>
               )}
               <BubbleMarkdown content={selected.body} tone="agent" />
             </div>
@@ -1102,8 +1103,7 @@ function SkillsTab() {
               <button
                 key={`${skill.plugin_name}:${skill.name}`}
                 onClick={() => setSelected(skill)}
-                className="flex flex-col items-start gap-1.5 rounded-xl border border-stone-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-3 text-left hover:border-primary-400 hover:shadow-sm transition-all"
-              >
+                className="flex flex-col items-start gap-1.5 rounded-xl border border-stone-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-3 text-left hover:border-primary-400 hover:shadow-sm transition-all">
                 <span className="text-xs font-semibold text-stone-800 dark:text-neutral-100 break-all leading-tight">
                   {skill.name}
                 </span>

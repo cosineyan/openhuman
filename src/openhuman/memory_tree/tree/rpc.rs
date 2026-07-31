@@ -233,7 +233,11 @@ pub async fn suppress_chunk_rpc(
             if existing.is_none() {
                 return Ok(false);
             }
-            chunk_store::set_chunk_lifecycle_status(&config, &id, chunk_store::CHUNK_STATUS_DROPPED)?;
+            chunk_store::set_chunk_lifecycle_status(
+                &config,
+                &id,
+                chunk_store::CHUNK_STATUS_DROPPED,
+            )?;
             log::info!("[memory_tree] suppress_chunk: chunk_id={id} → dropped");
             Ok(true)
         }
@@ -247,7 +251,10 @@ pub async fn suppress_chunk_rpc(
             new_status: chunk_store::CHUNK_STATUS_DROPPED.to_string(),
             found,
         },
-        format!("memory_tree: suppress_chunk id={} found={found}", req.chunk_id),
+        format!(
+            "memory_tree: suppress_chunk id={} found={found}",
+            req.chunk_id
+        ),
     ))
 }
 
@@ -265,7 +272,11 @@ pub async fn restore_chunk_rpc(
             if existing.is_none() {
                 return Ok(false);
             }
-            chunk_store::set_chunk_lifecycle_status(&config, &id, chunk_store::CHUNK_STATUS_ADMITTED)?;
+            chunk_store::set_chunk_lifecycle_status(
+                &config,
+                &id,
+                chunk_store::CHUNK_STATUS_ADMITTED,
+            )?;
             log::info!("[memory_tree] restore_chunk: chunk_id={id} → admitted");
             Ok(true)
         }
@@ -279,7 +290,10 @@ pub async fn restore_chunk_rpc(
             new_status: chunk_store::CHUNK_STATUS_ADMITTED.to_string(),
             found,
         },
-        format!("memory_tree: restore_chunk id={} found={found}", req.chunk_id),
+        format!(
+            "memory_tree: restore_chunk id={} found={found}",
+            req.chunk_id
+        ),
     ))
 }
 

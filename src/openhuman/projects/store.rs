@@ -100,7 +100,12 @@ pub fn with_connection<T>(config: &Config, f: impl FnOnce(&Connection) -> Result
     add_column_if_missing(&conn, "project_tasks", "assignee", "TEXT")?;
     add_column_if_missing(&conn, "project_tasks", "ai_plan", "TEXT")?;
     add_column_if_missing(&conn, "project_tasks", "parent_task_id", "TEXT")?;
-    add_column_if_missing(&conn, "project_tasks", "archived", "INTEGER NOT NULL DEFAULT 0")?;
+    add_column_if_missing(
+        &conn,
+        "project_tasks",
+        "archived",
+        "INTEGER NOT NULL DEFAULT 0",
+    )?;
     add_column_if_missing(&conn, "project_tasks", "archived_at", "TEXT")?;
 
     // Fix tasks that are marked done=1 but live in a non-done bucket — can
@@ -569,7 +574,11 @@ pub fn list_archived_tasks(
 
 /// Mark tasks as archived if they haven't been updated for more than `stale_days` days.
 /// Returns the number of tasks archived.
-pub fn auto_archive_stale_tasks(config: &Config, project_id: &str, stale_days: u32) -> Result<usize> {
+pub fn auto_archive_stale_tasks(
+    config: &Config,
+    project_id: &str,
+    stale_days: u32,
+) -> Result<usize> {
     with_connection(config, |conn| {
         let threshold = (Utc::now() - chrono::Duration::days(stale_days as i64)).to_rfc3339();
         let now_str = Utc::now().to_rfc3339();

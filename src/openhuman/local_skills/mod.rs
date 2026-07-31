@@ -132,10 +132,12 @@ pub fn list_local_skills_impl() -> Vec<LocalSkill> {
                     Err(_) => continue,
                 };
                 let (fields, body) = parse_skill_md(&content);
-                let name = fields
-                    .get("name")
-                    .cloned()
-                    .unwrap_or_else(|| skill_dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default());
+                let name = fields.get("name").cloned().unwrap_or_else(|| {
+                    skill_dir
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_default()
+                });
                 let description = fields.get("description").cloned().unwrap_or_default();
                 let when_to_use = fields.get("when_to_use").cloned();
                 // author is nested under metadata:, try both
@@ -175,7 +177,8 @@ fn controller_schema() -> ControllerSchema {
     ControllerSchema {
         namespace: "local_skills",
         function: "list",
-        description: "List locally installed Claude Code skills from ~/.claude/plugins (user scope).",
+        description:
+            "List locally installed Claude Code skills from ~/.claude/plugins (user scope).",
         inputs: vec![],
         outputs: vec![FieldSchema {
             name: "skills",

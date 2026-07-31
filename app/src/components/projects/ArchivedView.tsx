@@ -31,12 +31,18 @@ export function ArchivedView({ onTaskClick }: Props) {
   };
 
   // Initial load
-  useEffect(() => { reload(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    reload();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fmt = (iso: string | null) => {
     if (!iso) return '—';
     try {
-      return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+      return new Date(iso).toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
     } catch {
       return iso;
     }
@@ -83,8 +89,7 @@ export function ArchivedView({ onTaskClick }: Props) {
         </div>
         <button
           onClick={reload}
-          className="px-4 py-1.5 text-sm font-medium rounded-md bg-primary-500 text-white hover:bg-primary-600 transition-colors"
-        >
+          className="px-4 py-1.5 text-sm font-medium rounded-md bg-primary-500 text-white hover:bg-primary-600 transition-colors">
           Filter
         </button>
       </div>
@@ -124,8 +129,7 @@ export function ArchivedView({ onTaskClick }: Props) {
                     onTaskClick
                       ? 'cursor-pointer hover:bg-stone-50 dark:hover:bg-neutral-800/30'
                       : ''
-                  }`}
-                >
+                  }`}>
                   <td className="py-2 px-3 text-stone-700 dark:text-neutral-200 font-medium max-w-xs truncate">
                     {task.title}
                   </td>

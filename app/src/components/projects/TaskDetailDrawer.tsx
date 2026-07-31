@@ -1,8 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { BubbleMarkdown } from '../../pages/conversations/components/AgentMessageBubble';
 import { formatFileSize } from '../../lib/attachments';
+import { BubbleMarkdown } from '../../pages/conversations/components/AgentMessageBubble';
 import {
   addAttachment,
   addComment,
@@ -931,14 +931,15 @@ export function TaskDetailDrawer({
                               <div
                                 className="flex-1 min-w-0 bg-stone-50 dark:bg-neutral-800 rounded-lg border-l-2 border-primary-400 dark:border-primary-500 px-2.5 py-1.5 cursor-pointer group"
                                 onDoubleClick={() => setExpandedComment(ev.body ?? '')}
-                                title="Double-click to expand"
-                              >
+                                title="Double-click to expand">
                                 <p className="text-stone-800 dark:text-neutral-200 break-words line-clamp-6">
                                   {ev.body}
                                 </p>
                                 <p className="text-stone-400 dark:text-neutral-500 text-[10px] mt-0.5 flex items-center gap-2">
                                   {formatTime(ev.created)}
-                                  <span className="opacity-0 group-hover:opacity-60 transition-opacity">双击展开</span>
+                                  <span className="opacity-0 group-hover:opacity-60 transition-opacity">
+                                    双击展开
+                                  </span>
                                 </p>
                               </div>
                             </div>
@@ -1127,18 +1128,17 @@ export function TaskDetailDrawer({
       {expandedComment !== null && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm"
-          onClick={() => setExpandedComment(null)}
-        >
+          onClick={() => setExpandedComment(null)}>
           <div
             className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col"
-            onClick={e => e.stopPropagation()}
-          >
+            onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3 border-b border-stone-200 dark:border-neutral-700">
-              <span className="text-sm font-semibold text-stone-700 dark:text-neutral-200">Comment</span>
+              <span className="text-sm font-semibold text-stone-700 dark:text-neutral-200">
+                Comment
+              </span>
               <button
                 onClick={() => setExpandedComment(null)}
-                className="text-stone-400 hover:text-stone-600 dark:hover:text-neutral-200 text-xl leading-none px-1"
-              >
+                className="text-stone-400 hover:text-stone-600 dark:hover:text-neutral-200 text-xl leading-none px-1">
                 ×
               </button>
             </div>

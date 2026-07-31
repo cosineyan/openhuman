@@ -345,7 +345,11 @@ fn handle_get_email_content(params: Map<String, Value>) -> ControllerFuture {
         let config = config_rpc::load_config_with_timeout()
             .await
             .map_err(|e| e.to_string())?;
-        let source_id = params.get("source_id").and_then(|v| v.as_str()).ok_or("missing source_id")?.to_string();
+        let source_id = params
+            .get("source_id")
+            .and_then(|v| v.as_str())
+            .ok_or("missing source_id")?
+            .to_string();
         to_json(ops::get_email_content_rpc(&config, &source_id)?)
     })
 }
@@ -415,10 +419,7 @@ fn handle_search_email_chunks(params: Map<String, Value>) -> ControllerFuture {
             .get("subject_filter")
             .and_then(|v| v.as_str())
             .map(str::to_string);
-        let limit = params
-            .get("limit")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(20) as usize;
+        let limit = params.get("limit").and_then(|v| v.as_u64()).unwrap_or(20) as usize;
         to_json(ops::search_email_chunks_rpc(
             &config,
             sender_filter.as_deref(),
@@ -495,14 +496,19 @@ fn handle_dry_run(params: Map<String, Value>) -> ControllerFuture {
         } else if let Some(ref cid) = chunk_id {
             // Try reading the full .md file (content_path). If it returns only
             // inline content (≤ 500 chars), it's truncated — fetch via Graph API.
-            let from_file = crate::openhuman::memory_store::content::read::read_chunk_body(&config, cid);
+            let from_file =
+                crate::openhuman::memory_store::content::read::read_chunk_body(&config, cid);
             let needs_graph = match &from_file {
-                Ok(b) if b.trim().len() <= 500 => true,  // truncated inline content
-                Ok(_) => false,                           // real .md file content
-                Err(_) => true,                           // no file at all
+                Ok(b) if b.trim().len() <= 500 => true, // truncated inline content
+                Ok(_) => false,                         // real .md file content
+                Err(_) => true,                         // no file at all
             };
-            log::info!("[email_automation] dry_run chunk_id={} from_file_len={:?} needs_graph={}", cid,
-                from_file.as_ref().ok().map(|b| b.len()), needs_graph);
+            log::info!(
+                "[email_automation] dry_run chunk_id={} from_file_len={:?} needs_graph={}",
+                cid,
+                from_file.as_ref().ok().map(|b| b.len()),
+                needs_graph
+            );
             if needs_graph {
                 // Get source_id directly from DB (avoid get_chunk config path issues)
                 let db_path = config.workspace_dir.join("memory_tree").join("chunks.db");
@@ -511,12 +517,20 @@ fn handle_dry_run(params: Map<String, Value>) -> ControllerFuture {
                         conn.query_row(
                             "SELECT source_id, content FROM mem_tree_chunks WHERE id=?1",
                             rusqlite::params![cid],
-                            |row| Ok((row.get::<_,String>(0)?, row.get::<_,String>(1)?))
-                        ).unwrap_or_default()
-                    } else { (String::new(), String::new()) }
-                } else { (String::new(), String::new()) };
+                            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+                        )
+                        .unwrap_or_default()
+                    } else {
+                        (String::new(), String::new())
+                    }
+                } else {
+                    (String::new(), String::new())
+                };
 
-                log::info!("[email_automation] dry_run source_id={}", &source_id[..source_id.len().min(60)]);
+                log::info!(
+                    "[email_automation] dry_run source_id={}",
+                    &source_id[..source_id.len().min(60)]
+                );
                 if !source_id.is_empty() {
                     ops::fetch_full_email_body_pub(&config, &source_id, &preview).await
                 } else {
@@ -545,19 +559,41 @@ fn handle_refine_rule(params: Map<String, Value>) -> ControllerFuture {
         let config = config_rpc::load_config_with_timeout()
             .await
             .map_err(|e| e.to_string())?;
-        let task_title_template = params.get("task_title_template").and_then(|v| v.as_str()).ok_or("missing task_title_template")?.to_string();
-        let task_description_template = params.get("task_description_template").and_then(|v| v.as_str()).map(str::to_string);
-        let parse_script = params.get("parse_script").and_then(|v| v.as_str()).map(str::to_string);
-        let user_feedback = params.get("user_feedback").and_then(|v| v.as_str()).ok_or("missing user_feedback")?.to_string();
+        let task_title_template = params
+            .get("task_title_template")
+            .and_then(|v| v.as_str())
+            .ok_or("missing task_title_template")?
+            .to_string();
+        let task_description_template = params
+            .get("task_description_template")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let parse_script = params
+            .get("parse_script")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let user_feedback = params
+            .get("user_feedback")
+            .and_then(|v| v.as_str())
+            .ok_or("missing user_feedback")?
+            .to_string();
 
         // Support either email_body (manual) or chunk_id (pick mode — full body fetched server-side)
-        let chunk_id = params.get("chunk_id").and_then(|v| v.as_str()).map(str::to_string);
-        let email_body = if let Some(body) = params.get("email_body").and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()) {
+        let chunk_id = params
+            .get("chunk_id")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let email_body = if let Some(body) = params
+            .get("email_body")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.trim().is_empty())
+        {
             body.to_string()
         } else if let Some(ref cid) = chunk_id {
-            let from_file = crate::openhuman::memory_store::content::read::read_chunk_body(&config, cid);
+            let from_file =
+                crate::openhuman::memory_store::content::read::read_chunk_body(&config, cid);
             let needs_graph = match &from_file {
-                Ok(b) if b.trim().len() <= 500 => true,  // truncated inline content, not a real file
+                Ok(b) if b.trim().len() <= 500 => true, // truncated inline content, not a real file
                 Ok(_) => false,
                 Err(_) => true,
             };
@@ -579,14 +615,17 @@ fn handle_refine_rule(params: Map<String, Value>) -> ControllerFuture {
             return Err("either email_body or chunk_id is required".to_string());
         };
 
-        to_json(ops::refine_rule_rpc(
-            &config,
-            &task_title_template,
-            task_description_template.as_deref(),
-            parse_script.as_deref(),
-            &email_body,
-            &user_feedback,
-        ).await?)
+        to_json(
+            ops::refine_rule_rpc(
+                &config,
+                &task_title_template,
+                task_description_template.as_deref(),
+                parse_script.as_deref(),
+                &email_body,
+                &user_feedback,
+            )
+            .await?,
+        )
     })
 }
 
@@ -609,17 +648,53 @@ pub fn all_controller_schemas() -> Vec<ControllerSchema> {
 
 pub fn all_registered_controllers() -> Vec<RegisteredController> {
     vec![
-        RegisteredController { schema: schemas("list_rules"),                  handler: handle_list_rules                  },
-        RegisteredController { schema: schemas("list_processed_emails"),       handler: handle_list_processed_emails       },
-        RegisteredController { schema: schemas("get_email_content"),           handler: handle_get_email_content           },
-        RegisteredController { schema: schemas("create_rule"),                 handler: handle_create_rule                 },
-        RegisteredController { schema: schemas("update_rule"),                 handler: handle_update_rule                 },
-        RegisteredController { schema: schemas("delete_rule"),                 handler: handle_delete_rule                 },
-        RegisteredController { schema: schemas("run_now"),                     handler: handle_run_now                     },
-        RegisteredController { schema: schemas("search_email_chunks"),         handler: handle_search_email_chunks         },
-        RegisteredController { schema: schemas("generate_rule_from_email"),    handler: handle_generate_rule_from_email    },
-        RegisteredController { schema: schemas("generate_rule_from_emails"),   handler: handle_generate_rule_from_emails   },
-        RegisteredController { schema: schemas("dry_run"),                     handler: handle_dry_run                     },
-        RegisteredController { schema: schemas("refine_rule"),                 handler: handle_refine_rule                 },
+        RegisteredController {
+            schema: schemas("list_rules"),
+            handler: handle_list_rules,
+        },
+        RegisteredController {
+            schema: schemas("list_processed_emails"),
+            handler: handle_list_processed_emails,
+        },
+        RegisteredController {
+            schema: schemas("get_email_content"),
+            handler: handle_get_email_content,
+        },
+        RegisteredController {
+            schema: schemas("create_rule"),
+            handler: handle_create_rule,
+        },
+        RegisteredController {
+            schema: schemas("update_rule"),
+            handler: handle_update_rule,
+        },
+        RegisteredController {
+            schema: schemas("delete_rule"),
+            handler: handle_delete_rule,
+        },
+        RegisteredController {
+            schema: schemas("run_now"),
+            handler: handle_run_now,
+        },
+        RegisteredController {
+            schema: schemas("search_email_chunks"),
+            handler: handle_search_email_chunks,
+        },
+        RegisteredController {
+            schema: schemas("generate_rule_from_email"),
+            handler: handle_generate_rule_from_email,
+        },
+        RegisteredController {
+            schema: schemas("generate_rule_from_emails"),
+            handler: handle_generate_rule_from_emails,
+        },
+        RegisteredController {
+            schema: schemas("dry_run"),
+            handler: handle_dry_run,
+        },
+        RegisteredController {
+            schema: schemas("refine_rule"),
+            handler: handle_refine_rule,
+        },
     ]
 }

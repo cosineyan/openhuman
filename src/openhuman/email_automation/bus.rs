@@ -54,12 +54,23 @@ impl EventHandler for EmailAutomationSubscriber {
             // If read_chunk_body returns ≤500 chars it's a truncated preview — fall back to Graph API.
             let full_body = match first_chunk_id.as_deref() {
                 Some(id) => {
-                    match crate::openhuman::memory_store::content::read::read_chunk_body(&config, id) {
+                    match crate::openhuman::memory_store::content::read::read_chunk_body(
+                        &config, id,
+                    ) {
                         Ok(b) if b.len() > 500 => b,
-                        _ => ops::fetch_full_email_body_pub(&config, &source_id_clone, &preview_clone).await,
+                        _ => {
+                            ops::fetch_full_email_body_pub(
+                                &config,
+                                &source_id_clone,
+                                &preview_clone,
+                            )
+                            .await
+                        }
                     }
                 }
-                None => ops::fetch_full_email_body_pub(&config, &source_id_clone, &preview_clone).await,
+                None => {
+                    ops::fetch_full_email_body_pub(&config, &source_id_clone, &preview_clone).await
+                }
             };
 
             let mut ctx = ops::extract_email_context(&preview_clone);

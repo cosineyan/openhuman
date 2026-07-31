@@ -66,8 +66,14 @@ fn with_connection<T>(config: &Config, f: impl FnOnce(&Connection) -> Result<T>)
     .context("migrate email_automation DB")?;
 
     // Migrate existing DBs
-    let _ = conn.execute("ALTER TABLE email_automation_rules ADD COLUMN parse_script TEXT", []);
-    let _ = conn.execute("ALTER TABLE email_automation_rules ADD COLUMN batch_mode INTEGER NOT NULL DEFAULT 0", []);
+    let _ = conn.execute(
+        "ALTER TABLE email_automation_rules ADD COLUMN parse_script TEXT",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE email_automation_rules ADD COLUMN batch_mode INTEGER NOT NULL DEFAULT 0",
+        [],
+    );
     let _ = conn.execute("ALTER TABLE email_automation_rules ADD COLUMN batch_window_secs INTEGER NOT NULL DEFAULT 21600", []);
     let _ = conn.execute("ALTER TABLE email_automation_rules ADD COLUMN batch_parse_mode TEXT NOT NULL DEFAULT 'first_only'", []);
 
@@ -194,19 +200,34 @@ pub fn update_rule(config: &Config, id: &str, patch: RulePatch) -> Result<EmailA
     let now = chrono::Utc::now().to_rfc3339();
     with_connection(config, |conn| {
         if let Some(v) = patch.name {
-            conn.execute("UPDATE email_automation_rules SET name=?1, updated_at=?2 WHERE id=?3", params![v, now, id])?;
+            conn.execute(
+                "UPDATE email_automation_rules SET name=?1, updated_at=?2 WHERE id=?3",
+                params![v, now, id],
+            )?;
         }
         if let Some(v) = patch.enabled {
-            conn.execute("UPDATE email_automation_rules SET enabled=?1, updated_at=?2 WHERE id=?3", params![v as i64, now, id])?;
+            conn.execute(
+                "UPDATE email_automation_rules SET enabled=?1, updated_at=?2 WHERE id=?3",
+                params![v as i64, now, id],
+            )?;
         }
         if let Some(v) = patch.sender_contains {
-            conn.execute("UPDATE email_automation_rules SET sender_contains=?1, updated_at=?2 WHERE id=?3", params![v, now, id])?;
+            conn.execute(
+                "UPDATE email_automation_rules SET sender_contains=?1, updated_at=?2 WHERE id=?3",
+                params![v, now, id],
+            )?;
         }
         if let Some(v) = patch.subject_contains {
-            conn.execute("UPDATE email_automation_rules SET subject_contains=?1, updated_at=?2 WHERE id=?3", params![v, now, id])?;
+            conn.execute(
+                "UPDATE email_automation_rules SET subject_contains=?1, updated_at=?2 WHERE id=?3",
+                params![v, now, id],
+            )?;
         }
         if let Some(v) = patch.body_contains {
-            conn.execute("UPDATE email_automation_rules SET body_contains=?1, updated_at=?2 WHERE id=?3", params![v, now, id])?;
+            conn.execute(
+                "UPDATE email_automation_rules SET body_contains=?1, updated_at=?2 WHERE id=?3",
+                params![v, now, id],
+            )?;
         }
         if let Some(v) = patch.task_title_template {
             conn.execute("UPDATE email_automation_rules SET task_title_template=?1, updated_at=?2 WHERE id=?3", params![v, now, id])?;
@@ -215,26 +236,47 @@ pub fn update_rule(config: &Config, id: &str, patch: RulePatch) -> Result<EmailA
             conn.execute("UPDATE email_automation_rules SET task_description_template=?1, updated_at=?2 WHERE id=?3", params![v, now, id])?;
         }
         if let Some(v) = patch.assignee {
-            conn.execute("UPDATE email_automation_rules SET assignee=?1, updated_at=?2 WHERE id=?3", params![v, now, id])?;
+            conn.execute(
+                "UPDATE email_automation_rules SET assignee=?1, updated_at=?2 WHERE id=?3",
+                params![v, now, id],
+            )?;
         }
         if let Some(v) = patch.bucket_id {
-            conn.execute("UPDATE email_automation_rules SET bucket_id=?1, updated_at=?2 WHERE id=?3", params![v, now, id])?;
+            conn.execute(
+                "UPDATE email_automation_rules SET bucket_id=?1, updated_at=?2 WHERE id=?3",
+                params![v, now, id],
+            )?;
         }
         if let Some(v) = patch.llm_fallback_enabled {
             conn.execute("UPDATE email_automation_rules SET llm_fallback_enabled=?1, updated_at=?2 WHERE id=?3", params![v as i64, now, id])?;
         }
         if let Some(v) = patch.parse_script {
-            conn.execute("UPDATE email_automation_rules SET parse_script=?1, updated_at=?2 WHERE id=?3", params![v, now, id])?;
+            conn.execute(
+                "UPDATE email_automation_rules SET parse_script=?1, updated_at=?2 WHERE id=?3",
+                params![v, now, id],
+            )?;
         }
         if let Some(v) = patch.batch_mode {
-            conn.execute("UPDATE email_automation_rules SET batch_mode=?1, updated_at=?2 WHERE id=?3", params![v as i64, now, id])?;
+            conn.execute(
+                "UPDATE email_automation_rules SET batch_mode=?1, updated_at=?2 WHERE id=?3",
+                params![v as i64, now, id],
+            )?;
         }
         if let Some(v) = patch.batch_window_secs {
-            conn.execute("UPDATE email_automation_rules SET batch_window_secs=?1, updated_at=?2 WHERE id=?3", params![v as i64, now, id])?;
+            conn.execute(
+                "UPDATE email_automation_rules SET batch_window_secs=?1, updated_at=?2 WHERE id=?3",
+                params![v as i64, now, id],
+            )?;
         }
         if let Some(v) = patch.batch_parse_mode {
-            let s = match v { super::types::BatchParseMode::All => "all", _ => "first_only" };
-            conn.execute("UPDATE email_automation_rules SET batch_parse_mode=?1, updated_at=?2 WHERE id=?3", params![s, now, id])?;
+            let s = match v {
+                super::types::BatchParseMode::All => "all",
+                _ => "first_only",
+            };
+            conn.execute(
+                "UPDATE email_automation_rules SET batch_parse_mode=?1, updated_at=?2 WHERE id=?3",
+                params![s, now, id],
+            )?;
         }
         Ok(())
     })?;
@@ -243,7 +285,10 @@ pub fn update_rule(config: &Config, id: &str, patch: RulePatch) -> Result<EmailA
 
 pub fn delete_rule(config: &Config, id: &str) -> Result<()> {
     with_connection(config, |conn| {
-        conn.execute("DELETE FROM email_automation_rules WHERE id = ?1", params![id])?;
+        conn.execute(
+            "DELETE FROM email_automation_rules WHERE id = ?1",
+            params![id],
+        )?;
         Ok(())
     })
 }
@@ -290,20 +335,22 @@ pub fn list_processed_emails(config: &Config, limit: usize) -> Result<Vec<Proces
 /// Fetch email subject, sender, to, date and body from memory chunks for display.
 /// Returns (subject, from, to, date, body).
 /// Email chunks use plain-text format: `[Subject: ...] [From: ...] [Date: ...] [To: ...]\nbody`
-pub fn get_email_for_display(config: &Config, source_id: &str) -> Result<Option<(String, String, String, String, String)>> {
+pub fn get_email_for_display(
+    config: &Config,
+    source_id: &str,
+) -> Result<Option<(String, String, String, String, String)>> {
     let db_path = config.workspace_dir.join("memory_tree").join("chunks.db");
     if !db_path.exists() {
         return Ok(None);
     }
-    let conn = rusqlite::Connection::open(&db_path)
-        .context("open chunks db for email display")?;
+    let conn = rusqlite::Connection::open(&db_path).context("open chunks db for email display")?;
 
     // Collect all chunk content fields ordered by seq
     let parts: Vec<String> = {
         let mut stmt = conn.prepare(
             "SELECT content FROM mem_tree_chunks
              WHERE source_id=?1 AND source_kind='email'
-             ORDER BY seq_in_source ASC"
+             ORDER BY seq_in_source ASC",
         )?;
         let mut result = Vec::new();
         let mut db_rows = stmt.query(params![source_id])?;
@@ -320,17 +367,18 @@ pub fn get_email_for_display(config: &Config, source_id: &str) -> Result<Option<
     let full = parts.join("");
 
     // Auto-detect format: HTML or plain-text bracketed headers
-    let (subject, from, to, date, body) = if full.trim_start().starts_with('<') || full.contains("<html") || full.contains("<div") {
-        parse_html_email(&full)
-    } else {
-        // Plain-text format: [Subject: ...] [From: ...] [Date: ...] [To: ...]\nbody
-        let subject = extract_bracketed_header(&full, "Subject").unwrap_or_default();
-        let from    = extract_bracketed_header(&full, "From").unwrap_or_default();
-        let to      = extract_bracketed_header(&full, "To").unwrap_or_default();
-        let date    = extract_bracketed_header(&full, "Date").unwrap_or_default();
-        let body    = extract_plain_body(&full);
-        (subject, from, to, date, body)
-    };
+    let (subject, from, to, date, body) =
+        if full.trim_start().starts_with('<') || full.contains("<html") || full.contains("<div") {
+            parse_html_email(&full)
+        } else {
+            // Plain-text format: [Subject: ...] [From: ...] [Date: ...] [To: ...]\nbody
+            let subject = extract_bracketed_header(&full, "Subject").unwrap_or_default();
+            let from = extract_bracketed_header(&full, "From").unwrap_or_default();
+            let to = extract_bracketed_header(&full, "To").unwrap_or_default();
+            let date = extract_bracketed_header(&full, "Date").unwrap_or_default();
+            let body = extract_plain_body(&full);
+            (subject, from, to, date, body)
+        };
 
     Ok(Some((subject, from, to, date, body)))
 }
@@ -342,7 +390,11 @@ fn extract_bracketed_header(text: &str, key: &str) -> Option<String> {
     let inner = &text[start + needle.len()..];
     let end = inner.find(']')?;
     let value = inner[..end].trim().to_string();
-    if value.is_empty() { None } else { Some(value) }
+    if value.is_empty() {
+        None
+    } else {
+        Some(value)
+    }
 }
 
 /// Extract the email body: everything after the leading `[Key: Value]` header blocks.
@@ -350,7 +402,9 @@ fn extract_plain_body(text: &str) -> String {
     let mut pos = 0;
     let bytes = text.as_bytes();
     loop {
-        while pos < bytes.len() && (bytes[pos] == b' ' || bytes[pos] == b'\n' || bytes[pos] == b'\r') {
+        while pos < bytes.len()
+            && (bytes[pos] == b' ' || bytes[pos] == b'\n' || bytes[pos] == b'\r')
+        {
             pos += 1;
         }
         if pos >= bytes.len() || bytes[pos] != b'[' {
@@ -370,17 +424,26 @@ fn extract_html_header(html: &str, label: &str) -> Option<String> {
     let pos = html.find(label)?;
     let after = &html[pos + label.len()..];
     let after = if after.starts_with("</") {
-        after.find('>').map(|i| &after[i+1..]).unwrap_or(after)
+        after.find('>').map(|i| &after[i + 1..]).unwrap_or(after)
     } else {
         after
     };
     let after = after.trim_start_matches(|c: char| c == ' ' || c == '\u{00a0}');
-    let end = after.find("<br").or_else(|| after.find('<')).unwrap_or(after.len());
+    let end = after
+        .find("<br")
+        .or_else(|| after.find('<'))
+        .unwrap_or(after.len());
     let value = after[..end]
-        .replace("&lt;", "<").replace("&gt;", ">")
-        .replace("&amp;", "&").replace("&nbsp;", " ");
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&amp;", "&")
+        .replace("&nbsp;", " ");
     let value = value.trim().to_string();
-    if value.is_empty() { None } else { Some(value) }
+    if value.is_empty() {
+        None
+    } else {
+        Some(value)
+    }
 }
 
 /// Strip HTML tags and decode entities into plain text.
@@ -391,23 +454,38 @@ fn strip_html(html: &str) -> String {
     let mut chars = html.chars().peekable();
     while let Some(c) = chars.next() {
         match c {
-            '<' => { in_tag = true; }
-            '>' => { in_tag = false; out.push('\n'); }
+            '<' => {
+                in_tag = true;
+            }
+            '>' => {
+                in_tag = false;
+                out.push('\n');
+            }
             _ if in_tag => {}
             '&' => {
                 let mut entity = String::new();
                 for ec in chars.by_ref() {
-                    if ec == ';' { break; }
+                    if ec == ';' {
+                        break;
+                    }
                     entity.push(ec);
                 }
                 let decoded = match entity.as_str() {
-                    "amp" => "&", "lt" => "<", "gt" => ">",
-                    "nbsp" | "#160" => " ", "quot" => "\"", "apos" => "'",
+                    "amp" => "&",
+                    "lt" => "<",
+                    "gt" => ">",
+                    "nbsp" | "#160" => " ",
+                    "quot" => "\"",
+                    "apos" => "'",
                     _ => "",
                 };
-                if !decoded.is_empty() { out.push_str(decoded); }
+                if !decoded.is_empty() {
+                    out.push_str(decoded);
+                }
             }
-            other => { out.push(other); }
+            other => {
+                out.push(other);
+            }
         }
     }
     // Collapse multiple blank lines
@@ -416,7 +494,9 @@ fn strip_html(html: &str) -> String {
         let t = line.trim();
         if t.is_empty() {
             blank_lines += 1;
-            if blank_lines <= 1 { result.push('\n'); }
+            if blank_lines <= 1 {
+                result.push('\n');
+            }
         } else {
             blank_lines = 0;
             result.push_str(t);
@@ -429,20 +509,34 @@ fn strip_html(html: &str) -> String {
 /// Parse HTML email: extract Subject/From/To/Date from <b>Key: </b> pattern, body from elementToProof.
 fn parse_html_email(html: &str) -> (String, String, String, String, String) {
     let subject = extract_html_header(html, "<b>Subject: </b>")
-        .or_else(|| extract_html_header(html, "Subject:")).unwrap_or_default();
+        .or_else(|| extract_html_header(html, "Subject:"))
+        .unwrap_or_default();
     let from = extract_html_header(html, "<b>From: </b>")
-        .or_else(|| extract_html_header(html, "From:")).unwrap_or_default();
+        .or_else(|| extract_html_header(html, "From:"))
+        .unwrap_or_default();
     let to = extract_html_header(html, "<b>To: </b>")
-        .or_else(|| extract_html_header(html, "To:")).unwrap_or_default();
+        .or_else(|| extract_html_header(html, "To:"))
+        .unwrap_or_default();
     let date = extract_html_header(html, "<b>Date: </b>")
-        .or_else(|| extract_html_header(html, "Date:")).unwrap_or_default();
+        .or_else(|| extract_html_header(html, "Date:"))
+        .unwrap_or_default();
 
     // Cut off Teams meeting footer and quoted reply
-    let stop_markers = ["me-email-text", "mail-editor-reference-message-container", "ms-outlook-mobile-reference-message"];
+    let stop_markers = [
+        "me-email-text",
+        "mail-editor-reference-message-container",
+        "ms-outlook-mobile-reference-message",
+    ];
     let trimmed = stop_markers.iter().fold(html as &str, |s, marker| {
         if let Some(pos) = s.find(marker) {
-            if let Some(tag_start) = s[..pos].rfind('<') { &s[..tag_start] } else { &s[..pos] }
-        } else { s }
+            if let Some(tag_start) = s[..pos].rfind('<') {
+                &s[..tag_start]
+            } else {
+                &s[..pos]
+            }
+        } else {
+            s
+        }
     });
     let body = strip_html(trimmed);
     (subject, from, to, date, body)
@@ -457,22 +551,27 @@ fn parse_html_email(html: &str) -> (String, String, String, String, String) {
 pub fn is_email_processed(config: &Config, source_id: &str, rule_id: &str) -> bool {
     use rusqlite::OptionalExtension;
     let result = with_connection(config, |conn| {
-        let task_id: Option<String> = conn.query_row(
-            "SELECT task_id FROM processed_emails WHERE source_id=?1 AND rule_id=?2",
-            params![source_id, rule_id],
-            |row| row.get(0),
-        ).optional()?;
+        let task_id: Option<String> = conn
+            .query_row(
+                "SELECT task_id FROM processed_emails WHERE source_id=?1 AND rule_id=?2",
+                params![source_id, rule_id],
+                |row| row.get(0),
+            )
+            .optional()?;
 
         if let Some(task_id) = task_id {
             // Verify the task still exists in projects DB
             let projects_db = config.workspace_dir.join("projects").join("projects.db");
             if projects_db.exists() {
                 let pconn = rusqlite::Connection::open(&projects_db)?;
-                let exists: bool = pconn.query_row(
-                    "SELECT COUNT(*) FROM project_tasks WHERE id=?1",
-                    params![task_id],
-                    |row| row.get::<_, i64>(0),
-                ).unwrap_or(0) > 0;
+                let exists: bool = pconn
+                    .query_row(
+                        "SELECT COUNT(*) FROM project_tasks WHERE id=?1",
+                        params![task_id],
+                        |row| row.get::<_, i64>(0),
+                    )
+                    .unwrap_or(0)
+                    > 0;
                 Ok(exists)
             } else {
                 Ok(true) // projects DB not found, assume task exists
@@ -485,7 +584,12 @@ pub fn is_email_processed(config: &Config, source_id: &str, rule_id: &str) -> bo
 }
 
 /// Mark an email as processed by a rule, storing the created task_id.
-pub fn mark_email_processed(config: &Config, source_id: &str, rule_id: &str, task_id: &str) -> Result<()> {
+pub fn mark_email_processed(
+    config: &Config,
+    source_id: &str,
+    rule_id: &str,
+    task_id: &str,
+) -> Result<()> {
     let now = chrono::Utc::now().to_rfc3339();
     with_connection(config, |conn| {
         conn.execute(
@@ -502,7 +606,12 @@ pub fn mark_email_processed(config: &Config, source_id: &str, rule_id: &str, tas
 // ---------------------------------------------------------------------------
 
 /// Enqueue an email for batch processing. Ignores duplicates (same source_id).
-pub fn enqueue_batch_email(config: &Config, rule_id: &str, source_id: &str, email_body: &str) -> Result<()> {
+pub fn enqueue_batch_email(
+    config: &Config,
+    rule_id: &str,
+    source_id: &str,
+    email_body: &str,
+) -> Result<()> {
     let id = Uuid::new_v4().to_string();
     let now = chrono::Utc::now().to_rfc3339();
     with_connection(config, |conn| {
@@ -517,16 +626,25 @@ pub fn enqueue_batch_email(config: &Config, rule_id: &str, source_id: &str, emai
 
 /// Return all queued entries for a rule whose first matched_at is older than window_secs.
 /// "Older than window" = the earliest matched_at for the rule is past the window.
-pub fn pop_ready_batch_entries(config: &Config, rule_id: &str, window_secs: u64) -> Result<Vec<BatchQueueEntry>> {
+pub fn pop_ready_batch_entries(
+    config: &Config,
+    rule_id: &str,
+    window_secs: u64,
+) -> Result<Vec<BatchQueueEntry>> {
     with_connection(config, |conn| {
         // Check if oldest entry for this rule has passed the window
-        let oldest: Option<String> = conn.query_row(
-            "SELECT MIN(matched_at) FROM email_batch_queue WHERE rule_id = ?1",
-            params![rule_id],
-            |row| row.get(0),
-        ).ok().flatten();
+        let oldest: Option<String> = conn
+            .query_row(
+                "SELECT MIN(matched_at) FROM email_batch_queue WHERE rule_id = ?1",
+                params![rule_id],
+                |row| row.get(0),
+            )
+            .ok()
+            .flatten();
 
-        let Some(oldest_str) = oldest else { return Ok(vec![]); };
+        let Some(oldest_str) = oldest else {
+            return Ok(vec![]);
+        };
 
         let oldest_time = chrono::DateTime::parse_from_rfc3339(&oldest_str)
             .map(|t| t.with_timezone(&chrono::Utc))
@@ -542,22 +660,26 @@ pub fn pop_ready_batch_entries(config: &Config, rule_id: &str, window_secs: u64)
              FROM email_batch_queue WHERE rule_id = ?1
              ORDER BY matched_at ASC",
         )?;
-        let entries = stmt.query_map(params![rule_id], |row| {
-            Ok(BatchQueueEntry {
-                id: row.get(0)?,
-                rule_id: row.get(1)?,
-                source_id: row.get(2)?,
-                email_body: row.get(3)?,
-                matched_at: row.get(4)?,
-            })
-        })?.collect::<rusqlite::Result<Vec<_>>>()?;
+        let entries = stmt
+            .query_map(params![rule_id], |row| {
+                Ok(BatchQueueEntry {
+                    id: row.get(0)?,
+                    rule_id: row.get(1)?,
+                    source_id: row.get(2)?,
+                    email_body: row.get(3)?,
+                    matched_at: row.get(4)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(entries)
     })
 }
 
 /// Delete batch queue entries by their ids (after successful task creation).
 pub fn delete_batch_entries(config: &Config, ids: &[String]) -> Result<()> {
-    if ids.is_empty() { return Ok(()); }
+    if ids.is_empty() {
+        return Ok(());
+    }
     with_connection(config, |conn| {
         for id in ids {
             conn.execute("DELETE FROM email_batch_queue WHERE id = ?1", params![id])?;
@@ -569,10 +691,9 @@ pub fn delete_batch_entries(config: &Config, ids: &[String]) -> Result<()> {
 /// List all rule_ids that have at least one entry in the batch queue.
 pub fn list_batch_rule_ids(config: &Config) -> Result<Vec<String>> {
     with_connection(config, |conn| {
-        let mut stmt = conn.prepare(
-            "SELECT DISTINCT rule_id FROM email_batch_queue",
-        )?;
-        let ids = stmt.query_map([], |row| row.get(0))?
+        let mut stmt = conn.prepare("SELECT DISTINCT rule_id FROM email_batch_queue")?;
+        let ids = stmt
+            .query_map([], |row| row.get(0))?
             .collect::<rusqlite::Result<Vec<String>>>()?;
         Ok(ids)
     })

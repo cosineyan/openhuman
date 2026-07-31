@@ -43,8 +43,7 @@ pub fn get_board(config: &Config) -> Result<RpcOutcome<BucketsWithTasks>, String
     let project_id = store::ensure_default_project(config).map_err(|e| e.to_string())?;
 
     // Auto-archive tasks not updated for 14 days
-    let archived_count = store::auto_archive_stale_tasks(config, &project_id, 14)
-        .unwrap_or(0);
+    let archived_count = store::auto_archive_stale_tasks(config, &project_id, 14).unwrap_or(0);
     if archived_count > 0 {
         log::info!("[projects] auto-archived {archived_count} stale task(s) (14-day rule)");
     }
@@ -197,10 +196,14 @@ pub fn list_archived_tasks(
     created_before: Option<chrono::DateTime<chrono::Utc>>,
 ) -> Result<RpcOutcome<Vec<Task>>, String> {
     let project_id = store::ensure_default_project(config).map_err(|e| e.to_string())?;
-    let tasks = store::list_archived_tasks(config, &project_id, search, created_after, created_before)
-        .map_err(|e| e.to_string())?;
+    let tasks =
+        store::list_archived_tasks(config, &project_id, search, created_after, created_before)
+            .map_err(|e| e.to_string())?;
     log::debug!("[projects] list_archived_tasks n={}", tasks.len());
-    Ok(RpcOutcome::single_log(tasks, "projects: list_archived_tasks"))
+    Ok(RpcOutcome::single_log(
+        tasks,
+        "projects: list_archived_tasks",
+    ))
 }
 
 /// Delete a task by id.

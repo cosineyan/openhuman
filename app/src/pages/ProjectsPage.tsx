@@ -5,8 +5,8 @@ import { SidebarContent } from '../components/layout/shell/SidebarSlot';
 import TwoPaneNav from '../components/layout/TwoPaneNav';
 import { ArchivedView } from '../components/projects/ArchivedView';
 import { EmailAutomationPanel } from '../components/projects/EmailAutomationPanel';
-import { ScheduledTaskPanel } from '../components/projects/ScheduledTaskPanel';
 import { KanbanBoard } from '../components/projects/KanbanBoard';
+import { ScheduledTaskPanel } from '../components/projects/ScheduledTaskPanel';
 import { TaskDetailDrawer } from '../components/projects/TaskDetailDrawer';
 import { useT } from '../lib/i18n/I18nContext';
 import {
@@ -24,15 +24,26 @@ type ViewMode = 'board' | 'archived' | 'email_automation' | 'scheduled_tasks';
 
 function NavIcon({ path }: { path: string }) {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round">
       <path d={path} />
     </svg>
   );
 }
 
-const BOARD_ICON_PATH = 'M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18';
-const ARCHIVED_ICON_PATH = 'M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4';
-const EMAIL_ICON_PATH = 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z';
+const BOARD_ICON_PATH =
+  'M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18';
+const ARCHIVED_ICON_PATH =
+  'M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4';
+const EMAIL_ICON_PATH =
+  'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z';
 
 export function ProjectsPage() {
   const { t } = useT();
@@ -81,7 +92,7 @@ export function ProjectsPage() {
   // Reload when navigating back to this page via route change.
   useEffect(() => {
     void reload();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
   // Poll every 5s while any task with assignee=ai is in a non-terminal bucket
@@ -244,14 +255,26 @@ export function ProjectsPage() {
               label: 'Views',
               items: [
                 { value: 'board', label: 'Board', icon: <NavIcon path={BOARD_ICON_PATH} /> },
-                { value: 'archived', label: 'Archived', icon: <NavIcon path={ARCHIVED_ICON_PATH} /> },
+                {
+                  value: 'archived',
+                  label: 'Archived',
+                  icon: <NavIcon path={ARCHIVED_ICON_PATH} />,
+                },
               ],
             },
             {
               label: 'Automation',
               items: [
-                { value: 'email_automation', label: 'Email → Task', icon: <NavIcon path={EMAIL_ICON_PATH} /> },
-                { value: 'scheduled_tasks', label: 'Scheduling Task', icon: <NavIcon path={EMAIL_ICON_PATH} /> },
+                {
+                  value: 'email_automation',
+                  label: 'Email → Task',
+                  icon: <NavIcon path={EMAIL_ICON_PATH} />,
+                },
+                {
+                  value: 'scheduled_tasks',
+                  label: 'Scheduling Task',
+                  icon: <NavIcon path={EMAIL_ICON_PATH} />,
+                },
               ],
             },
           ]}
@@ -278,7 +301,7 @@ export function ProjectsPage() {
         {viewMode === 'archived' && <ArchivedView onTaskClick={setSelectedTask} />}
         {viewMode === 'email_automation' && (
           <EmailAutomationPanel
-            onOpenTask={(taskId) => {
+            onOpenTask={taskId => {
               const task = board?.buckets.flatMap(b => b.tasks).find(t => t.id === taskId);
               if (task) {
                 setSelectedTask(task);
@@ -289,9 +312,12 @@ export function ProjectsPage() {
         )}
         {viewMode === 'scheduled_tasks' && (
           <ScheduledTaskPanel
-            onOpenTask={(title) => {
+            onOpenTask={title => {
               const task = board?.buckets.flatMap(b => b.tasks).find(t => t.title === title);
-              if (task) { setSelectedTask(task); setTaskStack([]); }
+              if (task) {
+                setSelectedTask(task);
+                setTaskStack([]);
+              }
             }}
           />
         )}

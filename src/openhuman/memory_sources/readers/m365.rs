@@ -85,7 +85,11 @@ pub(crate) async fn graph_get(token: &str, url: &str) -> Result<serde_json::Valu
         .map_err(|e| format!("parse graph response: {e}"))
 }
 
-pub(crate) async fn graph_post(token: &str, url: &str, body: serde_json::Value) -> Result<serde_json::Value, String> {
+pub(crate) async fn graph_post(
+    token: &str,
+    url: &str,
+    body: serde_json::Value,
+) -> Result<serde_json::Value, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()
@@ -920,16 +924,14 @@ impl SourceReader for TeamsTranscriptReader {
         // the thread_id is embedded in the meetup-join path segment of the URL itself,
         // and the /me/onlineMeetings filter API only works for meetings YOU organized).
         let thread_id = if let Some(join_url) = lookup_key.strip_prefix("join:") {
-            extract_thread_id_from_join_url(join_url).ok_or_else(|| {
-                format!("cannot extract thread_id from join URL for: {subject}")
-            })?
+            extract_thread_id_from_join_url(join_url)
+                .ok_or_else(|| format!("cannot extract thread_id from join URL for: {subject}"))?
         } else if let Some(event_id) = lookup_key.strip_prefix("event:") {
             // For meetings without join URL in Calendar, fetch the event body and
             // extract the Teams join URL embedded in the HTML.
             let graph_tok = read_graph_token(config)?;
-            let event_url = format!(
-                "{GRAPH_BASE}/me/events/{event_id}?$select=body,onlineMeetingUrl,subject"
-            );
+            let event_url =
+                format!("{GRAPH_BASE}/me/events/{event_id}?$select=body,onlineMeetingUrl,subject");
             let event_data = graph_get(&graph_tok, &event_url)
                 .await
                 .map_err(|e| format!("calendar event lookup for {subject}: {e}"))?;
@@ -940,16 +942,18 @@ impl SourceReader for TeamsTranscriptReader {
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
 
-            let join_url_candidate =
-                extract_teams_join_url_from_body(body_content).or_else(|| {
-                    event_data
-                        .get("onlineMeetingUrl")
-                        .and_then(|v| v.as_str())
-                        .filter(|s| !s.is_empty())
-                        .map(|s| s.to_string())
-                });
+            let join_url_candidate = extract_teams_join_url_from_body(body_content).or_else(|| {
+                event_data
+                    .get("onlineMeetingUrl")
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+            });
 
-            match join_url_candidate.as_deref().and_then(extract_thread_id_from_join_url) {
+            match join_url_candidate
+                .as_deref()
+                .and_then(extract_thread_id_from_join_url)
+            {
                 Some(tid) => tid,
                 None => {
                     return Err(format!(
