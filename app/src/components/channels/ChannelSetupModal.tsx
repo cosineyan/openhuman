@@ -10,6 +10,7 @@ import { useT } from '../../lib/i18n/I18nContext';
 import type { ChannelDefinition, ChannelType } from '../../types/channels';
 import { CloseIcon } from '../ui';
 import { renderChannelIcon } from './channelIcon';
+import CredentialChannelConfig from './CredentialChannelConfig';
 import DiscordConfig from './DiscordConfig';
 import TelegramConfig from './TelegramConfig';
 import YuanbaoConfig from './YuanbaoConfig';
@@ -29,6 +30,12 @@ function ChannelConfigContent({ definition }: { definition: ChannelDefinition })
       return <DiscordConfig definition={definition} />;
     case 'yuanbao':
       return <YuanbaoConfig definition={definition} />;
+    // Schema-driven credential form (fields come straight from the backend
+    // ChannelDefinition). Lark/Feishu and DingTalk have no dedicated component;
+    // CredentialChannelConfig renders their app_id/app_secret/etc. fields.
+    case 'lark':
+    case 'dingtalk':
+      return <CredentialChannelConfig definition={definition} />;
     default:
       return (
         <p className="text-sm text-stone-400 dark:text-neutral-500 py-4">
