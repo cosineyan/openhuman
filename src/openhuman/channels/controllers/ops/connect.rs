@@ -3,7 +3,8 @@
 use serde_json::{json, Value};
 
 use crate::openhuman::channels::providers::yuanbao::YuanbaoConfig;
-use crate::openhuman::config::{Config, DiscordConfig, IMessageConfig, TelegramConfig};
+use crate::openhuman::config::schema::LarkReceiveMode;
+use crate::openhuman::config::{Config, DiscordConfig, IMessageConfig, LarkConfig, TelegramConfig};
 use crate::openhuman::credentials;
 use crate::openhuman::memory_store::chunks::store as memory_tree_store;
 use crate::openhuman::memory_store::chunks::types::SourceKind;
@@ -376,6 +377,92 @@ pub async fn connect_channel(
             target: "openhuman::channels",
             "[yuanbao] connect_channel: wrote channels_config.yuanbao (secret stored in credentials); restart core for WS listener"
         );
+    } else if channel_id == "lark" && auth_mode == ChannelAuthMode::ApiKey {
+        // Bridge the UI-supplied credentials into `channels_config.lark` so the
+        // startup listener (runtime/startup.rs) actually starts — it reads only
+        // config.channels_config.lark, never the credential store. Field names
+        // match `LarkConfig` / the `lark_definition()` form. Secrets in the
+        // persisted config are encrypted at rest by `save()` (see
+        // config/schema/load/secrets.rs), so `app_secret`/`encrypt_key`/
+        // `verification_token` never hit config.toml in plaintext.
+        let app_id = creds_map
+            .get("app_id")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| "missing required app_id".to_string())?
+            .to_string();
+        let app_secret = creds_map
+            .get("app_secret")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| "missing required app_secret".to_string())?
+            .to_string();
+        let encrypt_key = creds_map
+            .get("encrypt_key")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        let verification_token = creds_map
+            .get("verification_token")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        let use_feishu = parse_optional_bool(creds_map.get("use_feishu")).unwrap_or(false);
+        let receive_mode = match creds_map
+            .get("receive_mode")
+            .and_then(|v| v.as_str())
+            .map(|s| s.trim().to_ascii_lowercase())
+            .as_deref()
+        {
+            Some("webhook") => LarkReceiveMode::Webhook,
+            // Empty / "websocket" / anything else → default long-connection mode.
+            _ => LarkReceiveMode::Websocket,
+        };
+        // Port is typed as a plain string in the form; parse to u16, ignoring blanks.
+        let port = creds_map
+            .get("port")
+            .and_then(|v| {
+                // Accept both a JSON number and a numeric string.
+                v.as_u64()
+                    .map(|n| n.to_string())
+                    .or_else(|| v.as_str().map(|s| s.trim().to_string()))
+            })
+            .filter(|s| !s.is_empty())
+            .map(|s| {
+                s.parse::<u16>()
+                    .map_err(|e| format!("invalid webhook port '{s}': {e}"))
+            })
+            .transpose()?;
+        let allowed_users = parse_allowed_users(creds_map.get("allowed_users"));
+        let allowed_users_count = allowed_users.len();
+
+        let mut persisted = config.clone();
+        persisted.channels_config.lark = Some(LarkConfig {
+            app_id,
+            app_secret,
+            encrypt_key,
+            verification_token,
+            allowed_users,
+            use_feishu,
+            receive_mode,
+            port,
+        });
+
+        persisted
+            .save()
+            .await
+            .map_err(|e| format!("failed to persist lark config.toml: {e}"))?;
+
+        tracing::info!(
+            target: "openhuman::channels",
+            allowed_users_count,
+            use_feishu,
+            "[lark] connect_channel: wrote channels_config.lark; restart core for listener to start"
+        );
     }
 
     Ok(RpcOutcome::single_log(
@@ -457,6 +544,18 @@ pub async fn disconnect_channel(
             tracing::info!(
                 target: "openhuman::channels",
                 "[yuanbao] disconnect_channel: cleared channels_config.yuanbao"
+            );
+        }
+    } else if channel_id == "lark" && auth_mode == ChannelAuthMode::ApiKey {
+        let mut persisted = config.clone();
+        if persisted.channels_config.lark.take().is_some() {
+            persisted
+                .save()
+                .await
+                .map_err(|e| format!("failed to clear lark config.toml: {e}"))?;
+            tracing::info!(
+                target: "openhuman::channels",
+                "[lark] disconnect_channel: cleared channels_config.lark"
             );
         }
     }

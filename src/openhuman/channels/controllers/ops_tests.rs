@@ -340,6 +340,141 @@ async fn disconnect_discord_bot_token_clears_runtime_config() {
 }
 
 #[tokio::test]
+async fn connect_lark_api_key_persists_runtime_config() {
+    let (_tmp, config) = isolated_test_config();
+    let result = connect_channel(
+        &config,
+        "lark",
+        ChannelAuthMode::ApiKey,
+        serde_json::json!({
+            "app_id": "cli_test123",
+            "app_secret": "lark-secret-xyz",
+            "encrypt_key": "enc-key-1",
+            "use_feishu": true,
+            "receive_mode": "webhook",
+            "port": "8080",
+            "allowed_users": "ou_abc, ou_def"
+        }),
+    )
+    .await
+    .expect("lark connect should succeed");
+
+    assert_eq!(result.value.status, "connected");
+    assert!(result.value.restart_required);
+
+    // In-memory config must carry the runtime block so the listener starts.
+    // (config passed to connect is immutable; re-read from disk to verify.)
+    let raw = tokio::fs::read_to_string(&config.config_path)
+        .await
+        .expect("saved config should exist");
+    let parsed: toml::Value = toml::from_str(&raw).expect("saved config should parse");
+    let lark = parsed
+        .get("channels_config")
+        .and_then(|v| v.get("lark"))
+        .and_then(toml::Value::as_table)
+        .expect("channels_config.lark should be persisted");
+
+    assert_eq!(
+        lark.get("app_id").and_then(toml::Value::as_str),
+        Some("cli_test123")
+    );
+    // Secrets are encrypted at rest (config/schema/load/secrets.rs).
+    let secret = lark.get("app_secret").and_then(toml::Value::as_str);
+    assert!(
+        secret.is_some_and(|t| t.starts_with("enc:") || t.starts_with("enc2:")),
+        "app_secret should be encrypted on disk, got: {secret:?}"
+    );
+    let enc_key = lark.get("encrypt_key").and_then(toml::Value::as_str);
+    assert!(
+        enc_key.is_some_and(|t| t.starts_with("enc:") || t.starts_with("enc2:")),
+        "encrypt_key should be encrypted on disk, got: {enc_key:?}"
+    );
+    assert_eq!(
+        lark.get("use_feishu").and_then(toml::Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        lark.get("receive_mode").and_then(toml::Value::as_str),
+        Some("webhook")
+    );
+    assert_eq!(
+        lark.get("port").and_then(toml::Value::as_integer),
+        Some(8080)
+    );
+    let allowed = lark
+        .get("allowed_users")
+        .and_then(toml::Value::as_array)
+        .expect("allowed_users array");
+    assert_eq!(allowed.len(), 2);
+}
+
+#[tokio::test]
+async fn connect_lark_rejects_missing_app_secret() {
+    let (_tmp, config) = isolated_test_config();
+    let result = connect_channel(
+        &config,
+        "lark",
+        ChannelAuthMode::ApiKey,
+        serde_json::json!({ "app_id": "cli_test123" }),
+    )
+    .await;
+    assert!(result.is_err());
+    // Rejected by the definition's required-field validation.
+    assert!(result.unwrap_err().to_lowercase().contains("app_secret"));
+}
+
+#[tokio::test]
+async fn connect_lark_rejects_bad_port() {
+    let (_tmp, config) = isolated_test_config();
+    let result = connect_channel(
+        &config,
+        "lark",
+        ChannelAuthMode::ApiKey,
+        serde_json::json!({
+            "app_id": "cli_test123",
+            "app_secret": "lark-secret-xyz",
+            "port": "not-a-number"
+        }),
+    )
+    .await;
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("invalid webhook port"));
+}
+
+#[tokio::test]
+async fn disconnect_lark_api_key_clears_runtime_config() {
+    let (_tmp, mut config) = isolated_test_config();
+    config.channels_config.lark = Some(LarkConfig {
+        app_id: "cli_test123".to_string(),
+        app_secret: "lark-secret-xyz".to_string(),
+        encrypt_key: None,
+        verification_token: None,
+        allowed_users: vec![],
+        use_feishu: false,
+        receive_mode: crate::openhuman::config::schema::LarkReceiveMode::Websocket,
+        port: None,
+    });
+    config
+        .save()
+        .await
+        .expect("preloaded config should be persisted");
+
+    disconnect_channel(&config, "lark", ChannelAuthMode::ApiKey, false)
+        .await
+        .expect("lark disconnect should succeed");
+
+    let raw = tokio::fs::read_to_string(&config.config_path)
+        .await
+        .expect("saved config should exist");
+    let parsed: toml::Value = toml::from_str(&raw).expect("saved config should parse");
+    let lark = parsed.get("channels_config").and_then(|v| v.get("lark"));
+    assert!(
+        lark.is_none(),
+        "channels_config.lark should be removed after disconnect"
+    );
+}
+
+#[tokio::test]
 async fn disconnect_channel_clear_memory_deletes_matching_chat_sources() {
     let (_tmp, mut config) = isolated_test_config();
     config.channels_config.discord = Some(DiscordConfig {
