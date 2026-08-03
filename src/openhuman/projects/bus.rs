@@ -173,8 +173,8 @@ async fn run_ai_task(
         });
         return;
     }
-    let _ = store::add_comment(&config, &task_id, "ai", "Starting to work on this task…");
-    emit_task_log(&task_id, "Starting to work on this task…", "log");
+    // "Starting to work…" is emitted below (after §3 resolves the model) so it
+    // can include which model this run will use.
 
     // ── 2. Build prompt ───────────────────────────────────────────────────
     let prompt = build_prompt(&title, description.as_deref());
@@ -240,6 +240,30 @@ async fn run_ai_task(
         }
     })
     .unwrap_or_else(|| vec![(settings_path.clone(), model_override.clone())]);
+
+    // Announce the start, naming the model this run will use. The first attempt
+    // is the model that actually launches; if a fallback chain exists, note it.
+    let first_model = attempts
+        .first()
+        .and_then(|(_, m)| m.clone())
+        .unwrap_or_else(|| {
+            config
+                .chat_provider
+                .as_deref()
+                .and_then(|p| p.strip_prefix("claude-code:"))
+                .unwrap_or("app default")
+                .to_string()
+        });
+    let start_msg = if attempts.len() > 1 {
+        format!(
+            "Starting to work on this task… (model: {first_model}, {} fallback steps)",
+            attempts.len()
+        )
+    } else {
+        format!("Starting to work on this task… (model: {first_model})")
+    };
+    let _ = store::add_comment(&config, &task_id, "ai", &start_msg);
+    emit_task_log(&task_id, &start_msg, "log");
 
     // Use existing session if available (resume), otherwise generate a new hint UUID.
     let cc_session_uuid = existing_session_id.unwrap_or_else(
