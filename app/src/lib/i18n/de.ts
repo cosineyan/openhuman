@@ -6040,6 +6040,53 @@ const messages: TranslationMap = {
   'topics.backfill.none': 'Keine',
   'topics.backfill.label': 'Nachfüllen:',
   'topics.backfill.done': 'Nachfüllen eingereiht — Zeitleiste wird bald aktualisiert.',
+  // Claude settings profiles
+  'claudeProfiles.title': 'Claude-Profile',
+  'claudeProfiles.menuDesc': 'Claude-Code-settings.json-Dateien und ihre Modelle registrieren',
+  'claudeProfiles.desktopOnly': 'Nur auf dem Desktop verfügbar.',
+  'claudeProfiles.intro':
+    'Registrieren Sie Ihre Claude-Code-settings.json-Dateien. Aufgaben können ein Profil und Modell wählen; der KI-Lauf startet mit claude --settings <Pfad>. Auth-Tokens in den Dateien werden nie gelesen oder angezeigt.',
+  'claudeProfiles.registered': 'Registrierte Profile',
+  'claudeProfiles.loading': 'Wird geladen…',
+  'claudeProfiles.empty': 'Noch keine Profile.',
+  'claudeProfiles.unreadable': 'Datei nicht lesbar',
+  'claudeProfiles.remove': 'Entfernen',
+  'claudeProfiles.addTitle': 'Profil hinzufügen',
+  'claudeProfiles.addDesc':
+    'Verweisen Sie auf eine settings.json-Datei, z. B. ~/.claude/settings.json.hyperspace',
+  'claudeProfiles.nameLabel': 'Name',
+  'claudeProfiles.namePlaceholder': 'z. B. Hyperspace',
+  'claudeProfiles.pathLabel': 'Pfad zur settings-Datei',
+  'claudeProfiles.adding': 'Wird hinzugefügt…',
+  'claudeProfiles.add': 'Profil hinzufügen',
+  'claudeProfiles.picker.none':
+    'Noch keine Claude-Profile – füge eines in den Einstellungen hinzu.',
+  'claudeProfiles.picker.default': 'Standard (kein Profil)',
+  'claudeProfiles.picker.modelDefault': 'Standardmodell',
+  'claudeProfiles.parsing': 'Wird analysiert…',
+  'claudeProfiles.previewUnreadable': 'Datei nicht gefunden oder nicht lesbar.',
+  'claudeProfiles.previewNoModels': 'Keine Modellschlüssel in dieser Datei gefunden.',
+  'claudeProfiles.ladderTitle': 'Fallback-Leiter',
+  'claudeProfiles.ladderDesc':
+    'Globale Modellreihenfolge für den Aufgaben-Fallback. Eine Aufgabe fällt entlang dieser Leiter (auf/ab) zurück, wenn ihr Modell nicht startet.',
+  'claudeProfiles.ladderEmpty': 'Füge ein Profil hinzu, um die Leiter zu bauen.',
+  'claudeProfiles.picker.fallback': 'Fallback bei Startfehler',
+  'claudeProfiles.picker.down': 'Leiter hinab',
+  'claudeProfiles.picker.up': 'Leiter hinauf',
+  'claudeProfiles.picker.endBoundary': 'Ende: Leitergrenze',
+  'claudeProfiles.picker.endPrefix': 'Ende bei',
+  'claudeProfiles.globalTitle': 'Globaler Standard (Aufgaben ohne Profil)',
+  'claudeProfiles.globalDesc':
+    'Aufgaben ohne eigenes Profil nutzen diesen Fallback. Aus = sie laufen mit dem Standardmodell der App.',
+  'claudeProfiles.globalEnable': 'Globalen Standard-Fallback aktivieren',
+  'claudeProfiles.globalStart': 'Startmodell…',
+  'claudeProfiles.globalNoLadder': 'Füge zuerst ein Profil hinzu, um die Leiter zu bauen.',
+  'claudeProfiles.globalSentStart': 'Beginn bei',
+  'claudeProfiles.globalSentStep': 'und gehe',
+  'claudeProfiles.globalSentDown': 'nach unten',
+  'claudeProfiles.globalSentUp': 'nach oben',
+  'claudeProfiles.globalSentEnd': 'die Leiter, endend bei',
+  'claudeProfiles.globalSentBoundary': 'die Leitergrenze',
 };
 
 export default messages;

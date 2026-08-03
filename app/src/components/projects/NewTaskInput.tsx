@@ -1,12 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { ProfileModelPicker, type ProfileModelValue } from '../common/ProfileModelPicker';
+
 interface Props {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   addTaskColor?: string;
   onAdd: (
     title: string,
-    opts?: { assignee?: string; due_date?: string; priority?: number }
+    opts?: {
+      assignee?: string;
+      due_date?: string;
+      priority?: number;
+      settings_profile?: string;
+      model?: string;
+      fallback_direction?: string;
+      fallback_end?: string;
+    }
   ) => Promise<void>;
 }
 
@@ -280,6 +290,7 @@ export function NewTaskInput({ open: openProp, onOpenChange, addTaskColor, onAdd
   const [assignee, setAssignee] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [priority, setPriority] = useState(0);
+  const [profileValue, setProfileValue] = useState<ProfileModelValue>({});
   const [busy, setBusy] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showAssigneePicker, setShowAssigneePicker] = useState(false);
@@ -326,11 +337,16 @@ export function NewTaskInput({ open: openProp, onOpenChange, addTaskColor, onAdd
         assignee: assignee || undefined,
         due_date: dueDate || undefined,
         priority: priority || undefined,
+        settings_profile: profileValue.settingsProfile,
+        model: profileValue.model,
+        fallback_direction: profileValue.fallbackDirection,
+        fallback_end: profileValue.fallbackEnd,
       });
       setTitle('');
       setAssignee('');
       setDueDate('');
       setPriority(0);
+      setProfileValue({});
       setOpen(false);
     } finally {
       setBusy(false);
@@ -542,6 +558,17 @@ export function NewTaskInput({ open: openProp, onOpenChange, addTaskColor, onAdd
                 {p.label}
               </button>
             ))}
+          </div>
+        )}
+
+        {/* Claude profile + model — only relevant for AI-assigned tasks */}
+        {assignee === 'ai' && (
+          <div className="flex items-center gap-2.5 w-full px-3 py-1.5 text-xs text-stone-500 dark:text-neutral-400">
+            <ProfileModelPicker
+              value={profileValue}
+              onChange={setProfileValue}
+              selectStyle={{ fontSize: 12 }}
+            />
           </div>
         )}
       </div>

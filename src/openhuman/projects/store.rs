@@ -107,6 +107,10 @@ pub fn with_connection<T>(config: &Config, f: impl FnOnce(&Connection) -> Result
         "INTEGER NOT NULL DEFAULT 0",
     )?;
     add_column_if_missing(&conn, "project_tasks", "archived_at", "TEXT")?;
+    add_column_if_missing(&conn, "project_tasks", "settings_profile", "TEXT")?;
+    add_column_if_missing(&conn, "project_tasks", "model", "TEXT")?;
+    add_column_if_missing(&conn, "project_tasks", "fallback_direction", "TEXT")?;
+    add_column_if_missing(&conn, "project_tasks", "fallback_end", "TEXT")?;
 
     // Fix tasks that are marked done=1 but live in a non-done bucket — can
     // happen when a task was moved back from a done bucket via a code path that
@@ -220,6 +224,10 @@ fn row_to_task(row: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
             .map(parse_rfc3339)
             .transpose()
             .map_err(sql_err)?,
+        settings_profile: row.get(19).unwrap_or(None),
+        model: row.get(20).unwrap_or(None),
+        fallback_direction: row.get(21).unwrap_or(None),
+        fallback_end: row.get(22).unwrap_or(None),
     })
 }
 
@@ -464,7 +472,7 @@ pub fn get_task(config: &Config, task_id: &str) -> Result<Task> {
                     done, done_at, priority, due_date, hex_color,
                     position, idx, created, updated,
                     assignee, ai_plan, parent_task_id,
-                    archived, archived_at
+                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end
              FROM project_tasks WHERE id = ?1",
             params![task_id],
             row_to_task,
@@ -482,7 +490,7 @@ pub fn list_tasks(config: &Config, project_id: &str, bucket_id: Option<&str>) ->
                         done, done_at, priority, due_date, hex_color,
                         position, idx, created, updated,
                         assignee, ai_plan, parent_task_id,
-                    archived, archived_at
+                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end
                  FROM project_tasks
                  WHERE project_id = ?1 AND bucket_id = ?2 AND parent_task_id IS NULL
                    AND (archived = 0 OR archived IS NULL)
@@ -498,7 +506,7 @@ pub fn list_tasks(config: &Config, project_id: &str, bucket_id: Option<&str>) ->
                         done, done_at, priority, due_date, hex_color,
                         position, idx, created, updated,
                         assignee, ai_plan, parent_task_id,
-                    archived, archived_at
+                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end
                  FROM project_tasks
                  WHERE project_id = ?1 AND parent_task_id IS NULL
                    AND (archived = 0 OR archived IS NULL)
@@ -533,7 +541,7 @@ pub fn list_archived_tasks(
                     done, done_at, priority, due_date, hex_color,
                     position, idx, created, updated,
                     assignee, ai_plan, parent_task_id,
-                    archived, archived_at
+                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end
              FROM project_tasks
              WHERE project_id = ?1 AND archived = 1 AND parent_task_id IS NULL"
             .to_string();
@@ -603,7 +611,7 @@ pub fn list_subtasks(config: &Config, parent_task_id: &str) -> Result<Vec<Task>>
                     done, done_at, priority, due_date, hex_color,
                     position, idx, created, updated,
                     assignee, ai_plan, parent_task_id,
-                    archived, archived_at
+                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end
              FROM project_tasks
              WHERE parent_task_id = ?1
              ORDER BY created ASC",
@@ -628,6 +636,10 @@ pub fn create_task(
     due_date: Option<DateTime<Utc>>,
     actor: &str,
     parent_task_id: Option<&str>,
+    settings_profile: Option<&str>,
+    model: Option<&str>,
+    fallback_direction: Option<&str>,
+    fallback_end: Option<&str>,
 ) -> Result<Task> {
     let now = Utc::now();
     let task_id = Uuid::new_v4().to_string();
@@ -658,8 +670,9 @@ pub fn create_task(
             "INSERT INTO project_tasks
              (id, project_id, bucket_id, title, description,
               done, done_at, priority, due_date, hex_color,
-              position, idx, created, updated, parent_task_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, 0, NULL, ?6, ?7, NULL, ?8, ?9, ?10, ?11, ?12)",
+              position, idx, created, updated, parent_task_id,
+              settings_profile, model, fallback_direction, fallback_end)
+             VALUES (?1, ?2, ?3, ?4, ?5, 0, NULL, ?6, ?7, NULL, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
             params![
                 task_id,
                 project_id,
@@ -673,6 +686,10 @@ pub fn create_task(
                 now.to_rfc3339(),
                 now.to_rfc3339(),
                 parent_task_id,
+                settings_profile,
+                model,
+                fallback_direction,
+                fallback_end,
             ],
         )
         .context("Failed to insert task")?;
@@ -682,7 +699,7 @@ pub fn create_task(
                     done, done_at, priority, due_date, hex_color,
                     position, idx, created, updated,
                     assignee, ai_plan, parent_task_id,
-                    archived, archived_at
+                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end
              FROM project_tasks WHERE id = ?1",
             params![task_id],
             row_to_task,
@@ -720,7 +737,7 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch, actor: &st
                         done, done_at, priority, due_date, hex_color,
                         position, idx, created, updated,
                         assignee, ai_plan, parent_task_id,
-                    archived, archived_at
+                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end
                  FROM project_tasks WHERE id = ?1",
                 params![task_id],
                 row_to_task,
@@ -829,12 +846,36 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch, actor: &st
         };
         let archived_at_str = new_archived_at.map(|d| d.to_rfc3339());
 
+        // Resolve settings_profile/model (double-option: set / clear / keep).
+        let new_settings_profile: Option<String> = match &patch.settings_profile {
+            Some(Some(v)) => Some(v.clone()),
+            Some(None) => None,
+            None => task.settings_profile.clone(),
+        };
+        let new_model: Option<String> = match &patch.model {
+            Some(Some(v)) => Some(v.clone()),
+            Some(None) => None,
+            None => task.model.clone(),
+        };
+        let new_fallback_direction: Option<String> = match &patch.fallback_direction {
+            Some(Some(v)) => Some(v.clone()),
+            Some(None) => None,
+            None => task.fallback_direction.clone(),
+        };
+        let new_fallback_end: Option<String> = match &patch.fallback_end {
+            Some(Some(v)) => Some(v.clone()),
+            Some(None) => None,
+            None => task.fallback_end.clone(),
+        };
+
         conn.execute(
             "UPDATE project_tasks
              SET bucket_id = ?1, title = ?2, description = ?3,
                  done = ?4, done_at = ?5, priority = ?6, due_date = ?7,
                  hex_color = ?8, position = ?9, updated = ?10,
-                 ai_plan = ?12, archived = ?13, archived_at = ?14
+                 ai_plan = ?12, archived = ?13, archived_at = ?14,
+                 settings_profile = ?15, model = ?16,
+                 fallback_direction = ?17, fallback_end = ?18
              WHERE id = ?11",
             params![
                 new_bucket_id,
@@ -851,6 +892,10 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch, actor: &st
                 new_ai_plan,
                 if new_archived { 1_i64 } else { 0 },
                 archived_at_str,
+                new_settings_profile,
+                new_model,
+                new_fallback_direction,
+                new_fallback_end,
             ],
         )
         .context("Failed to update task")?;
@@ -870,7 +915,7 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch, actor: &st
                     done, done_at, priority, due_date, hex_color,
                     position, idx, created, updated,
                     assignee, ai_plan, parent_task_id,
-                    archived, archived_at
+                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end
              FROM project_tasks WHERE id = ?1",
             params![task_id],
             row_to_task,

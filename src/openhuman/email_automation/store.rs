@@ -76,6 +76,22 @@ fn with_connection<T>(config: &Config, f: impl FnOnce(&Connection) -> Result<T>)
     );
     let _ = conn.execute("ALTER TABLE email_automation_rules ADD COLUMN batch_window_secs INTEGER NOT NULL DEFAULT 21600", []);
     let _ = conn.execute("ALTER TABLE email_automation_rules ADD COLUMN batch_parse_mode TEXT NOT NULL DEFAULT 'first_only'", []);
+    let _ = conn.execute(
+        "ALTER TABLE email_automation_rules ADD COLUMN settings_profile TEXT",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE email_automation_rules ADD COLUMN model TEXT",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE email_automation_rules ADD COLUMN fallback_direction TEXT",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE email_automation_rules ADD COLUMN fallback_end TEXT",
+        [],
+    );
 
     f(&conn)
 }
@@ -102,6 +118,10 @@ fn row_to_rule(row: &rusqlite::Row<'_>) -> rusqlite::Result<EmailAutomationRule>
         batch_mode: row.get::<_, i64>(12).unwrap_or(0) != 0,
         batch_window_secs: row.get::<_, i64>(13).unwrap_or(21600) as u64,
         batch_parse_mode,
+        settings_profile: row.get(17).unwrap_or(None),
+        model: row.get(18).unwrap_or(None),
+        fallback_direction: row.get(19).unwrap_or(None),
+        fallback_end: row.get(20).unwrap_or(None),
         created_at: row.get(15)?,
         updated_at: row.get(16)?,
     })
@@ -113,7 +133,7 @@ pub fn list_rules(config: &Config) -> Result<Vec<EmailAutomationRule>> {
             "SELECT id, name, enabled, sender_contains, subject_contains, body_contains,
                     task_title_template, task_description_template, assignee, bucket_id,
                     llm_fallback_enabled, parse_script, batch_mode, batch_window_secs,
-                    batch_parse_mode, created_at, updated_at
+                    batch_parse_mode, created_at, updated_at, settings_profile, model, fallback_direction, fallback_end
              FROM email_automation_rules
              ORDER BY created_at ASC",
         )?;
@@ -130,7 +150,7 @@ pub fn list_enabled_rules(config: &Config) -> Result<Vec<EmailAutomationRule>> {
             "SELECT id, name, enabled, sender_contains, subject_contains, body_contains,
                     task_title_template, task_description_template, assignee, bucket_id,
                     llm_fallback_enabled, parse_script, batch_mode, batch_window_secs,
-                    batch_parse_mode, created_at, updated_at
+                    batch_parse_mode, created_at, updated_at, settings_profile, model, fallback_direction, fallback_end
              FROM email_automation_rules
              WHERE enabled = 1
              ORDER BY created_at ASC",
@@ -148,7 +168,7 @@ pub fn get_rule(config: &Config, id: &str) -> Result<Option<EmailAutomationRule>
             "SELECT id, name, enabled, sender_contains, subject_contains, body_contains,
                     task_title_template, task_description_template, assignee, bucket_id,
                     llm_fallback_enabled, parse_script, batch_mode, batch_window_secs,
-                    batch_parse_mode, created_at, updated_at
+                    batch_parse_mode, created_at, updated_at, settings_profile, model, fallback_direction, fallback_end
              FROM email_automation_rules WHERE id = ?1",
         )?;
         let mut rows = stmt.query_map(params![id], row_to_rule)?;
@@ -169,8 +189,8 @@ pub fn create_rule(config: &Config, input: CreateRuleInput) -> Result<EmailAutom
              (id, name, enabled, sender_contains, subject_contains, body_contains,
               task_title_template, task_description_template, assignee, bucket_id,
               llm_fallback_enabled, parse_script, batch_mode, batch_window_secs,
-              batch_parse_mode, created_at, updated_at)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)",
+              batch_parse_mode, created_at, updated_at, settings_profile, model, fallback_direction, fallback_end)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21)",
             params![
                 id,
                 input.name,
@@ -189,6 +209,10 @@ pub fn create_rule(config: &Config, input: CreateRuleInput) -> Result<EmailAutom
                 batch_parse_mode_str,
                 now,
                 now,
+                input.settings_profile,
+                input.model,
+                input.fallback_direction,
+                input.fallback_end,
             ],
         )?;
         Ok(())
@@ -276,6 +300,31 @@ pub fn update_rule(config: &Config, id: &str, patch: RulePatch) -> Result<EmailA
             conn.execute(
                 "UPDATE email_automation_rules SET batch_parse_mode=?1, updated_at=?2 WHERE id=?3",
                 params![s, now, id],
+            )?;
+        }
+        // Double-option: Some(Some) set, Some(None) clear, None no-op.
+        if let Some(v) = patch.settings_profile {
+            conn.execute(
+                "UPDATE email_automation_rules SET settings_profile=?1, updated_at=?2 WHERE id=?3",
+                params![v, now, id],
+            )?;
+        }
+        if let Some(v) = patch.model {
+            conn.execute(
+                "UPDATE email_automation_rules SET model=?1, updated_at=?2 WHERE id=?3",
+                params![v, now, id],
+            )?;
+        }
+        if let Some(v) = patch.fallback_direction {
+            conn.execute(
+                "UPDATE email_automation_rules SET fallback_direction=?1, updated_at=?2 WHERE id=?3",
+                params![v, now, id],
+            )?;
+        }
+        if let Some(v) = patch.fallback_end {
+            conn.execute(
+                "UPDATE email_automation_rules SET fallback_end=?1, updated_at=?2 WHERE id=?3",
+                params![v, now, id],
             )?;
         }
         Ok(())

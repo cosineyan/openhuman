@@ -14,7 +14,15 @@ interface Props {
   onAddTask: (
     bucketId: string,
     title: string,
-    opts?: { assignee?: string; due_date?: string; priority?: number }
+    opts?: {
+      assignee?: string;
+      due_date?: string;
+      priority?: number;
+      settings_profile?: string;
+      model?: string;
+      fallback_direction?: string;
+      fallback_end?: string;
+    }
   ) => Promise<void>;
   onAddViaModal: (bucketId: string) => void;
   onRenameColumn: (bucketId: string, title: string) => Promise<void>;

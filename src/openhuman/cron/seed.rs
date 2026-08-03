@@ -143,6 +143,9 @@ fn seed_morning_briefing(config: &Config) -> Result<()> {
         Some(proactive_delivery()),
         false, // recurring — do not delete after run
         Some(MORNING_BRIEFING_JOB_NAME.to_string()),
+        None,
+        None,
+        None,
     )?;
 
     Ok(())
@@ -205,6 +208,9 @@ mod tests {
             Some(proactive_delivery()),
             true,
             Some(LEGACY_WELCOME_JOB_NAME.to_string()),
+            None,
+            None,
+            None,
         )
         .expect("seed legacy welcome");
         assert_eq!(list_jobs(&config).unwrap().len(), 1);

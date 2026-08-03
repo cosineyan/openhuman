@@ -43,6 +43,18 @@ pub struct EmailAutomationRule {
     /// Whether to run parse_script on only the first queued email or all of them.
     #[serde(default)]
     pub batch_parse_mode: BatchParseMode,
+    /// Claude Code settings-profile id to launch the generated task's AI run with.
+    #[serde(default)]
+    pub settings_profile: Option<String>,
+    /// Model tier alias or concrete model id for the generated task's AI run.
+    #[serde(default)]
+    pub model: Option<String>,
+    /// Fallback ladder direction ("up"/"down") for the generated task; None=off.
+    #[serde(default)]
+    pub fallback_direction: Option<String>,
+    /// Fallback terminus "<profile_id>:<tier>" for the generated task.
+    #[serde(default)]
+    pub fallback_end: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -69,6 +81,14 @@ pub struct CreateRuleInput {
     pub batch_window_secs: u64,
     #[serde(default)]
     pub batch_parse_mode: BatchParseMode,
+    #[serde(default)]
+    pub settings_profile: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub fallback_direction: Option<String>,
+    #[serde(default)]
+    pub fallback_end: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -87,6 +107,14 @@ pub struct RulePatch {
     pub batch_mode: Option<bool>,
     pub batch_window_secs: Option<u64>,
     pub batch_parse_mode: Option<BatchParseMode>,
+    #[serde(default)]
+    pub settings_profile: Option<Option<String>>,
+    #[serde(default)]
+    pub model: Option<Option<String>>,
+    #[serde(default)]
+    pub fallback_direction: Option<Option<String>>,
+    #[serde(default)]
+    pub fallback_end: Option<Option<String>>,
 }
 
 /// Extracted fields from an email's body_preview.

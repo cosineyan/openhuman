@@ -138,6 +138,10 @@ fn schemas(function: &'static str) -> ControllerSchema {
                 FieldSchema { name: "batch_mode", ty: TypeSchema::Option(Box::new(TypeSchema::Bool)), comment: "Accumulate matching emails and create one combined task.", required: false },
                 FieldSchema { name: "batch_window_secs", ty: TypeSchema::Option(Box::new(TypeSchema::U64)), comment: "Seconds to wait before draining the batch queue (default 21600).", required: false },
                 FieldSchema { name: "batch_parse_mode", ty: TypeSchema::Option(Box::new(TypeSchema::String)), comment: "'first_only' or 'all'.", required: false },
+                FieldSchema { name: "settings_profile", ty: TypeSchema::Option(Box::new(TypeSchema::String)), comment: "Claude Code settings-profile id for the generated task's AI run.", required: false },
+                FieldSchema { name: "model", ty: TypeSchema::Option(Box::new(TypeSchema::String)), comment: "Model tier alias (opus/sonnet/haiku/default) or concrete model id for the generated task's AI run.", required: false },
+                FieldSchema { name: "fallback_direction", ty: TypeSchema::Option(Box::new(TypeSchema::String)), comment: "Fallback ladder direction 'up'/'down' for the generated task; omit to disable.", required: false },
+                FieldSchema { name: "fallback_end", ty: TypeSchema::Option(Box::new(TypeSchema::String)), comment: "Fallback terminus '<profile_id>:<tier>' for the generated task.", required: false },
             ],
             outputs: vec![FieldSchema {
                 name: "rule",
@@ -165,6 +169,10 @@ fn schemas(function: &'static str) -> ControllerSchema {
                 FieldSchema { name: "batch_mode", ty: TypeSchema::Option(Box::new(TypeSchema::Bool)), comment: "Batch mode.", required: false },
                 FieldSchema { name: "batch_window_secs", ty: TypeSchema::Option(Box::new(TypeSchema::U64)), comment: "Batch window in seconds.", required: false },
                 FieldSchema { name: "batch_parse_mode", ty: TypeSchema::Option(Box::new(TypeSchema::String)), comment: "'first_only' or 'all'.", required: false },
+                FieldSchema { name: "settings_profile", ty: TypeSchema::Option(Box::new(TypeSchema::String)), comment: "Claude Code settings-profile id for the generated task's AI run.", required: false },
+                FieldSchema { name: "model", ty: TypeSchema::Option(Box::new(TypeSchema::String)), comment: "Model tier alias (opus/sonnet/haiku/default) or concrete model id for the generated task's AI run.", required: false },
+                FieldSchema { name: "fallback_direction", ty: TypeSchema::Option(Box::new(TypeSchema::String)), comment: "Fallback ladder direction 'up'/'down' for the generated task; omit to disable.", required: false },
+                FieldSchema { name: "fallback_end", ty: TypeSchema::Option(Box::new(TypeSchema::String)), comment: "Fallback terminus '<profile_id>:<tier>' for the generated task.", required: false },
             ],
             outputs: vec![FieldSchema {
                 name: "rule",

@@ -111,13 +111,25 @@ export function ProjectsPage() {
   const handleAddTask = async (
     bucketId: string,
     title: string,
-    opts?: { assignee?: string; due_date?: string; priority?: number }
+    opts?: {
+      assignee?: string;
+      due_date?: string;
+      priority?: number;
+      settings_profile?: string;
+      model?: string;
+      fallback_direction?: string;
+      fallback_end?: string;
+    }
   ) => {
     const task = await createTask({
       title,
       bucket_id: bucketId,
       priority: opts?.priority,
       due_date: opts?.due_date ? `${opts.due_date}T00:00:00Z` : undefined,
+      settings_profile: opts?.settings_profile,
+      model: opts?.model,
+      fallback_direction: opts?.fallback_direction,
+      fallback_end: opts?.fallback_end,
     });
     if (opts?.assignee) {
       await updateTask({ task_id: task.id, patch: { assignee: opts.assignee } });

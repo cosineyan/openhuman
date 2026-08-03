@@ -187,6 +187,10 @@ impl Tool for ProjectsCreateTaskTool {
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string()),
             parent_task_id: None,
+            settings_profile: None,
+            model: None,
+            fallback_direction: None,
+            fallback_end: None,
         };
 
         match ops::create_task(&self.config, input, "ai") {

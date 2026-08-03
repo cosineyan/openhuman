@@ -734,6 +734,10 @@ async fn deliver_if_configured(config: &Config, job: &CronJob, output: &str) -> 
                     priority: None,
                     due_date: None,
                     parent_task_id: None,
+                    settings_profile: job.settings_profile.clone(),
+                    model: job.model.clone(),
+                    fallback_direction: job.fallback_direction.clone(),
+                    fallback_end: job.fallback_end.clone(),
                 },
                 "cron",
             );

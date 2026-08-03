@@ -12,6 +12,7 @@ pub mod auth;
 pub mod auth_status;
 pub mod driver;
 pub mod event_mapper;
+pub mod fallback;
 pub mod input_builder;
 pub mod session_store;
 pub mod settings;
@@ -70,6 +71,9 @@ pub struct ClaudeCodeProvider {
     /// file tools act on the user's code, not the internal workspace.
     project_dir: PathBuf,
     anthropic_api_key: Option<String>,
+    /// Optional Claude Code settings.json profile path, threaded to the driver
+    /// as `--settings`. `None` → legacy behavior.
+    settings_path: Option<PathBuf>,
     semaphore: Arc<Semaphore>,
     session_store: Arc<session_store::SessionStore>,
 }
@@ -82,6 +86,7 @@ impl ClaudeCodeProvider {
         workspace_dir: PathBuf,
         project_dir: PathBuf,
         anthropic_api_key: Option<String>,
+        settings_path: Option<PathBuf>,
     ) -> Self {
         let session_store = Arc::new(session_store::SessionStore::open(&workspace_dir));
         Self {
@@ -90,6 +95,7 @@ impl ClaudeCodeProvider {
             workspace_dir,
             project_dir,
             anthropic_api_key,
+            settings_path,
             semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_TURNS)),
             session_store,
         }
@@ -102,6 +108,7 @@ impl ClaudeCodeProvider {
         model: impl Into<String>,
         workspace_dir: PathBuf,
         project_dir: PathBuf,
+        settings_path: Option<PathBuf>,
     ) -> anyhow::Result<Self> {
         match version_check::probe() {
             types::CliStatus::Ok { path, .. } => {
@@ -112,6 +119,7 @@ impl ClaudeCodeProvider {
                     workspace_dir,
                     project_dir,
                     key,
+                    settings_path,
                 ))
             }
             types::CliStatus::NotInstalled => {
@@ -182,6 +190,7 @@ impl ClaudeCodeProvider {
             session_store: self.session_store.clone(),
             stream: request.stream,
             anthropic_api_key: self.anthropic_api_key.clone(),
+            settings_path: self.settings_path.clone(),
         };
         driver::run_turn(turn).await
     }

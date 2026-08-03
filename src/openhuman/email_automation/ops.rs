@@ -236,6 +236,10 @@ pub fn create_task_from_rule(
     description: Option<&str>,
     assignee: &str,
     bucket_id: Option<&str>,
+    settings_profile: Option<&str>,
+    model: Option<&str>,
+    fallback_direction: Option<&str>,
+    fallback_end: Option<&str>,
 ) -> Result<Task, String> {
     let input = CreateTaskInput {
         title: title.to_string(),
@@ -244,6 +248,10 @@ pub fn create_task_from_rule(
         priority: None,
         due_date: None,
         parent_task_id: None,
+        settings_profile: settings_profile.map(str::to_string),
+        model: model.map(str::to_string),
+        fallback_direction: fallback_direction.map(str::to_string),
+        fallback_end: fallback_end.map(str::to_string),
     };
     let outcome = projects_create_task(config, input, "email_automation")?;
     let task = outcome.value;
@@ -343,6 +351,10 @@ pub fn process_email(config: &Config, ctx: &EmailContext) -> Option<RuleHit> {
                 description.as_deref(),
                 &rule.assignee,
                 rule.bucket_id.as_deref(),
+                rule.settings_profile.as_deref(),
+                rule.model.as_deref(),
+                rule.fallback_direction.as_deref(),
+                rule.fallback_end.as_deref(),
             ) {
                 Ok(task) => {
                     if !ctx.source_id.is_empty() {
@@ -384,7 +396,17 @@ pub fn process_email(config: &Config, ctx: &EmailContext) -> Option<RuleHit> {
                     title,
                     ctx_clone.subject
                 );
-                let _ = create_task_from_rule(&config_clone, &title, desc.as_deref(), "ai", None);
+                let _ = create_task_from_rule(
+                    &config_clone,
+                    &title,
+                    desc.as_deref(),
+                    "ai",
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                );
             }
         });
     }
@@ -595,8 +617,71 @@ pub async fn move_email_to_ai_processed(config: &Config, source_id: &str) {
     }
 }
 
+/// Format a Graph `message` JSON (with subject/body/from/receivedDateTime)
+/// into the prefixed body string parse_script expects. Returns None when the
+/// message has no body content.
+fn format_graph_message(data: &serde_json::Value) -> Option<String> {
+    let body_content = data
+        .get("body")
+        .and_then(|b| b.get("content"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    if body_content.is_empty() {
+        return None;
+    }
+    let content_type = data
+        .get("body")
+        .and_then(|b| b.get("contentType"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("text");
+    log::info!(
+        "[email_automation] fetch_full_email_body: content_type={} body_len={} contains_href_launchpad={}",
+        content_type,
+        body_content.len(),
+        body_content.contains("launchpad")
+    );
+    let subject = data.get("subject").and_then(|v| v.as_str()).unwrap_or("");
+    let from = data
+        .get("from")
+        .and_then(|f| f.get("emailAddress"))
+        .map(|e| {
+            let name = e.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            let addr = e.get("address").and_then(|v| v.as_str()).unwrap_or("");
+            if name.is_empty() {
+                addr.to_string()
+            } else {
+                format!("{name} <{addr}>")
+            }
+        })
+        .unwrap_or_default();
+    let date = data
+        .get("receivedDateTime")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let prefix = format!("[Subject: {subject}] [From: {from}] [Date: {date}]\n");
+    Some(format!("{prefix}{body_content}"))
+}
+
+/// Extract the `[Subject: …]` value from the ingested chunk fallback content,
+/// used to re-resolve a stale message-id by searching Outlook.
+fn extract_subject_from_content(content: &str) -> Option<String> {
+    let start = content.find("[Subject:")? + "[Subject:".len();
+    let rest = &content[start..];
+    // Subject runs to the first "] [" delimiter (before [From:/[Date:) or "]".
+    let end = rest.find("] [").or_else(|| rest.find(']'))?;
+    let subject = rest[..end].trim();
+    if subject.is_empty() {
+        None
+    } else {
+        Some(subject.to_string())
+    }
+}
+
 async fn fetch_full_email_body(config: &Config, source_id: &str, content_fallback: &str) -> String {
     use crate::openhuman::memory_sources::readers::m365::graph_get;
+
+    let token = crate::openhuman::memory_sources::readers::m365::read_graph_token_public(config)
+        .unwrap_or_default();
 
     // source_id format: mem_src:{src_id}:{message_id}
     // message_id can contain ':' so we split on the first two ':' only
@@ -607,7 +692,6 @@ async fn fetch_full_email_body(config: &Config, source_id: &str, content_fallbac
             let decoded = urlencoding::decode(raw)
                 .map(|s| s.into_owned())
                 .unwrap_or_else(|_| raw.to_string());
-            // Accept any non-empty message id — let Graph API reject invalid ones
             if !decoded.is_empty() {
                 Some(decoded)
             } else {
@@ -618,65 +702,69 @@ async fn fetch_full_email_body(config: &Config, source_id: &str, content_fallbac
         }
     };
 
-    if let Some(msg_id) = msg_id {
-        let token =
-            crate::openhuman::memory_sources::readers::m365::read_graph_token_public(config)
-                .unwrap_or_default();
-        if !token.is_empty() {
+    if !token.is_empty() {
+        // 1) Try the stored message-id directly.
+        if let Some(msg_id) = msg_id {
             let url = format!(
                 "https://graph.microsoft.com/v1.0/me/messages/{}?$select=subject,body,from,receivedDateTime,toRecipients",
                 urlencoding::encode(&msg_id)
             );
-            if let Ok(data) = graph_get(&token, &url).await {
-                let body_content = data
-                    .get("body")
-                    .and_then(|b| b.get("content"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                let content_type = data
-                    .get("body")
-                    .and_then(|b| b.get("contentType"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("text");
-
-                // Keep HTML as-is so parse_script can use href/URL patterns.
-                // Plain-text conversion is done by parse_script itself when needed.
-                let plain = body_content.to_string();
-                log::info!("[email_automation] fetch_full_email_body: content_type={} body_len={} contains_href_launchpad={}",
-                    content_type, plain.len(), plain.contains("launchpad"));
-
-                if !plain.is_empty() {
-                    // Reconstruct the prefix format
-                    let subject = data.get("subject").and_then(|v| v.as_str()).unwrap_or("");
-                    let from = data
-                        .get("from")
-                        .and_then(|f| f.get("emailAddress"))
-                        .map(|e| {
-                            let name = e.get("name").and_then(|v| v.as_str()).unwrap_or("");
-                            let addr = e.get("address").and_then(|v| v.as_str()).unwrap_or("");
-                            if name.is_empty() {
-                                addr.to_string()
-                            } else {
-                                format!("{name} <{addr}>")
-                            }
-                        })
-                        .unwrap_or_default();
-                    let date = data
-                        .get("receivedDateTime")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("");
-                    let prefix = format!("[Subject: {subject}] [From: {from}] [Date: {date}]\n");
-                    log::debug!(
-                        "[email_automation] fetch_full_email_body: got {} chars via Graph API",
-                        plain.len()
+            match graph_get(&token, &url).await {
+                Ok(data) => {
+                    if let Some(body) = format_graph_message(&data) {
+                        return body;
+                    }
+                }
+                Err(e) => {
+                    // Stale id (moved/re-synced email → 404) is common; fall
+                    // through to a subject search rather than the URL-less chunk.
+                    log::info!(
+                        "[email_automation] fetch_full_email_body: id fetch failed ({e}); trying subject re-resolve"
                     );
-                    return format!("{prefix}{plain}");
+                }
+            }
+        }
+
+        // 2) Re-resolve by subject search (handles stale/rotated message ids).
+        //    Graph rejects `$search` combined with `$select` on messages (400),
+        //    and returns the full message resource (incl. `body`) by default —
+        //    so we omit `$select` here.
+        if let Some(subject) = extract_subject_from_content(content_fallback) {
+            // Graph $search requires the value quoted; strip embedded quotes.
+            let q = subject.replace('"', " ");
+            let url = format!(
+                "https://graph.microsoft.com/v1.0/me/messages?$search=%22{}%22&$top=1",
+                urlencoding::encode(&q)
+            );
+            match graph_get(&token, &url).await {
+                Ok(data) => {
+                    if let Some(first) = data
+                        .get("value")
+                        .and_then(|v| v.as_array())
+                        .and_then(|a| a.first())
+                    {
+                        if let Some(body) = format_graph_message(first) {
+                            log::info!(
+                                "[email_automation] fetch_full_email_body: recovered via subject search ({} chars body)",
+                                body.len()
+                            );
+                            return body;
+                        }
+                    }
+                    log::info!(
+                        "[email_automation] fetch_full_email_body: subject search returned no usable message"
+                    );
+                }
+                Err(e) => {
+                    log::warn!(
+                        "[email_automation] fetch_full_email_body: subject search failed: {e}"
+                    );
                 }
             }
         }
     }
 
-    // Fallback: concatenate all chunks
+    // Fallback: concatenate all chunks (stripped/summarized — may lack URLs).
     use crate::openhuman::memory_store::chunks::store::with_connection;
     use anyhow::Context as _;
     with_connection(config, |conn| {
@@ -1202,6 +1290,10 @@ pub async fn refine_rule_rpc(
         batch_mode: false,
         batch_window_secs: super::types::default_batch_window_secs(),
         batch_parse_mode: super::types::BatchParseMode::FirstOnly,
+        settings_profile: None,
+        model: None,
+        fallback_direction: None,
+        fallback_end: None,
     };
 
     log::info!("[email_automation] refined rule: {:?}", result.name);
@@ -1351,6 +1443,10 @@ pub async fn generate_rule_from_emails_rpc(
         batch_mode: false,
         batch_window_secs: super::types::default_batch_window_secs(),
         batch_parse_mode: super::types::BatchParseMode::FirstOnly,
+        settings_profile: None,
+        model: None,
+        fallback_direction: None,
+        fallback_end: None,
     };
 
     log::info!(
@@ -1497,6 +1593,10 @@ pub fn drain_batch_queue(config: &Config) {
             description.as_deref(),
             &rule.assignee,
             rule.bucket_id.as_deref(),
+            rule.settings_profile.as_deref(),
+            rule.model.as_deref(),
+            rule.fallback_direction.as_deref(),
+            rule.fallback_end.as_deref(),
         ) {
             Ok(task) => {
                 // Mark all source_ids as processed

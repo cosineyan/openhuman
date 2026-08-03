@@ -22,6 +22,10 @@ export interface EmailAutomationRule {
   batch_mode: boolean;
   batch_window_secs: number;
   batch_parse_mode: BatchParseMode;
+  settings_profile?: string | null;
+  model?: string | null;
+  fallback_direction?: string | null;
+  fallback_end?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -41,6 +45,10 @@ export interface CreateRuleInput {
   batch_mode?: boolean;
   batch_window_secs?: number;
   batch_parse_mode?: BatchParseMode;
+  settings_profile?: string | null;
+  model?: string | null;
+  fallback_direction?: string | null;
+  fallback_end?: string | null;
 }
 
 export interface RulePatch {
@@ -58,6 +66,10 @@ export interface RulePatch {
   batch_mode?: boolean;
   batch_window_secs?: number;
   batch_parse_mode?: BatchParseMode;
+  settings_profile?: string | null;
+  model?: string | null;
+  fallback_direction?: string | null;
+  fallback_end?: string | null;
 }
 
 export interface RuleHit {

@@ -31,6 +31,7 @@ pub mod audio_toolkit;
 pub mod autocomplete;
 pub mod billing;
 pub mod channels;
+pub mod claude_profiles;
 pub mod codegraph;
 pub mod composio;
 pub mod config;

@@ -17,6 +17,7 @@ import ApprovalHistoryPanel from '../components/settings/panels/ApprovalHistoryP
 import AutocompleteDebugPanel from '../components/settings/panels/AutocompleteDebugPanel';
 import AutocompletePanel from '../components/settings/panels/AutocompletePanel';
 import BillingPanel from '../components/settings/panels/BillingPanel';
+import ClaudeProfilesPanel from '../components/settings/panels/ClaudeProfilesPanel';
 import CompanionPanel from '../components/settings/panels/CompanionPanel';
 import ComposioTriagePanel from '../components/settings/panels/ComposioTriagePanel';
 import CronJobsPanel from '../components/settings/panels/CronJobsPanel';
@@ -116,6 +117,7 @@ const Settings = () => {
             path="embeddings"
             element={<Navigate to="/connections?tab=embeddings" replace />}
           />
+          <Route path="claude-profiles" element={wrapSettingsPage(<ClaudeProfilesPanel />)} />
           <Route path="usage" element={wrapSettingsPage(<UsagePanel />)} />
           <Route path="voice" element={<Navigate to="/connections?tab=voice" replace />} />
           <Route path="personality" element={wrapSettingsPage(<PersonalityPanel />)} />

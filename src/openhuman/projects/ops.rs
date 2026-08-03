@@ -16,6 +16,18 @@ pub struct CreateTaskInput {
     pub priority: Option<i64>,
     pub due_date: Option<String>,
     pub parent_task_id: Option<String>,
+    /// Claude Code settings-profile id to launch this task's AI run with.
+    #[serde(default)]
+    pub settings_profile: Option<String>,
+    /// Model tier alias or concrete model id for this task's AI run.
+    #[serde(default)]
+    pub model: Option<String>,
+    /// Fallback ladder direction ("up"/"down"); None = fallback off.
+    #[serde(default)]
+    pub fallback_direction: Option<String>,
+    /// Fallback terminus, "<profile_id>:<tier>".
+    #[serde(default)]
+    pub fallback_end: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -127,6 +139,10 @@ pub fn create_task(
         due_date,
         actor,
         input.parent_task_id.as_deref(),
+        input.settings_profile.as_deref(),
+        input.model.as_deref(),
+        input.fallback_direction.as_deref(),
+        input.fallback_end.as_deref(),
     )
     .map_err(|e| e.to_string())?;
 
@@ -352,6 +368,10 @@ pub fn create_subtask(
         None,
         actor,
         Some(parent_task_id),
+        None,
+        None,
+        None,
+        None,
     )
     .map_err(|e| e.to_string())?;
 

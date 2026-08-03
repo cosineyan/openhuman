@@ -167,6 +167,30 @@ pub fn schemas(function: &str) -> ControllerSchema {
                     comment: "Due date as RFC 3339 string (e.g. 2026-06-07T12:00:00Z).",
                     required: false,
                 },
+                FieldSchema {
+                    name: "settings_profile",
+                    ty: TypeSchema::Option(Box::new(TypeSchema::String)),
+                    comment: "Claude Code settings-profile id to launch this task's AI run with.",
+                    required: false,
+                },
+                FieldSchema {
+                    name: "model",
+                    ty: TypeSchema::Option(Box::new(TypeSchema::String)),
+                    comment: "Model tier alias (opus/sonnet/haiku/default) or concrete model id for this task's AI run.",
+                    required: false,
+                },
+                FieldSchema {
+                    name: "fallback_direction",
+                    ty: TypeSchema::Option(Box::new(TypeSchema::String)),
+                    comment: "Fallback ladder direction 'up'/'down'; omit to disable fallback.",
+                    required: false,
+                },
+                FieldSchema {
+                    name: "fallback_end",
+                    ty: TypeSchema::Option(Box::new(TypeSchema::String)),
+                    comment: "Fallback terminus encoded '<profile_id>:<tier>'.",
+                    required: false,
+                },
             ],
             outputs: vec![FieldSchema {
                 name: "task",
@@ -507,6 +531,22 @@ fn handle_create_task(params: Map<String, Value>) -> ControllerFuture {
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string()),
             parent_task_id: None,
+            settings_profile: params
+                .get("settings_profile")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            model: params
+                .get("model")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            fallback_direction: params
+                .get("fallback_direction")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            fallback_end: params
+                .get("fallback_end")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
         };
         tracing::debug!(title = %input.title, "[rpc][projects] create_task entry");
         to_json(ops::create_task(&config, input, "me")?)

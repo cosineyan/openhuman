@@ -10,6 +10,7 @@ import {
   openhumanCronRuns,
   openhumanCronUpdate,
 } from '../../utils/tauriCommands/cron';
+import { ProfileModelPicker } from '../common/ProfileModelPicker';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,10 @@ interface FormState {
   everyValue: string; // number
   everyUnit: 'minutes' | 'hours' | 'days';
   prompt: string;
+  settingsProfile?: string;
+  model?: string;
+  fallbackDirection?: string;
+  fallbackEnd?: string;
 }
 
 const EMPTY_FORM: FormState = {
@@ -77,6 +82,10 @@ function formToParams(f: FormState) {
     job_type: 'agent' as const,
     prompt: f.prompt.trim(),
     session_target: 'isolated' as const,
+    settings_profile: f.settingsProfile,
+    model: f.model,
+    fallback_direction: f.fallbackDirection,
+    fallback_end: f.fallbackEnd,
   };
 }
 
@@ -192,6 +201,10 @@ export function ScheduledTaskPanel({ onOpenTask }: { onOpenTask?: (title: string
       everyValue,
       everyUnit,
       prompt: job.prompt ?? '',
+      settingsProfile: job.settings_profile ?? undefined,
+      model: job.model ?? undefined,
+      fallbackDirection: job.fallback_direction ?? undefined,
+      fallbackEnd: job.fallback_end ?? undefined,
     });
     setEditingJobId(job.id);
     setFormOpen(true);
@@ -434,6 +447,27 @@ export function ScheduledTaskPanel({ onOpenTask }: { onOpenTask?: (title: string
                 }}
               />
             </label>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <div style={{ marginBottom: 4, fontWeight: 500, fontSize: 13 }}>
+              Claude profile & model
+            </div>
+            <ProfileModelPicker
+              value={{
+                settingsProfile: form.settingsProfile,
+                model: form.model,
+                fallbackDirection: form.fallbackDirection,
+                fallbackEnd: form.fallbackEnd,
+              }}
+              onChange={v =>
+                set({
+                  settingsProfile: v.settingsProfile,
+                  model: v.model,
+                  fallbackDirection: v.fallbackDirection,
+                  fallbackEnd: v.fallbackEnd,
+                })
+              }
+            />
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
             <button

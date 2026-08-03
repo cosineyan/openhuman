@@ -176,6 +176,9 @@ fn build_registered_controllers() -> Vec<RegisteredController> {
         .extend(crate::openhuman::channels::controllers::all_channels_registered_controllers());
     // Persistent configuration management
     controllers.extend(crate::openhuman::config::all_config_registered_controllers());
+    // Claude Code settings-profile registry
+    controllers
+        .extend(crate::openhuman::claude_profiles::all_claude_profiles_registered_controllers());
     // Local sidecar reachability + backend Socket.IO state diagnostics (#1527)
     controllers.extend(crate::openhuman::connectivity::all_connectivity_registered_controllers());
     // User credentials and session management
@@ -386,6 +389,7 @@ fn build_declared_controller_schemas() -> Vec<ControllerSchema> {
         .extend(crate::openhuman::channels::providers::web::all_web_channel_controller_schemas());
     schemas.extend(crate::openhuman::channels::controllers::all_channels_controller_schemas());
     schemas.extend(crate::openhuman::config::all_config_controller_schemas());
+    schemas.extend(crate::openhuman::claude_profiles::all_claude_profiles_controller_schemas());
     schemas.extend(crate::openhuman::connectivity::all_connectivity_controller_schemas());
     schemas.extend(crate::openhuman::credentials::all_credentials_controller_schemas());
     schemas.extend(crate::openhuman::service::all_service_controller_schemas());
@@ -503,6 +507,9 @@ pub fn namespace_description(namespace: &str) -> Option<&'static str> {
         "agent_experience" => Some("Local procedural experience capture and retrieval for agents."),
         "autocomplete" => Some("Inline autocomplete engine controls and style settings."),
         "channels" => Some("Channel definitions, connections, and lifecycle management."),
+        "claude_profiles" => Some(
+            "Register Claude Code settings.json profiles and expose their parsed model tiers (no secrets).",
+        ),
         "composio" => Some(
             "Composio OAuth integrations proxied via the backend — toolkits, connections, tools, and actions."
         ),

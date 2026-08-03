@@ -517,6 +517,7 @@ pub fn create_chat_provider_from_string(
                 model.clone(),
                 workspace,
                 config.action_dir.clone(),
+                None,
             )?;
         let p_box: Box<dyn Provider> = Box::new(provider);
         return Ok((p_box, model));

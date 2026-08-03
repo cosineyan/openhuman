@@ -19,6 +19,12 @@ use tokio::sync::mpsc;
 /// Set generously to accommodate extended thinking / agentic tasks.
 const TURN_TIMEOUT: Duration = Duration::from_secs(7200);
 
+/// Prefix stamped onto error strings for failures that happened BEFORE claude
+/// started successfully (no `system` init event, spawn failure, CLI-build
+/// failure). The projects fallback ladder keys on this to decide whether to
+/// step to the next model. See [`is_startup_failure`].
+pub const STARTUP_FAILURE_PREFIX: &str = "[startup-failure] ";
+
 use super::event_mapper::EventMapper;
 use super::input_builder::build_stdin;
 use super::session_store::{generate_uuid_v4, is_uuid_v4, SessionStore};
@@ -152,6 +158,12 @@ pub struct TurnContext<'a> {
     /// Optional explicit `ANTHROPIC_API_KEY` to set on the child. When
     /// `None`, the CLI falls back to its own `~/.claude/.credentials.json`.
     pub anthropic_api_key: Option<String>,
+    /// Optional path to a Claude Code settings.json profile, passed as
+    /// `--settings <path>`. When `Some`, the CLI applies that file's `env`
+    /// block (auth token, base URL, model aliases) itself, and OpenHuman does
+    /// NOT inject `ANTHROPIC_API_KEY` (the profile's own auth must win). When
+    /// `None`, behavior is unchanged.
+    pub settings_path: Option<PathBuf>,
 }
 
 /// Stderr messages from the CC CLI that indicate the stored session UUID is
@@ -321,6 +333,14 @@ async fn run_turn_inner(ctx: &TurnContext<'_>, force_new: bool) -> anyhow::Resul
         "--model".into(),
         ctx.model.clone(),
     ];
+    // When a settings profile is bound, pass it through so the CLI applies its
+    // own `env` block (auth token, base URL, model aliases). Placed in the base
+    // `args` so the macOS seatbelt-wrapped path picks it up too. Log only
+    // presence, never the file contents.
+    if let Some(sp) = ctx.settings_path.as_ref() {
+        args.push("--settings".into());
+        args.push(sp.display().to_string());
+    }
     // For new sessions: omit --session-id so claude persists the session to
     // ~/.claude/projects/ under its own UUID (which we capture from the system
     // init event and write to session_store). Passing --session-id in -p mode
@@ -362,11 +382,12 @@ async fn run_turn_inner(ctx: &TurnContext<'_>, force_new: bool) -> anyhow::Resul
     }
 
     log::debug!(
-        "[claude-code][driver] spawn bin={} model={} is_new={} hint_thread_id={}",
+        "[claude-code][driver] spawn bin={} model={} is_new={} hint_thread_id={} settings={}",
         ctx.bin_path.display(),
         ctx.model,
         is_new,
-        ctx.thread_id
+        ctx.thread_id,
+        ctx.settings_path.is_some(),
     );
 
     // Best-effort: ensure the project dir exists so spawn (cwd) doesn't fail.
@@ -401,13 +422,20 @@ async fn run_turn_inner(ctx: &TurnContext<'_>, force_new: bool) -> anyhow::Resul
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
-    if let Some(key) = &ctx.anthropic_api_key {
-        cmd.env("ANTHROPIC_API_KEY", key);
+    // Only inject ANTHROPIC_API_KEY when NO settings profile is bound. A
+    // profile carries its own auth in its `env` block (ANTHROPIC_AUTH_TOKEN /
+    // ANTHROPIC_BASE_URL), which the CLI applies via --settings; a stray
+    // API key on the process env would override/conflict with it, breaking
+    // e.g. a Bedrock/proxy profile. Profile auth must win.
+    if ctx.settings_path.is_none() {
+        if let Some(key) = &ctx.anthropic_api_key {
+            cmd.env("ANTHROPIC_API_KEY", key);
+        }
     }
 
     let mut child = cmd
         .spawn()
-        .map_err(|e| anyhow::anyhow!("failed to spawn `claude`: {e}"))?;
+        .map_err(|e| anyhow::anyhow!("{}failed to spawn `claude`: {e}", STARTUP_FAILURE_PREFIX))?;
     if let Some(mut stdin) = child.stdin.take() {
         stdin
             .write_all(&stdin_bytes)
@@ -458,6 +486,13 @@ async fn run_turn_inner(ctx: &TurnContext<'_>, force_new: bool) -> anyhow::Resul
 
     // Wrap the streaming + wait in a timeout so a stuck CLI doesn't
     // block this task forever (PLAN §8).
+    //
+    // `init_seen` tracks whether claude emitted its `system` init event before
+    // finishing. claude aborts on auth / invalid-model / unreachable-backend
+    // errors BEFORE emitting `system`, so "no init event + error" is a reliable
+    // "failed to start" signal that the fallback ladder uses to decide whether
+    // to step to the next model (vs. a genuine mid-run failure → Blocked).
+    let mut init_seen = false;
     let timed = tokio::time::timeout(TURN_TIMEOUT, async {
         loop {
             let n = stdout
@@ -468,6 +503,10 @@ async fn run_turn_inner(ctx: &TurnContext<'_>, force_new: bool) -> anyhow::Resul
                 break;
             }
             for ev in parser.feed_bytes(&buf[..n]) {
+                // A `system` init event means claude started successfully.
+                if let ClaudeCodeEvent::System { .. } = ev {
+                    init_seen = true;
+                }
                 // Capture the real session UUID from the init event.
                 if is_new && actual_session_id.is_none() {
                     if let ClaudeCodeEvent::System { session_id: Some(ref sid), .. } = ev {
@@ -528,15 +567,25 @@ async fn run_turn_inner(ctx: &TurnContext<'_>, force_new: bool) -> anyhow::Resul
 
     let stderr_text = stderr_task.await.unwrap_or_default();
 
+    // Prefix errors that occurred before claude started successfully (no
+    // `system` init event seen) so the fallback ladder can distinguish a
+    // "failed to start" (step to next model) from a genuine mid-run failure.
+    let startup_prefix = if init_seen {
+        ""
+    } else {
+        STARTUP_FAILURE_PREFIX
+    };
+
     if !status.success() {
         anyhow::bail!(
-            "[claude-code][driver] exit {:?} stderr={}",
+            "{}[claude-code][driver] exit {:?} stderr={}",
+            startup_prefix,
             status.code(),
             stderr_text.trim()
         );
     }
     if let Some(err) = mapper.error.clone() {
-        anyhow::bail!("[claude-code][driver] {}", err);
+        anyhow::bail!("{}[claude-code][driver] {}", startup_prefix, err);
     }
 
     Ok(mapper.into_response())

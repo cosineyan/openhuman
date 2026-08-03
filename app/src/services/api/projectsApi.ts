@@ -56,6 +56,14 @@ export interface Task {
   updated: string;
   archived: boolean;
   archived_at: string | null;
+  /** Claude Code settings-profile id for this task's AI run. */
+  settings_profile?: string | null;
+  /** Model tier alias or concrete model id for this task's AI run. */
+  model?: string | null;
+  /** Fallback ladder direction ("up"/"down"); null = off. */
+  fallback_direction?: string | null;
+  /** Fallback terminus "<profile_id>:<tier>". */
+  fallback_end?: string | null;
 }
 
 export interface BucketWithTasks {
@@ -128,6 +136,10 @@ export async function createTask(params: {
   bucket_id?: string;
   priority?: number;
   due_date?: string;
+  settings_profile?: string;
+  model?: string;
+  fallback_direction?: string;
+  fallback_end?: string;
 }): Promise<Task> {
   log('createTask title=%s', params.title);
   const res = await callCoreRpc<RpcEnvelope<Task>>({

@@ -116,6 +116,24 @@ pub fn schemas(function: &str) -> ControllerSchema {
                     required: false,
                 },
                 FieldSchema {
+                    name: "settings_profile",
+                    ty: TypeSchema::Option(Box::new(TypeSchema::String)),
+                    comment: "Claude Code settings-profile id for the task created by this job's delivery (mode=task).",
+                    required: false,
+                },
+                FieldSchema {
+                    name: "fallback_direction",
+                    ty: TypeSchema::Option(Box::new(TypeSchema::String)),
+                    comment: "Fallback ladder direction 'up'/'down' for the created task; omit to disable.",
+                    required: false,
+                },
+                FieldSchema {
+                    name: "fallback_end",
+                    ty: TypeSchema::Option(Box::new(TypeSchema::String)),
+                    comment: "Fallback terminus '<profile_id>:<tier>' for the created task.",
+                    required: false,
+                },
+                FieldSchema {
                     name: "delivery",
                     ty: TypeSchema::Option(Box::new(TypeSchema::Ref("DeliveryConfig"))),
                     comment: "Delivery mode (proactive, announce, etc.).",
@@ -311,6 +329,18 @@ fn handle_add(params: Map<String, Value>) -> ControllerFuture {
             .get("agent_id")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
+        let settings_profile = params
+            .get("settings_profile")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let fallback_direction = params
+            .get("fallback_direction")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let fallback_end = params
+            .get("fallback_end")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
         let delivery: Option<crate::openhuman::cron::DeliveryConfig> = match params.get("delivery")
         {
             None | Some(Value::Null) => None,
@@ -356,6 +386,9 @@ fn handle_add(params: Map<String, Value>) -> ControllerFuture {
                     delivery,
                     delete_after_run,
                     agent_id,
+                    settings_profile,
+                    fallback_direction,
+                    fallback_end,
                 )
                 .map_err(|e| e.to_string())?
             }

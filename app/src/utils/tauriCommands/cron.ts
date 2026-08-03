@@ -32,6 +32,9 @@ export interface CoreCronJob {
   job_type: 'shell' | 'agent' | string;
   session_target: 'isolated' | 'main' | string;
   model?: string | null;
+  settings_profile?: string | null;
+  fallback_direction?: string | null;
+  fallback_end?: string | null;
   enabled: boolean;
   delivery: { mode: string; channel?: string | null; to?: string | null; best_effort: boolean };
   delete_after_run: boolean;
@@ -61,6 +64,9 @@ export interface CronAddParams {
   session_target?: 'isolated' | 'main';
   model?: string;
   agent_id?: string;
+  settings_profile?: string;
+  fallback_direction?: string;
+  fallback_end?: string;
   delivery?: { mode: string; channel?: string | null; to?: string | null; best_effort?: boolean };
   delete_after_run?: boolean;
 }

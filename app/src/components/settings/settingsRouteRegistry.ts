@@ -322,6 +322,14 @@ export const SETTINGS_ROUTE_REGISTRY: SettingsRegistryEntry[] = [
     navParent: 'llm',
   },
   {
+    id: 'claude-profiles',
+    titleKey: 'claudeProfiles.title',
+    descriptionKey: 'claudeProfiles.menuDesc',
+    section: 'ai',
+    searchKeywords: ['claude', 'settings', 'profile', 'model', 'settings.json', 'hyperspace'],
+    navGroup: 'modelsInference',
+  },
+  {
     id: 'voice',
     titleKey: 'pages.settings.ai.voice',
     descriptionKey: 'pages.settings.ai.voiceDesc',

@@ -458,7 +458,7 @@ async fn run_claude_code_direct(
     };
 
     let workspace = workspace_dir_from_config(config);
-    let provider = ClaudeCodeProvider::from_env(model, workspace, config.action_dir.clone())
+    let provider = ClaudeCodeProvider::from_env(model, workspace, config.action_dir.clone(), None)
         .map_err(|e| e.to_string())?;
 
     // Bridge ProviderDelta → AgentProgress for the existing progress_bridge.

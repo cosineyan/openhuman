@@ -182,9 +182,12 @@ async fn run_ai_task(
     // been run before and has a valid session UUID in ai_plan, pass it as
     // hint_thread_id so the driver uses --resume instead of starting fresh.
     // This lets claude see the full prior conversation history.
-    let existing_session_id: Option<String> = store::get_task(&config, &task_id)
-        .ok()
-        .and_then(|t| t.ai_plan)
+    // Load the task once to read: prior claude session (for --resume) and the
+    // per-task Claude settings profile + model override.
+    let task_record = store::get_task(&config, &task_id).ok();
+    let existing_session_id: Option<String> = task_record
+        .as_ref()
+        .and_then(|t| t.ai_plan.clone())
         .and_then(|plan| serde_json::from_str::<serde_json::Value>(&plan).ok())
         .and_then(|v| {
             v.get("claude_session_id")
@@ -195,6 +198,48 @@ async fn run_ai_task(
             crate::openhuman::inference::provider::claude_code::session_store::is_uuid_v4(id)
         });
 
+    // Per-task profile + model (both None → legacy behavior below).
+    let task_settings_profile = task_record
+        .as_ref()
+        .and_then(|t| t.settings_profile.clone());
+    let task_model = task_record.as_ref().and_then(|t| t.model.clone());
+    let task_fallback_direction = task_record
+        .as_ref()
+        .and_then(|t| t.fallback_direction.clone());
+    let task_fallback_end = task_record.as_ref().and_then(|t| t.fallback_end.clone());
+
+    // Resolve the profile id → settings.json path, and the model alias →
+    // concrete model, using the claude_profiles registry. A missing/unreadable
+    // profile falls back to legacy (no --settings, config.chat_provider model).
+    let (settings_path, model_override) = resolve_profile_and_model(
+        &config,
+        &task_id,
+        task_settings_profile.as_deref(),
+        task_model.as_deref(),
+    );
+
+    // Build the ordered attempt chain. Fallback is ON only when a direction is
+    // set AND a start profile/model exists AND the start step is on the ladder.
+    // Otherwise a single attempt (legacy / no-fallback).
+    let attempts: Vec<(Option<std::path::PathBuf>, Option<String>)> = build_attempt_chain(
+        &config,
+        task_settings_profile.as_deref(),
+        task_model.as_deref(),
+        task_fallback_direction.as_deref(),
+        task_fallback_end.as_deref(),
+    )
+    // Task has no profile of its own → apply the global default fallback
+    // policy (if enabled/resolvable). Guarded on `is_none()` so a task that
+    // DID pick a profile (but no fallback) keeps its single-run behavior.
+    .or_else(|| {
+        if task_settings_profile.is_none() {
+            build_global_default_chain(&config)
+        } else {
+            None
+        }
+    })
+    .unwrap_or_else(|| vec![(settings_path.clone(), model_override.clone())]);
+
     // Use existing session if available (resume), otherwise generate a new hint UUID.
     let cc_session_uuid = existing_session_id.unwrap_or_else(
         crate::openhuman::inference::provider::claude_code::session_store::generate_uuid_v4,
@@ -204,13 +249,73 @@ async fn run_ai_task(
     // cd there before running --resume, so store action_dir here.
     let cc_workspace_dir = config.action_dir.display().to_string();
 
-    // ── 3. Run AI ─────────────────────────────────────────────────────────
-    let (outcome, fwd, actual_session_id) = tokio::select! {
-        result = run_agent(&config, &task_id, &prompt, &cc_session_uuid) => result,
-        _ = cancel_token.cancelled() => {
-            (Err("Cancelled by user.".to_string()), tokio::spawn(async {}), None)
+    // ── 3. Run AI (with fallback ladder) ──────────────────────────────────
+    // Walk the attempt chain: on a STARTUP failure (claude never started —
+    // auth/model/backend/spawn error) step to the next candidate; on any other
+    // error (ran-but-failed, timeout) or success, stop. Single-element chains
+    // behave exactly as before.
+    use crate::openhuman::inference::provider::claude_code::fallback::is_startup_failure;
+    let total_attempts = attempts.len();
+    let mut outcome: Result<String, String> = Err("no attempt ran".to_string());
+    let mut fwd: tokio::task::JoinHandle<()> = tokio::spawn(async {});
+    let mut actual_session_id: Option<String> = None;
+
+    for (idx, (attempt_path, attempt_model)) in attempts.into_iter().enumerate() {
+        if idx > 0 {
+            let note = format!(
+                "Model startup failed — falling back to attempt {}/{} (model {}).",
+                idx + 1,
+                total_attempts,
+                attempt_model.as_deref().unwrap_or("default")
+            );
+            let _ = store::add_comment(&config, &task_id, "ai", &note);
+            emit_task_log(&task_id, &note, "log");
         }
-    };
+
+        let (o, f, sid) = tokio::select! {
+            result = run_agent(&config, &task_id, &prompt, &cc_session_uuid, attempt_path.clone(), attempt_model.clone()) => result,
+            _ = cancel_token.cancelled() => {
+                (Err("Cancelled by user.".to_string()), tokio::spawn(async {}), None)
+            }
+        };
+
+        // Cancellation: stop immediately.
+        if matches!(&o, Err(msg) if msg == "Cancelled by user.") {
+            outcome = o;
+            fwd = f;
+            actual_session_id = sid;
+            break;
+        }
+
+        match &o {
+            Ok(_) => {
+                outcome = o;
+                fwd = f;
+                actual_session_id = sid;
+                break;
+            }
+            Err(e) => {
+                let can_fallback = is_startup_failure(e) && idx + 1 < total_attempts;
+                if can_fallback {
+                    log::warn!(
+                        "{LOG} task={task_id} attempt {}/{} startup failure: {e}; stepping to next model",
+                        idx + 1,
+                        total_attempts
+                    );
+                    // Drain this attempt's forwarder before the next try.
+                    f.abort();
+                    let _ = f.await;
+                    continue;
+                }
+                // Non-startup error (ran-but-failed / timeout) or last attempt → stop.
+                outcome = o;
+                fwd = f;
+                actual_session_id = sid;
+                break;
+            }
+        }
+    }
+
     // Use the real claude session UUID if captured; otherwise fall back to the hint key.
     let claude_resume_uuid = actual_session_id.unwrap_or_else(|| cc_session_uuid.clone());
     let was_cancelled = matches!(&outcome, Err(msg) if msg == "Cancelled by user.");
@@ -518,11 +623,162 @@ fn build_prompt(title: &str, description: Option<&str>) -> String {
     prompt
 }
 
+/// Build the ordered attempt chain for a task's fallback ladder. Returns
+/// `Some(chain)` only when fallback is genuinely active: a direction is set, a
+/// start (profile,tier) exists, and the start step resolves on the global
+/// ladder. Each element is `(Some(settings_path), Some(model))`. Returns `None`
+/// when fallback is off / unresolvable → caller does a single legacy attempt.
+fn build_attempt_chain(
+    config: &Config,
+    start_profile: Option<&str>,
+    start_tier: Option<&str>,
+    direction: Option<&str>,
+    end: Option<&str>,
+) -> Option<Vec<(Option<std::path::PathBuf>, Option<String>)>> {
+    use crate::openhuman::claude_profiles;
+
+    let direction = direction?.trim();
+    if direction.is_empty() {
+        return None;
+    }
+    let start_profile = start_profile?;
+    let start_tier = start_tier.unwrap_or("default");
+
+    // End step: "<profile_id>:<tier>" → (profile, tier). Default to start (walk
+    // to ladder boundary in resolve_fallback_chain when end == start won't
+    // limit; we pass through the parsed end or fall back to the start step).
+    let (end_profile, end_tier) = match end.and_then(|e| e.split_once(':')) {
+        Some((p, t)) => (p.to_string(), t.to_string()),
+        None => (start_profile.to_string(), start_tier.to_string()),
+    };
+
+    let chain = claude_profiles::ops::resolve_fallback_chain(
+        config,
+        start_profile,
+        start_tier,
+        direction,
+        &end_profile,
+        &end_tier,
+    );
+    if chain.is_empty() {
+        return None;
+    }
+    Some(
+        chain
+            .into_iter()
+            .map(|c| (Some(c.settings_path), Some(c.model)))
+            .collect(),
+    )
+}
+
+/// Build the attempt chain from the GLOBAL default fallback policy, for tasks
+/// that have no profile of their own. Returns `None` when the policy is
+/// disabled, has no start step, or resolves to an empty chain (→ caller falls
+/// back to the legacy single run).
+fn build_global_default_chain(
+    config: &Config,
+) -> Option<Vec<(Option<std::path::PathBuf>, Option<String>)>> {
+    use crate::openhuman::claude_profiles;
+
+    let gf = claude_profiles::ops::get_global_fallback(config);
+    if !gf.enabled {
+        return None;
+    }
+    let start_profile = gf.start_profile.as_deref()?;
+    let start_tier = gf.start_tier.as_deref().unwrap_or("default");
+    let direction = gf.direction.as_deref().unwrap_or("down");
+
+    let (end_profile, end_tier) = match gf.end.as_deref().and_then(|e| e.split_once(':')) {
+        Some((p, t)) => (p.to_string(), t.to_string()),
+        None => (start_profile.to_string(), start_tier.to_string()),
+    };
+
+    let chain = claude_profiles::ops::resolve_fallback_chain(
+        config,
+        start_profile,
+        start_tier,
+        direction,
+        &end_profile,
+        &end_tier,
+    );
+    if chain.is_empty() {
+        return None;
+    }
+    log::debug!(
+        "{LOG} applying global default fallback: start={start_profile}:{start_tier} dir={direction} steps={}",
+        chain.len()
+    );
+    Some(
+        chain
+            .into_iter()
+            .map(|c| (Some(c.settings_path), Some(c.model)))
+            .collect(),
+    )
+}
+
+/// `(settings_path, model_override)` pair for the claude launch.
+///
+/// - No profile id → `(None, model_override)` where model_override passes the
+///   task's model through verbatim (or None → legacy chat_provider model).
+/// - Profile id present but unknown/unreadable → warn, add a task comment, and
+///   fall back to legacy (do NOT pass a `--settings` pointing at a missing file
+///   — the CLI would error).
+/// - Profile readable → `(Some(path), Some(resolved concrete model))`, where the
+///   model alias (opus/sonnet/haiku/default) is mapped via the profile's parsed
+///   tiers.
+fn resolve_profile_and_model(
+    config: &Config,
+    task_id: &str,
+    settings_profile: Option<&str>,
+    model: Option<&str>,
+) -> (Option<std::path::PathBuf>, Option<String>) {
+    use crate::openhuman::claude_profiles;
+
+    let Some(profile_id) = settings_profile.filter(|s| !s.trim().is_empty()) else {
+        // No profile bound — pass the task's model through (may be None).
+        return (None, model.map(str::to_string));
+    };
+
+    match claude_profiles::resolve_path(config, profile_id) {
+        Some(path) if path.is_file() => {
+            let models = claude_profiles::parse_profile_models(&path);
+            let resolved = model
+                .and_then(|m| claude_profiles::resolve_model(&models, m))
+                .or_else(|| models.default.clone());
+            log::debug!(
+                "{LOG} task={task_id} using profile={profile_id} path={} model={:?}",
+                path.display(),
+                resolved
+            );
+            (Some(path), resolved)
+        }
+        _ => {
+            // Unknown id or file missing/unreadable → fall back to legacy.
+            log::warn!(
+                "{LOG} task={task_id} settings profile {profile_id} unresolved/unreadable; \
+                 falling back to default model"
+            );
+            let _ = store::add_comment(
+                config,
+                task_id,
+                "ai",
+                &format!(
+                    "Claude settings profile '{profile_id}' is missing or unreadable — \
+                     running with the default model."
+                ),
+            );
+            (None, model.map(str::to_string))
+        }
+    }
+}
+
 async fn run_agent(
     config: &Config,
     task_id: &str,
     prompt: &str,
     hint_thread_id: &str,
+    settings_path: Option<std::path::PathBuf>,
+    model_override: Option<String>,
 ) -> (
     Result<String, String>,
     tokio::task::JoinHandle<()>,
@@ -534,21 +790,32 @@ async fn run_agent(
     use crate::openhuman::inference::provider::traits::ChatRequest;
     use crate::openhuman::inference::provider::{ChatMessage, Provider};
 
-    log::debug!("{LOG} task={task_id} building ClaudeCodeProvider directly");
+    log::debug!(
+        "{LOG} task={task_id} building ClaudeCodeProvider directly (profile={} model_override={:?})",
+        settings_path.is_some(),
+        model_override,
+    );
+
+    // Model: per-task override wins; else legacy chat_provider derivation.
+    let legacy_model = || {
+        config
+            .chat_provider
+            .as_deref()
+            .and_then(|p| p.strip_prefix("claude-code:"))
+            .unwrap_or("claude-sonnet-latest")
+            .to_string()
+    };
+    let model = model_override.clone().unwrap_or_else(legacy_model);
 
     // Build the provider directly — bypass agent harness so the task is
     // handled entirely by the claude CLI subprocess, not delegated through
     // openhuman's tool/subagent machinery.
     let workspace = workspace_dir_from_config(config);
     let provider = match ClaudeCodeProvider::from_env(
-        // Extract model from chat_provider string ("claude-code:<model>")
-        config
-            .chat_provider
-            .as_deref()
-            .and_then(|p| p.strip_prefix("claude-code:"))
-            .unwrap_or("claude-sonnet-latest"),
+        model.clone(),
         workspace,
         config.action_dir.clone(),
+        settings_path.clone(),
     ) {
         Ok(p) => p,
         Err(e) => {
@@ -600,13 +867,6 @@ async fn run_agent(
         hint_thread_id: Some(hint_thread_id),
     };
 
-    // Determine model from config
-    let model = config
-        .chat_provider
-        .as_deref()
-        .and_then(|p| p.strip_prefix("claude-code:"))
-        .unwrap_or("claude-sonnet-latest");
-
     // Snapshot session store keys before the run so we can detect the new UUID
     // written by the driver (via system init event capture).
     let workspace =
@@ -627,7 +887,7 @@ async fn run_agent(
     };
 
     let result = provider
-        .chat(request, model, 0.0)
+        .chat(request, &model, 0.0)
         .await
         .map(|resp| resp.text.unwrap_or_default())
         .map_err(|e| e.to_string());

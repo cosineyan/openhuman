@@ -121,6 +121,23 @@ pub struct Task {
     pub ai_plan: Option<String>,
     /// Parent task id — `None` means this is a top-level task.
     pub parent_task_id: Option<String>,
+    /// Claude Code settings-profile id (from the `claude_profiles` registry)
+    /// this task's AI run should launch with. `None` → default provider auth.
+    #[serde(default)]
+    pub settings_profile: Option<String>,
+    /// Model tier alias (`opus`/`sonnet`/`haiku`/`default`) or a concrete model
+    /// id for this task's AI run. Resolved against the profile at pickup.
+    #[serde(default)]
+    pub model: Option<String>,
+    /// Fallback ladder direction: `"up"` / `"down"` / `None` = fallback off.
+    /// When set, a failed startup steps along the global ladder from the start
+    /// step (settings_profile+model) toward `fallback_end`.
+    #[serde(default)]
+    pub fallback_direction: Option<String>,
+    /// Fallback terminus, encoded `"<profile_id>:<tier>"`. `None` = walk to the
+    /// ladder boundary in `fallback_direction`.
+    #[serde(default)]
+    pub fallback_end: Option<String>,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
     /// When true this task is hidden from the active board and shown only in the Archived view.
@@ -167,6 +184,36 @@ pub struct TaskPatch {
     pub done: Option<bool>,
     pub ai_plan: Option<String>,
     pub archived: Option<bool>,
+    /// `Some(Some(id))` = set profile, `Some(None)` = clear, `None` = no change.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_double_option",
+        serialize_with = "serialize_double_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub settings_profile: Option<Option<String>>,
+    /// `Some(Some(model))` = set, `Some(None)` = clear, `None` = no change.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_double_option",
+        serialize_with = "serialize_double_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub model: Option<Option<String>>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_double_option",
+        serialize_with = "serialize_double_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub fallback_direction: Option<Option<String>>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_double_option",
+        serialize_with = "serialize_double_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub fallback_end: Option<Option<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]

@@ -215,6 +215,16 @@ pub struct CronJob {
     pub job_type: JobType,
     pub session_target: SessionTarget,
     pub model: Option<String>,
+    /// Claude Code settings-profile id to launch the generated task's AI run
+    /// with (delivery `mode="task"` path). `None` → default provider auth.
+    #[serde(default)]
+    pub settings_profile: Option<String>,
+    /// Fallback ladder direction ("up"/"down") for the generated task. None=off.
+    #[serde(default)]
+    pub fallback_direction: Option<String>,
+    /// Fallback terminus "<profile_id>:<tier>" for the generated task.
+    #[serde(default)]
+    pub fallback_end: Option<String>,
     /// Optional built-in agent definition ID (e.g. `"welcome"`,
     /// `"morning_briefing"`). When set, [`crate::openhuman::cron::scheduler`]
     /// resolves the agent definition from the registry and runs with the
@@ -254,6 +264,12 @@ pub struct CronJobPatch {
     pub session_target: Option<SessionTarget>,
     pub delete_after_run: Option<bool>,
     pub agent_id: Option<Option<String>>,
+    #[serde(default)]
+    pub settings_profile: Option<Option<String>>,
+    #[serde(default)]
+    pub fallback_direction: Option<Option<String>>,
+    #[serde(default)]
+    pub fallback_end: Option<Option<String>>,
 }
 
 #[cfg(test)]

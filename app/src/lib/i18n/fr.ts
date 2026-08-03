@@ -6022,6 +6022,53 @@ const messages: TranslationMap = {
   'topics.backfill.none': 'Aucun',
   'topics.backfill.label': 'Remplir :',
   'topics.backfill.done': 'Remplissage en file — la chronologie se met à jour bientôt.',
+  // Claude settings profiles
+  'claudeProfiles.title': 'Profils Claude',
+  'claudeProfiles.menuDesc':
+    'Enregistrez les fichiers settings.json de Claude Code et leurs modèles',
+  'claudeProfiles.desktopOnly': 'Disponible uniquement sur ordinateur.',
+  'claudeProfiles.intro':
+    'Enregistrez vos fichiers settings.json de Claude Code. Les tâches peuvent choisir un profil et un modèle ; l’exécution IA démarre avec claude --settings <chemin>. Les jetons d’authentification ne sont jamais lus ni affichés.',
+  'claudeProfiles.registered': 'Profils enregistrés',
+  'claudeProfiles.loading': 'Chargement…',
+  'claudeProfiles.empty': 'Aucun profil pour l’instant.',
+  'claudeProfiles.unreadable': 'fichier illisible',
+  'claudeProfiles.remove': 'Supprimer',
+  'claudeProfiles.addTitle': 'Ajouter un profil',
+  'claudeProfiles.addDesc':
+    'Indiquez un fichier settings.json, par ex. ~/.claude/settings.json.hyperspace',
+  'claudeProfiles.nameLabel': 'Nom',
+  'claudeProfiles.namePlaceholder': 'par ex. Hyperspace',
+  'claudeProfiles.pathLabel': 'Chemin du fichier settings',
+  'claudeProfiles.adding': 'Ajout…',
+  'claudeProfiles.add': 'Ajouter le profil',
+  'claudeProfiles.picker.none': 'Aucun profil Claude — ajoutez-en un dans les Paramètres.',
+  'claudeProfiles.picker.default': 'Par défaut (aucun profil)',
+  'claudeProfiles.picker.modelDefault': 'Modèle par défaut',
+  'claudeProfiles.parsing': 'Analyse…',
+  'claudeProfiles.previewUnreadable': 'Fichier introuvable ou illisible.',
+  'claudeProfiles.previewNoModels': 'Aucune clé de modèle trouvée dans ce fichier.',
+  'claudeProfiles.ladderTitle': 'Échelle de repli',
+  'claudeProfiles.ladderDesc':
+    'Ordre global des modèles utilisé par le repli des tâches. Une tâche se replie sur cette échelle (haut ou bas) quand son modèle ne démarre pas.',
+  'claudeProfiles.ladderEmpty': "Ajoutez un profil pour construire l'échelle.",
+  'claudeProfiles.picker.fallback': "Repli en cas d'échec de démarrage",
+  'claudeProfiles.picker.down': "Descendre l'échelle",
+  'claudeProfiles.picker.up': "Monter l'échelle",
+  'claudeProfiles.picker.endBoundary': "Fin : limite de l'échelle",
+  'claudeProfiles.picker.endPrefix': 'Terminer à',
+  'claudeProfiles.globalTitle': 'Défaut global (tâches sans profil)',
+  'claudeProfiles.globalDesc':
+    'Les tâches qui ne choisissent pas leur profil utilisent ce repli. Désactivé = elles s’exécutent avec le modèle par défaut de l’app.',
+  'claudeProfiles.globalEnable': 'Activer le repli par défaut global',
+  'claudeProfiles.globalStart': 'Modèle de départ…',
+  'claudeProfiles.globalNoLadder': 'Ajoutez d’abord un profil pour construire l’échelle.',
+  'claudeProfiles.globalSentStart': 'Démarrer à',
+  'claudeProfiles.globalSentStep': 'et aller',
+  'claudeProfiles.globalSentDown': 'vers le bas',
+  'claudeProfiles.globalSentUp': 'vers le haut',
+  'claudeProfiles.globalSentEnd': "l'échelle, jusqu'à",
+  'claudeProfiles.globalSentBoundary': "la limite de l'échelle",
 };
 
 export default messages;

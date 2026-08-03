@@ -10,6 +10,7 @@ import {
   type RulePatch,
   searchEmailChunks,
 } from '../../services/api/emailAutomationApi';
+import { ProfileModelPicker, type ProfileModelValue } from '../common/ProfileModelPicker';
 import { EmailPickerModal } from './EmailPickerModal';
 
 interface Props {
@@ -35,6 +36,12 @@ export function EmailRuleForm({ rule, onSave, onCancel }: Props) {
   const [batchParseMode, setBatchParseMode] = useState<BatchParseMode>(
     rule?.batch_parse_mode ?? 'first_only'
   );
+  const [profileValue, setProfileValue] = useState<ProfileModelValue>({
+    settingsProfile: rule?.settings_profile ?? undefined,
+    model: rule?.model ?? undefined,
+    fallbackDirection: rule?.fallback_direction ?? undefined,
+    fallbackEnd: rule?.fallback_end ?? undefined,
+  });
   const [saving, setSaving] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const generating = false;
@@ -151,6 +158,10 @@ export function EmailRuleForm({ rule, onSave, onCancel }: Props) {
         batch_mode: batchMode,
         batch_window_secs: batchWindowHours * 3600,
         batch_parse_mode: batchParseMode,
+        settings_profile: profileValue.settingsProfile ?? null,
+        model: profileValue.model ?? null,
+        fallback_direction: profileValue.fallbackDirection ?? null,
+        fallback_end: profileValue.fallbackEnd ?? null,
       });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save rule');
@@ -815,6 +826,14 @@ export function EmailRuleForm({ rule, onSave, onCancel }: Props) {
             {error}
           </div>
         )}
+
+        {/* Claude profile + model for the generated task's AI run */}
+        <div>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+            Claude profile & model
+          </label>
+          <ProfileModelPicker value={profileValue} onChange={setProfileValue} />
+        </div>
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
           <button
