@@ -7,6 +7,7 @@ import {
   encodeStep,
   getGlobalFallback,
   getLadder,
+  getThrottles,
   type GlobalFallback,
   type LadderStepResolved,
   listProfiles,
@@ -16,6 +17,8 @@ import {
   removeProfile,
   setGlobalFallback,
   setLadder,
+  setThrottles,
+  type ThrottleLimit,
 } from '../../../services/api/claudeProfilesApi';
 import { isTauri } from '../../../utils/tauriCommands';
 import PanelPage from '../../layout/PanelPage';
@@ -65,12 +68,21 @@ const ClaudeProfilesPanel = () => {
   // Global default fallback (for tasks without a profile).
   const [gf, setGf] = useState<GlobalFallback>({ enabled: false });
 
+  // Per-(profile,tier) concurrency limits.
+  const [throttles, setThrottlesState] = useState<ThrottleLimit[]>([]);
+
   const reload = async () => {
     try {
-      const [ps, l, g] = await Promise.all([listProfiles(), getLadder(), getGlobalFallback()]);
+      const [ps, l, g, th] = await Promise.all([
+        listProfiles(),
+        getLadder(),
+        getGlobalFallback(),
+        getThrottles(),
+      ]);
       setProfiles(ps);
       setLadderState(l);
       setGf(g);
+      setThrottlesState(th);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -88,6 +100,25 @@ const ClaudeProfilesPanel = () => {
       setError(e instanceof Error ? e.message : String(e));
     }
   };
+
+  // Set / clear the limit for one (profile,tier). Empty/0 clears (unlimited).
+  const commitThrottle = async (profileId: string, tier: string, limit: number | null) => {
+    const next = throttles.filter(t => !(t.profile_id === profileId && t.tier === tier));
+    if (limit && limit > 0) {
+      next.push({ profile_id: profileId, tier, limit });
+    }
+    setThrottlesState(next);
+    setError(null);
+    try {
+      await setThrottles(next);
+      setThrottlesState(await getThrottles());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const throttleFor = (profileId: string, tier: string): number | undefined =>
+    throttles.find(t => t.profile_id === profileId && t.tier === tier)?.limit;
 
   // Persist a reordered/edited ladder and refresh from the server.
   const commitLadder = async (next: LadderStepResolved[]) => {
@@ -355,6 +386,56 @@ const ClaudeProfilesPanel = () => {
                       onClick={() => removeStep(idx)}>
                       {t('claudeProfiles.remove', 'Remove')}
                     </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </SettingsSection>
+
+        {/* Per-(profile,tier) concurrency limits */}
+        <SettingsSection
+          title={t('claudeProfiles.throttleTitle', 'Concurrency limits')}
+          description={t(
+            'claudeProfiles.throttleDesc',
+            'Max AI tasks that may run at once per model. Blank = unlimited. Extra tasks wait in To Do (highest priority first) until a slot frees.'
+          )}>
+          {ladder.length === 0 ? (
+            <SettingsEmptyState
+              label={t('claudeProfiles.throttleEmpty', 'Add a profile to set limits.')}
+            />
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {ladder.map(s => (
+                <div
+                  key={`thr-${s.profile_id}:${s.tier}`}
+                  className="flex items-center justify-between gap-3 rounded-md border border-stone-200 dark:border-neutral-700 px-3 py-1.5">
+                  <div className="min-w-0 flex items-center gap-2">
+                    <span className="text-sm text-stone-800 dark:text-neutral-100">
+                      {s.profile_name}
+                    </span>
+                    <SettingsBadge variant="neutral">{s.tier}</SettingsBadge>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <input
+                      type="number"
+                      min={1}
+                      placeholder={t('claudeProfiles.throttleUnlimited', '∞')}
+                      defaultValue={throttleFor(s.profile_id, s.tier) ?? ''}
+                      onBlur={e => {
+                        const v = e.target.value.trim();
+                        const n = v === '' ? null : parseInt(v, 10);
+                        void commitThrottle(
+                          s.profile_id,
+                          s.tier,
+                          Number.isNaN(n as number) ? null : n
+                        );
+                      }}
+                      className="w-20 rounded-md border border-stone-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-2 py-1 text-sm text-stone-800 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+                    />
+                    <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                      {t('claudeProfiles.throttleParallel', 'parallel')}
+                    </span>
                   </div>
                 </div>
               ))}

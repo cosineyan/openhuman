@@ -561,8 +561,9 @@ export function NewTaskInput({ open: openProp, onOpenChange, addTaskColor, onAdd
           </div>
         )}
 
-        {/* Claude profile + model — only relevant for AI-assigned tasks */}
-        {assignee === 'ai' && (
+        {/* Claude profile + model — shown for AI or unassigned (so you can
+            configure the model BEFORE assigning to AI, which starts the run). */}
+        {assignee !== 'me' && (
           <div className="flex items-center gap-2.5 w-full px-3 py-1.5 text-xs text-stone-500 dark:text-neutral-400">
             <ProfileModelPicker
               value={profileValue}

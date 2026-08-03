@@ -1,6 +1,7 @@
 pub mod bus;
 mod ops;
 pub(crate) mod run_registry;
+pub mod scheduler;
 mod schemas;
 pub mod session_watcher;
 pub(crate) mod store;
@@ -8,6 +9,7 @@ pub mod tools;
 mod types;
 
 pub use bus::register_project_ai_runner;
+pub use scheduler::{start_throttle_poller, try_dispatch};
 pub use session_watcher::register_session_watch;
 
 pub use ops::{

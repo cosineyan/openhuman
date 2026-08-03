@@ -337,6 +337,17 @@ pub fn get_project(config: &Config, project_id: &str) -> Result<Project> {
 // Buckets
 // ---------------------------------------------------------------------------
 
+/// List all project ids. Used by the throttle scheduler to scan every board.
+pub fn list_project_ids(config: &Config) -> Result<Vec<String>> {
+    with_connection(config, |conn| {
+        let mut stmt = conn.prepare("SELECT id FROM projects")?;
+        let ids = stmt
+            .query_map([], |row| row.get::<_, String>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(ids)
+    })
+}
+
 pub fn list_buckets(config: &Config, project_id: &str) -> Result<Vec<Bucket>> {
     with_connection(config, |conn| {
         let mut stmt = conn.prepare(

@@ -5807,6 +5807,16 @@ const messages: TranslationMap = {
   'claudeProfiles.globalSentUp': 'لأعلى',
   'claudeProfiles.globalSentEnd': 'السلم، وينتهي عند',
   'claudeProfiles.globalSentBoundary': 'حدّ السلم',
+  'claudeProfiles.picker.defaultGlobal': 'افتراضي — الرجوع العام',
+  'claudeProfiles.picker.defaultGlobalHint':
+    'بلا ملف → يعمل وفق الرجوع الافتراضي العام (يُضبط في الإعدادات → Claude profiles).',
+  'claudeProfiles.picker.defaultAppHint': 'بلا ملف → يعمل بالنموذج الافتراضي للتطبيق.',
+  'claudeProfiles.throttleTitle': 'حدود التزامن',
+  'claudeProfiles.throttleDesc':
+    'الحد الأقصى لمهام الذكاء الاصطناعي التي يمكن تشغيلها معًا لكل نموذج. فارغ = بلا حد. تنتظر المهام الإضافية في To Do (الأولوية الأعلى أولًا) حتى يتوفر مكان.',
+  'claudeProfiles.throttleEmpty': 'أضف ملفًا لتعيين الحدود.',
+  'claudeProfiles.throttleUnlimited': '∞',
+  'claudeProfiles.throttleParallel': 'بالتوازي',
 };
 
 export default messages;

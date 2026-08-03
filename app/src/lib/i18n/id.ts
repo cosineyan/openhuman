@@ -5945,6 +5945,16 @@ const messages: TranslationMap = {
   'claudeProfiles.globalSentUp': 'ke atas',
   'claudeProfiles.globalSentEnd': 'tangga, berakhir di',
   'claudeProfiles.globalSentBoundary': 'batas tangga',
+  'claudeProfiles.picker.defaultGlobal': 'Default — fallback global',
+  'claudeProfiles.picker.defaultGlobalHint':
+    'Tanpa profil → berjalan dengan fallback default global (diatur di Pengaturan → Claude profiles).',
+  'claudeProfiles.picker.defaultAppHint': 'Tanpa profil → berjalan dengan model default aplikasi.',
+  'claudeProfiles.throttleTitle': 'Batas konkurensi',
+  'claudeProfiles.throttleDesc':
+    'Maks tugas AI yang berjalan sekaligus per model. Kosong = tanpa batas. Tugas ekstra menunggu di To Do (prioritas tertinggi dulu) sampai slot kosong.',
+  'claudeProfiles.throttleEmpty': 'Tambahkan profil untuk menetapkan batas.',
+  'claudeProfiles.throttleUnlimited': '∞',
+  'claudeProfiles.throttleParallel': 'paralel',
 };
 
 export default messages;

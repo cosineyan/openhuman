@@ -16,7 +16,7 @@ use crate::openhuman::inference::provider::claude_code::workspace_dir_from_confi
 use super::store;
 use super::types::{
     ClaudeProfile, CreateProfileInput, GlobalFallback, LadderStep, LadderStepResolved,
-    ProfileModels, ProfileRegistry, ProfileWithModels,
+    ProfileModels, ProfileRegistry, ProfileWithModels, ThrottleLimit,
 };
 
 /// Tiers in canonical order, used for auto-prefill and iteration.
@@ -285,7 +285,51 @@ pub fn set_global_fallback(config: &Config, gf: GlobalFallback) -> Result<(), St
     store::save(&workspace, &registry).map_err(|e| format!("failed to save global fallback: {e}"))
 }
 
-/// A concrete fallback candidate: what to actually launch claude with.
+// --- Per-(profile,tier) concurrency throttles ------------------------------
+
+/// Get all configured throttle limits.
+pub fn get_throttles(config: &Config) -> Vec<ThrottleLimit> {
+    let workspace = workspace_dir_from_config(config);
+    store::load(&workspace).throttles
+}
+
+/// Persist throttle limits (overwrites wholesale). Rejects limit==0, dedupes
+/// on (profile_id, tier) keeping the last occurrence.
+pub fn set_throttles(config: &Config, limits: Vec<ThrottleLimit>) -> Result<(), String> {
+    let mut deduped: Vec<ThrottleLimit> = Vec::new();
+    for l in limits {
+        if l.limit == 0 {
+            return Err(format!(
+                "throttle limit for {}:{} must be >= 1 (0 would freeze the bucket)",
+                l.profile_id, l.tier
+            ));
+        }
+        // last wins on duplicate (profile_id, tier)
+        if let Some(existing) = deduped
+            .iter_mut()
+            .find(|e| e.profile_id == l.profile_id && e.tier == l.tier)
+        {
+            existing.limit = l.limit;
+        } else {
+            deduped.push(l);
+        }
+    }
+    let workspace = workspace_dir_from_config(config);
+    let mut registry = store::load(&workspace);
+    registry.throttles = deduped;
+    store::save(&workspace, &registry).map_err(|e| format!("failed to save throttles: {e}"))
+}
+
+/// The concurrency limit for a (profile,tier) pair, or `None` if unlimited.
+pub fn throttle_limit_for(config: &Config, profile_id: &str, tier: &str) -> Option<u32> {
+    let workspace = workspace_dir_from_config(config);
+    store::load(&workspace)
+        .throttles
+        .into_iter()
+        .find(|t| t.profile_id == profile_id && t.tier == tier)
+        .map(|t| t.limit)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FallbackCandidate {
     pub profile_id: String,

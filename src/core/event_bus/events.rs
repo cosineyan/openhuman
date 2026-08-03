@@ -993,6 +993,13 @@ pub enum DomainEvent {
         title: String,
         description: Option<String>,
     },
+    /// A project AI task finished (done / blocked / cancelled / error), freeing
+    /// its concurrency slot. The scheduler pulls the next queued task.
+    ProjectTaskCompleted {
+        task_id: String,
+        project_id: String,
+        status: String,
+    },
 
     // ── Backend Meet Bot ──────────────────────────────────────────────
     /// Backend gmeet bot successfully joined the meeting.
@@ -1223,6 +1230,7 @@ impl DomainEvent {
             Self::TaskPlanAwaitingApproval { .. } | Self::TaskRunReclaimed { .. } => "agent",
 
             Self::ProjectTaskAssignedToAi { .. } => "projects",
+            Self::ProjectTaskCompleted { .. } => "projects",
 
             Self::Voice(_) => "voice",
 
@@ -1370,6 +1378,7 @@ impl DomainEvent {
             Self::TaskPlanAwaitingApproval { .. } => "TaskPlanAwaitingApproval",
             Self::TaskRunReclaimed { .. } => "TaskRunReclaimed",
             Self::ProjectTaskAssignedToAi { .. } => "ProjectTaskAssignedToAi",
+            Self::ProjectTaskCompleted { .. } => "ProjectTaskCompleted",
             Self::BackendMeetJoined { .. } => "BackendMeetJoined",
             Self::BackendMeetLeft { .. } => "BackendMeetLeft",
             Self::BackendMeetReply { .. } => "BackendMeetReply",

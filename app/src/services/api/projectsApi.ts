@@ -162,6 +162,10 @@ export async function updateTask(params: {
     done?: boolean;
     /** 'me' | 'ai' | null to clear */
     assignee?: string | null;
+    settings_profile?: string | null;
+    model?: string | null;
+    fallback_direction?: string | null;
+    fallback_end?: string | null;
   };
 }): Promise<Task> {
   log('updateTask task_id=%s', params.task_id);

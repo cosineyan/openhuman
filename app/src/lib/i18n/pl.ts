@@ -6016,6 +6016,16 @@ const messages: TranslationMap = {
   'claudeProfiles.globalSentUp': 'w górę',
   'claudeProfiles.globalSentEnd': 'drabinę, kończąc na',
   'claudeProfiles.globalSentBoundary': 'granicy drabiny',
+  'claudeProfiles.picker.defaultGlobal': 'Domyślnie — globalny fallback',
+  'claudeProfiles.picker.defaultGlobalHint':
+    'Brak profilu → działa z globalnym domyślnym fallbackiem (konfiguracja w Ustawienia → Claude profiles).',
+  'claudeProfiles.picker.defaultAppHint': 'Brak profilu → działa z domyślnym modelem aplikacji.',
+  'claudeProfiles.throttleTitle': 'Limity równoległości',
+  'claudeProfiles.throttleDesc':
+    'Maks. zadań AI działających jednocześnie na model. Puste = bez limitu. Nadmiarowe zadania czekają w To Do (najwyższy priorytet najpierw), aż zwolni się miejsce.',
+  'claudeProfiles.throttleEmpty': 'Dodaj profil, aby ustawić limity.',
+  'claudeProfiles.throttleUnlimited': '∞',
+  'claudeProfiles.throttleParallel': 'równolegle',
 };
 
 export default messages;

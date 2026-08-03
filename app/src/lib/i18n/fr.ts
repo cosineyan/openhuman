@@ -6069,6 +6069,17 @@ const messages: TranslationMap = {
   'claudeProfiles.globalSentUp': 'vers le haut',
   'claudeProfiles.globalSentEnd': "l'échelle, jusqu'à",
   'claudeProfiles.globalSentBoundary': "la limite de l'échelle",
+  'claudeProfiles.picker.defaultGlobal': 'Défaut — repli global',
+  'claudeProfiles.picker.defaultGlobalHint':
+    "Aucun profil → s'exécute avec le repli par défaut global (configuré dans Paramètres → Claude profiles).",
+  'claudeProfiles.picker.defaultAppHint':
+    "Aucun profil → s'exécute avec le modèle par défaut de l'app.",
+  'claudeProfiles.throttleTitle': 'Limites de concurrence',
+  'claudeProfiles.throttleDesc':
+    "Nombre max de tâches IA simultanées par modèle. Vide = illimité. Les tâches en trop attendent dans To Do (priorité la plus haute d'abord) jusqu'à libération d'un créneau.",
+  'claudeProfiles.throttleEmpty': 'Ajoutez un profil pour définir des limites.',
+  'claudeProfiles.throttleUnlimited': '∞',
+  'claudeProfiles.throttleParallel': 'en parallèle',
 };
 
 export default messages;

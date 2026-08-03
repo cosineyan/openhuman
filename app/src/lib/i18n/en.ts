@@ -6217,6 +6217,16 @@ const en: TranslationMap = {
   'claudeProfiles.globalSentUp': 'up',
   'claudeProfiles.globalSentEnd': 'the ladder, ending at',
   'claudeProfiles.globalSentBoundary': 'the ladder boundary',
+  'claudeProfiles.picker.defaultGlobal': 'Default — global fallback',
+  'claudeProfiles.picker.defaultGlobalHint':
+    'No profile → runs under the global default fallback (configured in Settings → Claude profiles).',
+  'claudeProfiles.picker.defaultAppHint': 'No profile → runs with the app default model.',
+  'claudeProfiles.throttleTitle': 'Concurrency limits',
+  'claudeProfiles.throttleDesc':
+    'Max AI tasks that may run at once per model. Blank = unlimited. Extra tasks wait in To Do (highest priority first) until a slot frees.',
+  'claudeProfiles.throttleEmpty': 'Add a profile to set limits.',
+  'claudeProfiles.throttleUnlimited': '∞',
+  'claudeProfiles.throttleParallel': 'parallel',
 };
 
 export default en;

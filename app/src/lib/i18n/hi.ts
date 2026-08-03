@@ -5926,6 +5926,16 @@ const messages: TranslationMap = {
   'claudeProfiles.globalSentUp': 'ऊपर',
   'claudeProfiles.globalSentEnd': 'सीढ़ी पर, अंत में',
   'claudeProfiles.globalSentBoundary': 'सीढ़ी की सीमा',
+  'claudeProfiles.picker.defaultGlobal': 'डिफ़ॉल्ट — वैश्विक फ़ॉलबैक',
+  'claudeProfiles.picker.defaultGlobalHint':
+    'कोई प्रोफ़ाइल नहीं → वैश्विक डिफ़ॉल्ट फ़ॉलबैक पर चलता है (सेटिंग्स → Claude profiles में कॉन्फ़िगर)।',
+  'claudeProfiles.picker.defaultAppHint': 'कोई प्रोफ़ाइल नहीं → ऐप डिफ़ॉल्ट मॉडल से चलता है।',
+  'claudeProfiles.throttleTitle': 'समवर्ती सीमाएँ',
+  'claudeProfiles.throttleDesc':
+    'प्रति मॉडल एक साथ चलने वाले अधिकतम AI कार्य। खाली = असीमित। अतिरिक्त कार्य To Do में प्रतीक्षा करते हैं (उच्चतम प्राथमिकता पहले) जब तक स्लॉट खाली न हो।',
+  'claudeProfiles.throttleEmpty': 'सीमाएँ सेट करने के लिए प्रोफ़ाइल जोड़ें।',
+  'claudeProfiles.throttleUnlimited': '∞',
+  'claudeProfiles.throttleParallel': 'समानांतर',
 };
 
 export default messages;

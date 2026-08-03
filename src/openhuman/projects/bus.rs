@@ -73,61 +73,52 @@ impl EventHandler for ProjectAiRunner {
     }
 
     async fn handle(&self, event: &DomainEvent) {
-        let DomainEvent::ProjectTaskAssignedToAi {
+        // Both assign and completion events just nudge the throttle-aware
+        // dispatcher, which authoritatively re-scans To Do tasks and dispatches
+        // whatever fits the per-(profile,tier) limits. This is the single path;
+        // there is no direct spawn here anymore.
+        match event {
+            DomainEvent::ProjectTaskAssignedToAi { .. }
+            | DomainEvent::ProjectTaskCompleted { .. } => {
+                crate::openhuman::projects::scheduler::try_dispatch(Arc::clone(&self.config)).await;
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Reserve a slot (register the task's throttle key) and spawn its AI run.
+/// Called only by the scheduler, under its dispatch lock, so the registration
+/// is the atomic "reserve before spawn" step. `throttle_key` is the START
+/// (profile,tier) bucket the run occupies for its whole lifetime.
+pub(crate) fn spawn_run(
+    config: Arc<Config>,
+    task: crate::openhuman::projects::Task,
+    buckets: Vec<crate::openhuman::projects::Bucket>,
+    throttle_key: Option<crate::openhuman::projects::run_registry::ThrottleKey>,
+) {
+    let cancel_token = tokio_util::sync::CancellationToken::new();
+    crate::openhuman::projects::run_registry::register(
+        &task.id,
+        cancel_token.clone(),
+        throttle_key,
+    );
+    let project_id = task.project_id.clone();
+    let task_id = task.id.clone();
+    let title = task.title.clone();
+    let description = task.description.clone();
+    tokio::spawn(async move {
+        run_ai_task(
+            config,
             task_id,
             project_id,
-            bucket_id,
             title,
             description,
-        } = event
-        else {
-            return;
-        };
-
-        // Only process tasks in a "To Do" bucket (not already in progress / done / blocked).
-        let buckets = match store::list_buckets(&self.config, project_id) {
-            Ok(b) => b,
-            Err(e) => {
-                log::error!("{LOG} list_buckets failed: {e}");
-                return;
-            }
-        };
-
-        let current_bucket = buckets.iter().find(|b| &b.id == bucket_id);
-        let is_todo = current_bucket
-            .map(|b| !b.is_done_bucket && b.title.to_lowercase().contains("to do"))
-            .unwrap_or(false);
-
-        if !is_todo {
-            log::debug!(
-                "{LOG} task={task_id} bucket='{}' is not a To Do bucket — skipping",
-                current_bucket.map_or("?", |b| &b.title)
-            );
-            return;
-        }
-
-        let config = Arc::clone(&self.config);
-        let task_id = task_id.clone();
-        let project_id = project_id.clone();
-        let title = title.clone();
-        let description = description.clone();
-
-        let cancel_token = tokio_util::sync::CancellationToken::new();
-        let cancel_token_task = cancel_token.clone();
-        crate::openhuman::projects::run_registry::register(&task_id, cancel_token);
-        tokio::spawn(async move {
-            run_ai_task(
-                config,
-                task_id,
-                project_id,
-                title,
-                description,
-                buckets,
-                cancel_token_task,
-            )
-            .await;
-        });
-    }
+            buckets,
+            cancel_token,
+        )
+        .await;
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -159,6 +150,11 @@ async fn run_ai_task(
         None => {
             log::warn!("{LOG} task={task_id} no 'Doing' bucket found — aborting");
             crate::openhuman::projects::run_registry::deregister(&task_id);
+            crate::core::event_bus::publish_global(DomainEvent::ProjectTaskCompleted {
+                task_id: task_id.clone(),
+                project_id: project_id.clone(),
+                status: "error".to_string(),
+            });
             return;
         }
     };
@@ -170,6 +166,11 @@ async fn run_ai_task(
     if let Err(e) = store::update_task(&config, &task_id, &patch_doing, "ai") {
         log::error!("{LOG} task={task_id} failed to move to Doing: {e}");
         crate::openhuman::projects::run_registry::deregister(&task_id);
+        crate::core::event_bus::publish_global(DomainEvent::ProjectTaskCompleted {
+            task_id: task_id.clone(),
+            project_id: project_id.clone(),
+            status: "error".to_string(),
+        });
         return;
     }
     let _ = store::add_comment(&config, &task_id, "ai", "Starting to work on this task…");
@@ -514,7 +515,12 @@ async fn run_ai_task(
 
     crate::openhuman::projects::run_registry::deregister(&task_id);
     log::debug!("{LOG} task={task_id} complete (status={status})");
-    let _ = project_id;
+    // A slot just freed — nudge the dispatcher to pull the next queued task.
+    crate::core::event_bus::publish_global(DomainEvent::ProjectTaskCompleted {
+        task_id: task_id.clone(),
+        project_id,
+        status: status.to_string(),
+    });
 }
 
 // ---------------------------------------------------------------------------

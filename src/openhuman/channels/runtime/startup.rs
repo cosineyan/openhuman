@@ -116,6 +116,7 @@ pub async fn start_channels(mut config: Config) -> Result<()> {
     crate::openhuman::agent::task_dispatcher::start_board_poller();
     // Projects AI runner: event-driven pickup of project tasks assigned to AI.
     crate::openhuman::projects::register_project_ai_runner(std::sync::Arc::new(config.clone()));
+    crate::openhuman::projects::start_throttle_poller(std::sync::Arc::new(config.clone()));
     // Email-to-task automation: creates tasks from emails matching user-defined rules.
     // (Subscriber registration and startup scan are handled in jsonrpc.rs
     //  register_domain_subscribers, which runs unconditionally.)

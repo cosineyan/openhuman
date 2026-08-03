@@ -137,6 +137,30 @@ export async function setGlobalFallback(gf: GlobalFallback): Promise<void> {
   });
 }
 
+/** Per-(profile,tier) concurrency limit. No row for a pair = unlimited. */
+export interface ThrottleLimit {
+  profile_id: string;
+  tier: string;
+  limit: number;
+}
+
+/** Get all configured per-(profile,tier) concurrency limits. */
+export async function getThrottles(): Promise<ThrottleLimit[]> {
+  if (!isTauri()) return [];
+  const res = await callCoreRpc<{ throttles: ThrottleLimit[] }>({
+    method: 'openhuman.claude_profiles_get_throttles',
+  });
+  return res.throttles ?? [];
+}
+
+/** Persist per-(profile,tier) concurrency limits (overwrites wholesale). */
+export async function setThrottles(throttles: ThrottleLimit[]): Promise<void> {
+  await callCoreRpc<{ ok: boolean }>({
+    method: 'openhuman.claude_profiles_set_throttles',
+    params: { throttles },
+  });
+}
+
 /** The tier keys a picker can offer, in display order. */
 export const PROFILE_TIERS: Array<keyof ProfileModels> = ['default', 'opus', 'sonnet', 'haiku'];
 

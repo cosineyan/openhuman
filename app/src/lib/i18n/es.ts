@@ -6050,6 +6050,17 @@ const messages: TranslationMap = {
   'claudeProfiles.globalSentUp': 'hacia arriba',
   'claudeProfiles.globalSentEnd': 'la escalera, terminando en',
   'claudeProfiles.globalSentBoundary': 'el límite de la escalera',
+  'claudeProfiles.picker.defaultGlobal': 'Predeterminado — reserva global',
+  'claudeProfiles.picker.defaultGlobalHint':
+    'Sin perfil → se ejecuta con la reserva predeterminada global (configurada en Ajustes → Claude profiles).',
+  'claudeProfiles.picker.defaultAppHint':
+    'Sin perfil → se ejecuta con el modelo predeterminado de la app.',
+  'claudeProfiles.throttleTitle': 'Límites de concurrencia',
+  'claudeProfiles.throttleDesc':
+    'Máx. de tareas de IA que pueden ejecutarse a la vez por modelo. Vacío = sin límite. Las tareas extra esperan en To Do (mayor prioridad primero) hasta que se libere un espacio.',
+  'claudeProfiles.throttleEmpty': 'Agrega un perfil para establecer límites.',
+  'claudeProfiles.throttleUnlimited': '∞',
+  'claudeProfiles.throttleParallel': 'en paralelo',
 };
 
 export default messages;

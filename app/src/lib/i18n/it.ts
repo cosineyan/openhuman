@@ -6037,6 +6037,17 @@ const messages: TranslationMap = {
   'claudeProfiles.globalSentUp': 'su',
   'claudeProfiles.globalSentEnd': 'la scala, terminando a',
   'claudeProfiles.globalSentBoundary': 'il limite della scala',
+  'claudeProfiles.picker.defaultGlobal': 'Predefinito — ripiego globale',
+  'claudeProfiles.picker.defaultGlobalHint':
+    'Nessun profilo → viene eseguito con il ripiego predefinito globale (configurato in Impostazioni → Claude profiles).',
+  'claudeProfiles.picker.defaultAppHint':
+    "Nessun profilo → viene eseguito con il modello predefinito dell'app.",
+  'claudeProfiles.throttleTitle': 'Limiti di concorrenza',
+  'claudeProfiles.throttleDesc':
+    'Numero max di attività IA eseguibili insieme per modello. Vuoto = illimitato. Le attività in eccesso attendono in To Do (priorità più alta prima) finché non si libera uno slot.',
+  'claudeProfiles.throttleEmpty': 'Aggiungi un profilo per impostare i limiti.',
+  'claudeProfiles.throttleUnlimited': '∞',
+  'claudeProfiles.throttleParallel': 'in parallelo',
 };
 
 export default messages;

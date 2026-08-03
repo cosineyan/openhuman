@@ -112,6 +112,16 @@ pub struct GlobalFallback {
     pub end: Option<String>,
 }
 
+/// Per-(profile,tier) max concurrent AI project runs. Absence of a row for a
+/// (profile,tier) pair means UNLIMITED. `limit` is always >= 1.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ThrottleLimit {
+    pub profile_id: String,
+    /// opus/sonnet/haiku/default
+    pub tier: String,
+    pub limit: u32,
+}
+
 /// The persisted registry container (`claude_profiles.json`).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProfileRegistry {
@@ -123,4 +133,8 @@ pub struct ProfileRegistry {
     /// Global default fallback for tasks without their own profile.
     #[serde(default)]
     pub global_fallback: GlobalFallback,
+    /// Per-(profile,tier) concurrency limits. Only set rows stored;
+    /// no row = unlimited.
+    #[serde(default)]
+    pub throttles: Vec<ThrottleLimit>,
 }

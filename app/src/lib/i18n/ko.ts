@@ -5870,6 +5870,16 @@ const messages: TranslationMap = {
   'claudeProfiles.globalSentUp': '위로',
   'claudeProfiles.globalSentEnd': '사다리, 종료 지점',
   'claudeProfiles.globalSentBoundary': '사다리 경계',
+  'claudeProfiles.picker.defaultGlobal': '기본값 — 전역 폴백',
+  'claudeProfiles.picker.defaultGlobalHint':
+    '프로필 없음 → 전역 기본 폴백으로 실행됩니다 (설정 → Claude profiles에서 구성).',
+  'claudeProfiles.picker.defaultAppHint': '프로필 없음 → 앱 기본 모델로 실행됩니다.',
+  'claudeProfiles.throttleTitle': '동시 실행 제한',
+  'claudeProfiles.throttleDesc':
+    '모델당 동시에 실행할 수 있는 최대 AI 작업 수. 비우면 무제한. 초과 작업은 슬롯이 빌 때까지 To Do에서 대기합니다(우선순위 높은 순).',
+  'claudeProfiles.throttleEmpty': '제한을 설정하려면 프로필을 추가하세요.',
+  'claudeProfiles.throttleUnlimited': '∞',
+  'claudeProfiles.throttleParallel': '병렬',
 };
 
 export default messages;

@@ -2189,6 +2189,7 @@ fn register_domain_subscribers(
         crate::openhuman::agent::task_dispatcher::start_board_poller();
         // Projects AI runner: event-driven pickup of project tasks assigned to AI.
         crate::openhuman::projects::register_project_ai_runner(std::sync::Arc::new(config.clone()));
+        crate::openhuman::projects::start_throttle_poller(std::sync::Arc::new(config.clone()));
         // Clean up any cron runs left in 'queued' state from a previous app crash/restart.
         if let Ok(n) = crate::openhuman::cron::cleanup_stale_queued_runs(&config) {
             if n > 0 {

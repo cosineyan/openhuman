@@ -77,6 +77,7 @@ mod tests {
                 name: "Hyperspace".into(),
                 path: "/tmp/settings.json.hyperspace".into(),
             }],
+            ..Default::default()
         };
         save(&dir, &reg).unwrap();
         let loaded = load(&dir);

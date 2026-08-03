@@ -18,6 +18,7 @@ import {
   type TaskEvent,
 } from '../../services/api/projectsApi';
 import { openWorkspacePath, revealWorkspacePath } from '../../utils/tauriCommands/workspacePaths';
+import { ProfileModelPicker, type ProfileModelValue } from '../common/ProfileModelPicker';
 import { AiRunDrawer } from './AiRunDrawer';
 import { ClaudeCodeResumeCard } from './ClaudeCodeResumeCard';
 import { useAiTaskRuns } from './useAiTaskRuns';
@@ -58,6 +59,10 @@ interface SavePatch {
   priority?: number;
   due_date?: string | null;
   assignee?: string | null;
+  settings_profile?: string | null;
+  model?: string | null;
+  fallback_direction?: string | null;
+  fallback_end?: string | null;
 }
 
 interface Props {
@@ -158,6 +163,7 @@ export function TaskDetailDrawer({
   const [priority, setPriority] = useState(0);
   const [dueDate, setDueDate] = useState('');
   const [assignee, setAssignee] = useState('');
+  const [profileValue, setProfileValue] = useState<ProfileModelValue>({});
   const [bucketId, setBucketId] = useState(createBucketId ?? '');
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -236,6 +242,12 @@ export function TaskDetailDrawer({
         setPriority(task.priority);
         setDueDate(task.due_date ? task.due_date.slice(0, 10) : '');
         setAssignee(task.assignee ?? '');
+        setProfileValue({
+          settingsProfile: task.settings_profile ?? undefined,
+          model: task.model ?? undefined,
+          fallbackDirection: task.fallback_direction ?? undefined,
+          fallbackEnd: task.fallback_end ?? undefined,
+        });
         setBucketId(task.bucket_id);
         setConfirmDelete(false);
         setCommentDraft('');
@@ -392,6 +404,10 @@ export function TaskDetailDrawer({
         priority: priority || undefined,
         due_date: dueDate ? `${dueDate}T00:00:00Z` : null,
         assignee: assignee || null,
+        settings_profile: profileValue.settingsProfile ?? null,
+        model: profileValue.model ?? null,
+        fallback_direction: profileValue.fallbackDirection ?? null,
+        fallback_end: profileValue.fallbackEnd ?? null,
       });
       onClose();
     } finally {
@@ -596,6 +612,31 @@ export function TaskDetailDrawer({
                 ))}
               </select>
             </div>
+
+            {/* Claude profile + model + fallback — shown for AI or unassigned
+                so the model can be configured BEFORE assigning to AI (which
+                immediately starts the run). Hidden only for 'me'. */}
+            {assignee !== 'me' && (
+              <div>
+                <label className="text-xs font-medium text-stone-500 dark:text-neutral-400 block mb-1">
+                  Claude profile &amp; model
+                </label>
+                <ProfileModelPicker
+                  value={profileValue}
+                  onChange={next => {
+                    setProfileValue(next);
+                    if (!isCreateMode) {
+                      void autoSave({
+                        settings_profile: next.settingsProfile ?? null,
+                        model: next.model ?? null,
+                        fallback_direction: next.fallbackDirection ?? null,
+                        fallback_end: next.fallbackEnd ?? null,
+                      });
+                    }
+                  }}
+                />
+              </div>
+            )}
 
             {/* Subtasks — only in edit mode, not for subtasks themselves */}
             {!isCreateMode && !task?.parent_task_id && (

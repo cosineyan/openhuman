@@ -172,6 +172,35 @@ pub fn schemas(function: &str) -> ControllerSchema {
                 required: true,
             }],
         },
+        "get_throttles" => ControllerSchema {
+            namespace: "claude_profiles",
+            function: "get_throttles",
+            description: "Get per-(profile,tier) concurrency limits for AI project runs. No row = unlimited.",
+            inputs: vec![],
+            outputs: vec![FieldSchema {
+                name: "throttles",
+                ty: TypeSchema::Json,
+                comment: "Array of {profile_id, tier, limit}.",
+                required: true,
+            }],
+        },
+        "set_throttles" => ControllerSchema {
+            namespace: "claude_profiles",
+            function: "set_throttles",
+            description: "Persist per-(profile,tier) concurrency limits. Overwrites wholesale; limit must be >= 1.",
+            inputs: vec![FieldSchema {
+                name: "throttles",
+                ty: TypeSchema::Json,
+                comment: "Array of {profile_id, tier, limit} objects.",
+                required: true,
+            }],
+            outputs: vec![FieldSchema {
+                name: "ok",
+                ty: TypeSchema::Bool,
+                comment: "True on success.",
+                required: true,
+            }],
+        },
         other => panic!("unknown claude_profiles function: {other}"),
     }
 }
@@ -187,6 +216,8 @@ pub fn all_controller_schemas() -> Vec<ControllerSchema> {
         schemas("set_ladder"),
         schemas("get_global_fallback"),
         schemas("set_global_fallback"),
+        schemas("get_throttles"),
+        schemas("set_throttles"),
     ]
 }
 
@@ -227,6 +258,14 @@ pub fn all_registered_controllers() -> Vec<RegisteredController> {
         RegisteredController {
             schema: schemas("set_global_fallback"),
             handler: handle_set_global_fallback,
+        },
+        RegisteredController {
+            schema: schemas("get_throttles"),
+            handler: handle_get_throttles,
+        },
+        RegisteredController {
+            schema: schemas("set_throttles"),
+            handler: handle_set_throttles,
         },
     ]
 }
@@ -342,6 +381,30 @@ fn handle_set_global_fallback(params: Map<String, Value>) -> ControllerFuture {
             .ok_or("global_fallback is required")?;
         let config = config_rpc::load_config_with_timeout().await?;
         ops::set_global_fallback(&config, gf)?;
+        Ok(serde_json::json!({ "ok": true }))
+    })
+}
+
+fn handle_get_throttles(_params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let config = config_rpc::load_config_with_timeout().await?;
+        let throttles = ops::get_throttles(&config);
+        serde_json::to_value(serde_json::json!({ "throttles": throttles }))
+            .map_err(|e| e.to_string())
+    })
+}
+
+fn handle_set_throttles(params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let throttles: Vec<super::types::ThrottleLimit> = params
+            .get("throttles")
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|e| format!("invalid throttles: {e}"))?
+            .ok_or("throttles is required")?;
+        let config = config_rpc::load_config_with_timeout().await?;
+        ops::set_throttles(&config, throttles)?;
         Ok(serde_json::json!({ "ok": true }))
     })
 }

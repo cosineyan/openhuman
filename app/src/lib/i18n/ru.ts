@@ -5988,6 +5988,17 @@ const messages: TranslationMap = {
   'claudeProfiles.globalSentUp': 'вверх',
   'claudeProfiles.globalSentEnd': 'по лестнице, заканчивая на',
   'claudeProfiles.globalSentBoundary': 'границы лестницы',
+  'claudeProfiles.picker.defaultGlobal': 'По умолчанию — глобальный откат',
+  'claudeProfiles.picker.defaultGlobalHint':
+    'Без профиля → выполняется с глобальным откатом по умолчанию (настраивается в Настройки → Claude profiles).',
+  'claudeProfiles.picker.defaultAppHint':
+    'Без профиля → выполняется с моделью приложения по умолчанию.',
+  'claudeProfiles.throttleTitle': 'Лимиты параллелизма',
+  'claudeProfiles.throttleDesc':
+    'Макс. число ИИ-задач, выполняемых одновременно на модель. Пусто = без лимита. Лишние задачи ждут в To Do (сначала с высшим приоритетом), пока не освободится слот.',
+  'claudeProfiles.throttleEmpty': 'Добавьте профиль, чтобы задать лимиты.',
+  'claudeProfiles.throttleUnlimited': '∞',
+  'claudeProfiles.throttleParallel': 'параллельно',
 };
 
 export default messages;

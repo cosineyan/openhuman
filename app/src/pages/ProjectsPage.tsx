@@ -145,6 +145,10 @@ export function ProjectsPage() {
       priority?: number;
       due_date?: string | null;
       assignee?: string | null;
+      settings_profile?: string | null;
+      model?: string | null;
+      fallback_direction?: string | null;
+      fallback_end?: string | null;
     }
   ) => {
     const task = await createTask({
@@ -152,6 +156,10 @@ export function ProjectsPage() {
       bucket_id: bucketId,
       priority: patch.priority,
       due_date: patch.due_date ?? undefined,
+      settings_profile: patch.settings_profile ?? undefined,
+      model: patch.model ?? undefined,
+      fallback_direction: patch.fallback_direction ?? undefined,
+      fallback_end: patch.fallback_end ?? undefined,
     });
     const extraPatch: Parameters<typeof updateTask>[0]['patch'] = {};
     if (patch.assignee !== undefined) extraPatch.assignee = patch.assignee;

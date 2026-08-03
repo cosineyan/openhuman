@@ -6087,6 +6087,16 @@ const messages: TranslationMap = {
   'claudeProfiles.globalSentUp': 'nach oben',
   'claudeProfiles.globalSentEnd': 'die Leiter, endend bei',
   'claudeProfiles.globalSentBoundary': 'die Leitergrenze',
+  'claudeProfiles.picker.defaultGlobal': 'Standard — globaler Fallback',
+  'claudeProfiles.picker.defaultGlobalHint':
+    'Kein Profil → läuft mit dem globalen Standard-Fallback (in Einstellungen → Claude profiles konfiguriert).',
+  'claudeProfiles.picker.defaultAppHint': 'Kein Profil → läuft mit dem Standardmodell der App.',
+  'claudeProfiles.throttleTitle': 'Parallelitätslimits',
+  'claudeProfiles.throttleDesc':
+    'Max. gleichzeitig laufende KI-Aufgaben pro Modell. Leer = unbegrenzt. Zusätzliche Aufgaben warten in To Do (höchste Priorität zuerst), bis ein Platz frei wird.',
+  'claudeProfiles.throttleEmpty': 'Füge ein Profil hinzu, um Limits zu setzen.',
+  'claudeProfiles.throttleUnlimited': '∞',
+  'claudeProfiles.throttleParallel': 'parallel',
 };
 
 export default messages;

@@ -3,22 +3,39 @@ use std::sync::Mutex;
 
 use tokio_util::sync::CancellationToken;
 
-static REGISTRY: Mutex<Option<HashMap<String, CancellationToken>>> = Mutex::new(None);
+/// A (profile_id, tier) pair identifying a task's concurrency-throttle bucket.
+/// `None` = the task runs in an unlimited bucket.
+pub type ThrottleKey = (String, String);
 
-fn registry() -> std::sync::MutexGuard<'static, Option<HashMap<String, CancellationToken>>> {
+/// A live task run: its cancel token plus the throttle bucket it occupies.
+struct RunEntry {
+    token: CancellationToken,
+    throttle_key: Option<ThrottleKey>,
+}
+
+static REGISTRY: Mutex<Option<HashMap<String, RunEntry>>> = Mutex::new(None);
+
+fn registry() -> std::sync::MutexGuard<'static, Option<HashMap<String, RunEntry>>> {
     REGISTRY.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// Register a `CancellationToken` for `task_id`. Overwrites any previous entry.
+/// Register a `CancellationToken` for `task_id`, tagged with its throttle
+/// bucket (`None` = unlimited). Overwrites any previous entry.
 ///
 /// If a token already exists for `task_id`, logs a warning and cancels the
 /// displaced token before inserting the new one.
-pub fn register(task_id: &str, token: CancellationToken) {
+pub fn register(task_id: &str, token: CancellationToken, throttle_key: Option<ThrottleKey>) {
     let mut guard = registry();
     let map = guard.get_or_insert_with(HashMap::new);
-    if let Some(old) = map.insert(task_id.to_string(), token) {
+    if let Some(old) = map.insert(
+        task_id.to_string(),
+        RunEntry {
+            token,
+            throttle_key,
+        },
+    ) {
         log::warn!("[run_registry] overwrote live token for task={task_id}; cancelling old");
-        old.cancel();
+        old.token.cancel();
     }
     log::debug!("[run_registry] registered task={task_id}");
 }
@@ -27,8 +44,8 @@ pub fn register(task_id: &str, token: CancellationToken) {
 pub fn cancel(task_id: &str) -> bool {
     let mut guard = registry();
     if let Some(map) = guard.as_mut() {
-        if let Some(token) = map.remove(task_id) {
-            token.cancel();
+        if let Some(entry) = map.remove(task_id) {
+            entry.token.cancel();
             log::debug!("[run_registry] cancelled task={task_id}");
             return true;
         }
@@ -56,6 +73,19 @@ pub fn is_running(task_id: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Count live runs occupying the given throttle bucket.
+pub fn count_running(key: &ThrottleKey) -> u32 {
+    let guard = registry();
+    guard
+        .as_ref()
+        .map(|m| {
+            m.values()
+                .filter(|e| e.throttle_key.as_ref() == Some(key))
+                .count() as u32
+        })
+        .unwrap_or(0)
+}
+
 /// Return all currently-registered task IDs.
 pub fn list_running() -> Vec<String> {
     let guard = registry();
@@ -75,7 +105,7 @@ mod tests {
     fn register_and_cancel_removes_handle() {
         let _g = TEST_GUARD.lock().unwrap();
         let token = CancellationToken::new();
-        register("task-1", token.clone());
+        register("task-1", token.clone(), None);
         assert!(is_running("task-1"));
         let found = cancel("task-1");
         assert!(found);
@@ -93,9 +123,30 @@ mod tests {
     fn list_running_reflects_state() {
         let _g = TEST_GUARD.lock().unwrap();
         let token = CancellationToken::new();
-        register("task-list-test", token);
+        register("task-list-test", token, None);
         assert!(list_running().contains(&"task-list-test".to_string()));
         cancel("task-list-test");
         assert!(!list_running().contains(&"task-list-test".to_string()));
+    }
+
+    #[test]
+    fn count_running_counts_only_matching_key() {
+        let _g = TEST_GUARD.lock().unwrap();
+        // clear any residue
+        for id in list_running() {
+            cancel(&id);
+        }
+        let key_a: ThrottleKey = ("local".into(), "default".into());
+        let key_b: ThrottleKey = ("hyper".into(), "opus".into());
+        register("t1", CancellationToken::new(), Some(key_a.clone()));
+        register("t2", CancellationToken::new(), Some(key_a.clone()));
+        register("t3", CancellationToken::new(), Some(key_b.clone()));
+        register("t4", CancellationToken::new(), None);
+        assert_eq!(count_running(&key_a), 2);
+        assert_eq!(count_running(&key_b), 1);
+        assert_eq!(count_running(&("nope".into(), "x".into())), 0);
+        for id in ["t1", "t2", "t3", "t4"] {
+            cancel(id);
+        }
     }
 }

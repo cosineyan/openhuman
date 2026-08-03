@@ -5639,6 +5639,16 @@ const messages: TranslationMap = {
   'claudeProfiles.globalSentUp': '向上',
   'claudeProfiles.globalSentEnd': '，终点为',
   'claudeProfiles.globalSentBoundary': '梯子边界',
+  'claudeProfiles.picker.defaultGlobal': '默认 — 全局降级',
+  'claudeProfiles.picker.defaultGlobalHint':
+    '不选 profile → 走全局默认降级（在 设置 → Claude profiles 里配置）。',
+  'claudeProfiles.picker.defaultAppHint': '不选 profile → 用 app 默认模型运行。',
+  'claudeProfiles.throttleTitle': '并发限制',
+  'claudeProfiles.throttleDesc':
+    '每个模型同时可运行的 AI 任务上限。留空 = 无限制。超出的任务在 To Do 里等待（优先级高者先跑），直到有名额释放。',
+  'claudeProfiles.throttleEmpty': '添加配置以设置限制。',
+  'claudeProfiles.throttleUnlimited': '∞',
+  'claudeProfiles.throttleParallel': '并行',
 };
 
 export default messages;

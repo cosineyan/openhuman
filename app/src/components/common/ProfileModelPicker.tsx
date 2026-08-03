@@ -15,7 +15,9 @@ import { useT } from '../../lib/i18n/I18nContext';
 import {
   availableTiers,
   encodeStep,
+  getGlobalFallback,
   getLadder,
+  type GlobalFallback,
   type LadderStepResolved,
   listProfiles,
   type ProfileModels,
@@ -47,6 +49,7 @@ export function ProfileModelPicker({ value, onChange, selectStyle, showFallback 
   const { t } = useT();
   const [profiles, setProfiles] = useState<ProfileWithModels[]>([]);
   const [ladder, setLadder] = useState<LadderStepResolved[]>([]);
+  const [globalFb, setGlobalFb] = useState<GlobalFallback | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -57,6 +60,13 @@ export function ProfileModelPicker({ value, onChange, selectStyle, showFallback 
       })
       .catch(() => {
         if (!cancelled) setLadder([]);
+      });
+    getGlobalFallback()
+      .then(g => {
+        if (!cancelled) setGlobalFb(g);
+      })
+      .catch(() => {
+        if (!cancelled) setGlobalFb(null);
       });
     listProfiles()
       .then(p => {
@@ -92,6 +102,23 @@ export function ProfileModelPicker({ value, onChange, selectStyle, showFallback 
 
   const fallbackOn = !!value.fallbackDirection;
 
+  // Human summary of the global default policy, shown on the "default" option
+  // and as a hint, so users know that picking no profile isn't "nothing" —
+  // the task runs under the global default fallback configured in Settings.
+  const globalStep =
+    globalFb?.enabled && globalFb.start_profile
+      ? ladder.find(
+          s =>
+            s.profile_id === globalFb.start_profile && s.tier === (globalFb.start_tier ?? 'default')
+        )
+      : undefined;
+  const globalLabel = globalStep
+    ? `${globalStep.profile_name} / ${globalStep.tier}${
+        globalFb?.direction === 'up' ? ' ↑' : globalFb?.direction === 'down' ? ' ↓' : ''
+      }`
+    : null;
+  const noProfileSelected = !value.settingsProfile;
+
   return (
     <div className="flex flex-col gap-2" style={selectStyle}>
       <div className="flex flex-wrap gap-2">
@@ -103,7 +130,12 @@ export function ProfileModelPicker({ value, onChange, selectStyle, showFallback 
             // Reset model + fallback when the profile changes.
             onChange({ settingsProfile: id });
           }}>
-          <option value="">{t('claudeProfiles.picker.default', 'Default (no profile)')}</option>
+          <option value="">
+            {globalLabel
+              ? t('claudeProfiles.picker.defaultGlobal', 'Default — global fallback') +
+                `: ${globalLabel}`
+              : t('claudeProfiles.picker.default', 'Default (no profile)')}
+          </option>
           {profiles.map(p => (
             <option key={p.profile.id} value={p.profile.id}>
               {p.profile.name}
@@ -126,6 +158,21 @@ export function ProfileModelPicker({ value, onChange, selectStyle, showFallback 
           </select>
         )}
       </div>
+
+      {/* When no profile is picked, clarify what "default" actually runs. */}
+      {noProfileSelected && (
+        <div className="text-xs text-neutral-500 dark:text-neutral-400">
+          {globalLabel
+            ? t(
+                'claudeProfiles.picker.defaultGlobalHint',
+                'No profile → runs under the global default fallback (configured in Settings → Claude profiles).'
+              )
+            : t(
+                'claudeProfiles.picker.defaultAppHint',
+                'No profile → runs with the app default model.'
+              )}
+        </div>
+      )}
 
       {/* Fallback controls — only when a start profile+model is chosen and a
           ladder exists. */}

@@ -5924,6 +5924,16 @@ const messages: TranslationMap = {
   'claudeProfiles.globalSentUp': 'উপরে',
   'claudeProfiles.globalSentEnd': 'ল্যাডারে, শেষ হবে',
   'claudeProfiles.globalSentBoundary': 'ল্যাডার সীমা',
+  'claudeProfiles.picker.defaultGlobal': 'ডিফল্ট — গ্লোবাল ফলব্যাক',
+  'claudeProfiles.picker.defaultGlobalHint':
+    'কোনো প্রোফাইল নেই → গ্লোবাল ডিফল্ট ফলব্যাকে চলে (সেটিংস → Claude profiles-এ কনফিগার করা)।',
+  'claudeProfiles.picker.defaultAppHint': 'কোনো প্রোফাইল নেই → অ্যাপ ডিফল্ট মডেলে চলে।',
+  'claudeProfiles.throttleTitle': 'সমান্তরাল সীমা',
+  'claudeProfiles.throttleDesc':
+    'প্রতি মডেলে একসাথে চলতে পারা সর্বোচ্চ AI টাস্ক। ফাঁকা = সীমাহীন। অতিরিক্ত টাস্ক To Do-তে অপেক্ষা করে (সর্বোচ্চ অগ্রাধিকার আগে) যতক্ষণ না স্লট খালি হয়।',
+  'claudeProfiles.throttleEmpty': 'সীমা সেট করতে একটি প্রোফাইল যোগ করুন।',
+  'claudeProfiles.throttleUnlimited': '∞',
+  'claudeProfiles.throttleParallel': 'সমান্তরাল',
 };
 
 export default messages;
