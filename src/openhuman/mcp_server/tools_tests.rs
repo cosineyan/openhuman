@@ -904,3 +904,51 @@ fn slug_from_unicode_only_titles_are_unique_and_stable() {
     assert_eq!(slug_from("会议记录"), chinese);
     assert_eq!(slug_from("Протокол"), russian);
 }
+
+#[test]
+fn projects_list_task_runs_in_base_surface_and_registered() {
+    // Spec is exposed with a resolvable RPC target.
+    let spec = base_tool_specs()
+        .into_iter()
+        .find(|s| s.name == "projects.list_task_runs")
+        .expect("projects.list_task_runs spec present");
+    let rpc_method = spec.rpc_method.expect("rpc_method set");
+    assert_eq!(rpc_method, "openhuman.projects_list_task_runs");
+    assert!(
+        all::schema_for_rpc_method(rpc_method).is_some(),
+        "RPC method must be registered"
+    );
+    // Read-only annotation.
+    assert_eq!(spec.annotations["readOnlyHint"], json!(true));
+}
+
+#[test]
+fn projects_list_task_runs_params_pass_through() {
+    let params = build_rpc_params(
+        "projects.list_task_runs",
+        json!({ "since": "2026-08-01", "until": "2026-08-03T23:59:59Z", "limit": 100 }),
+    )
+    .expect("params");
+    assert_eq!(params["since"], "2026-08-01");
+    assert_eq!(params["until"], "2026-08-03T23:59:59Z");
+    assert_eq!(params["limit"], 100);
+}
+
+#[test]
+fn projects_list_task_runs_params_empty_ok() {
+    // No args → controller applies the today-default window.
+    let params = build_rpc_params("projects.list_task_runs", json!({})).expect("empty params ok");
+    assert!(params.is_empty());
+}
+
+#[test]
+fn projects_list_task_runs_rejects_unknown_arg() {
+    let err = build_rpc_params(
+        "projects.list_task_runs",
+        json!({ "since": "2026-08-01", "bogus": true }),
+    )
+    .expect_err("unexpected field should be rejected");
+    assert!(
+        matches!(err, ToolCallError::InvalidParams(message) if message.contains("unexpected argument"))
+    );
+}

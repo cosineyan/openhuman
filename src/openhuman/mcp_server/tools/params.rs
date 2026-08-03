@@ -6,9 +6,10 @@ use crate::openhuman::tools::SEARXNG_MAX_RESULTS;
 use super::types::{
     McpToolSpec, ToolCallError, DEFAULT_LIMIT, MAX_LIMIT, MEMORY_NOTE_ARGUMENTS,
     MEMORY_QUERY_SOURCE_ARGUMENTS, MEMORY_SMART_WALK_ARGUMENTS, MEMORY_STORE_ARGUMENTS,
-    QUERY_ARGUMENTS, SEARXNG_SEARCH_ARGUMENTS, SUBAGENT_RUN_ARGUMENTS, TREE_BROWSE_ARGUMENTS,
-    TREE_LIST_SOURCES_ARGUMENTS, TREE_READ_CHUNK_ARGUMENTS, TREE_TAG_ARGUMENTS, TREE_TAG_MAX_TAGS,
-    TREE_TAG_MAX_TAG_LENGTH, TREE_TOP_ENTITIES_ARGUMENTS,
+    PROJECTS_LIST_TASK_RUNS_ARGUMENTS, QUERY_ARGUMENTS, SEARXNG_SEARCH_ARGUMENTS,
+    SUBAGENT_RUN_ARGUMENTS, TREE_BROWSE_ARGUMENTS, TREE_LIST_SOURCES_ARGUMENTS,
+    TREE_READ_CHUNK_ARGUMENTS, TREE_TAG_ARGUMENTS, TREE_TAG_MAX_TAGS, TREE_TAG_MAX_TAG_LENGTH,
+    TREE_TOP_ENTITIES_ARGUMENTS,
 };
 
 pub fn build_rpc_params(
@@ -247,6 +248,23 @@ pub fn build_rpc_params(
                 params.insert("query".to_string(), Value::String(query));
             }
             params.insert("limit".to_string(), Value::from(optional_limit(&args)?));
+            Ok(params)
+        }
+        "projects.list_task_runs" => {
+            reject_unexpected_arguments(&args, PROJECTS_LIST_TASK_RUNS_ARGUMENTS)?;
+            let mut params = Map::new();
+            if let Some(since) = optional_non_empty_string(&args, "since")? {
+                params.insert("since".to_string(), Value::String(since));
+            }
+            if let Some(until) = optional_non_empty_string(&args, "until")? {
+                params.insert("until".to_string(), Value::String(until));
+            }
+            // Unlike the memory tools (capped at MAX_LIMIT=50), the run-history
+            // window can be large on a busy day; pass through the controller's
+            // own 1..=5000 clamp rather than the narrow MCP page cap.
+            if let Some(limit) = optional_i64(&args, "limit")? {
+                params.insert("limit".to_string(), Value::from(limit));
+            }
             Ok(params)
         }
         _ => Err(ToolCallError::InvalidParams(format!(

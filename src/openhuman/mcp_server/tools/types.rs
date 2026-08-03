@@ -29,6 +29,7 @@ pub const MEMORY_QUERY_SOURCE_ARGUMENTS: &[&str] = &[
     "query",
     "limit",
 ];
+pub const PROJECTS_LIST_TASK_RUNS_ARGUMENTS: &[&str] = &["since", "until", "limit"];
 /// Upper bound on the number of tags `tree.tag` accepts per call.
 /// Matches the "explicit rejection over silent clamping" pattern used
 /// elsewhere in the MCP layer; prevents a misbehaving client from

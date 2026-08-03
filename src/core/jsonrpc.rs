@@ -2190,6 +2190,11 @@ fn register_domain_subscribers(
         // Projects AI runner: event-driven pickup of project tasks assigned to AI.
         crate::openhuman::projects::register_project_ai_runner(std::sync::Arc::new(config.clone()));
         crate::openhuman::projects::start_throttle_poller(std::sync::Arc::new(config.clone()));
+        // Mark any AI run rows left in 'running' from a previous crash/restart as
+        // 'interrupted' so the run history reflects reality.
+        if let Err(e) = crate::openhuman::projects::cleanup_stale_running_task_runs(&config) {
+            log::warn!("[projects] failed to clean up stale running task runs on startup: {e}");
+        }
         // Clean up any cron runs left in 'queued' state from a previous app crash/restart.
         if let Ok(n) = crate::openhuman::cron::cleanup_stale_queued_runs(&config) {
             if n > 0 {

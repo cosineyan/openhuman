@@ -273,6 +273,18 @@ pub fn base_tool_specs() -> Vec<McpToolSpec> {
             input_schema: tree_tag_schema(),
             annotations: write_local_annotations(),
         },
+        McpToolSpec {
+            name: "projects.list_task_runs",
+            title: "List AI Task Runs",
+            description: "List AI project-task runs (one row per AI run) with the resolved model, \
+                          duration, and terminal status (done/blocked/cancelled/error/interrupted). \
+                          When both `since` and `until` are omitted the window defaults to today \
+                          (server local day) — ideal for a nightly summary of the day's project \
+                          AI activity. History is recorded since deploy only (no backfill).",
+            rpc_method: Some("openhuman.projects_list_task_runs"),
+            input_schema: projects_list_task_runs_schema(),
+            annotations: read_only_local_annotations(),
+        },
     ]
 }
 
@@ -375,6 +387,30 @@ pub fn query_schema(query_description: &str) -> Value {
             }
         },
         "required": ["query"],
+        "additionalProperties": false
+    })
+}
+
+fn projects_list_task_runs_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "since": {
+                "type": "string",
+                "description": "Lower bound on run start time — RFC3339 (e.g. 2026-08-03T00:00:00Z) or a bare local date YYYY-MM-DD. Inclusive."
+            },
+            "until": {
+                "type": "string",
+                "description": "Upper bound on run start time — RFC3339 or YYYY-MM-DD. Inclusive. Omit both bounds for today (local day)."
+            },
+            "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 5000,
+                "description": "Maximum runs to return, newest first. Defaults to 500."
+            }
+        },
+        "required": [],
         "additionalProperties": false
     })
 }

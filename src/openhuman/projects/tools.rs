@@ -605,6 +605,104 @@ impl Tool for ProjectsAddAttachmentTool {
 }
 
 // ---------------------------------------------------------------------------
+// ProjectsListTaskRunsTool  (AI run history, read-only)
+// ---------------------------------------------------------------------------
+
+pub struct ProjectsListTaskRunsTool {
+    config: Arc<Config>,
+}
+
+impl ProjectsListTaskRunsTool {
+    pub fn new(config: Arc<Config>) -> Self {
+        Self { config }
+    }
+}
+
+fn render_task_runs_markdown(runs: &[crate::openhuman::projects::ProjectTaskRun]) -> String {
+    if runs.is_empty() {
+        return "_No AI task runs in this window._".to_string();
+    }
+    let mut out = String::new();
+    let _ = writeln!(out, "| Task | Model | Status | Duration | Started |");
+    let _ = writeln!(out, "|------|-------|--------|----------|---------|");
+    for r in runs {
+        let secs = r.duration_ms as f64 / 1000.0;
+        let model = r.model.as_deref().unwrap_or("—");
+        let _ = writeln!(
+            out,
+            "| {} | {} | {} | {:.1}s | {} |",
+            r.task_title,
+            model,
+            r.status,
+            secs,
+            r.started_at.format("%Y-%m-%d %H:%M")
+        );
+    }
+    out
+}
+
+#[async_trait]
+impl Tool for ProjectsListTaskRunsTool {
+    fn name(&self) -> &str {
+        "projects_list_task_runs"
+    }
+
+    fn description(&self) -> &str {
+        "List AI project-task runs (one row per AI run) with the resolved model, duration, and \
+         terminal status (done/blocked/cancelled/error/interrupted). When both `since` and `until` \
+         are omitted the window defaults to today (local day) — ideal for a daily summary. \
+         History is recorded since deploy only (no backfill)."
+    }
+
+    fn parameters_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "since": { "type": "string", "description": "Lower bound on run start (RFC3339 or YYYY-MM-DD, inclusive)." },
+                "until": { "type": "string", "description": "Upper bound on run start (RFC3339 or YYYY-MM-DD, inclusive)." },
+                "limit": { "type": "integer", "minimum": 1, "maximum": 5000, "description": "Max rows (default 500), newest first." }
+            },
+            "additionalProperties": false
+        })
+    }
+
+    async fn execute(&self, args: Value) -> anyhow::Result<ToolResult> {
+        self.execute_with_options(args, ToolCallOptions::default())
+            .await
+    }
+
+    async fn execute_with_options(
+        &self,
+        args: Value,
+        options: ToolCallOptions,
+    ) -> anyhow::Result<ToolResult> {
+        let since = args.get("since").and_then(|v| v.as_str());
+        let until = args.get("until").and_then(|v| v.as_str());
+        let limit = args.get("limit").and_then(|v| v.as_i64());
+
+        let runs = match ops::list_task_runs(&self.config, since, until, limit) {
+            Ok(outcome) => outcome.value,
+            Err(e) => return Ok(ToolResult::error(e)),
+        };
+
+        let json_str = serde_json::to_string_pretty(&runs)?;
+        let mut result = ToolResult::success(json_str);
+        if options.prefer_markdown {
+            result.markdown_formatted = Some(render_task_runs_markdown(&runs));
+        }
+        Ok(result)
+    }
+
+    fn supports_markdown(&self) -> bool {
+        true
+    }
+
+    fn permission_level(&self) -> PermissionLevel {
+        PermissionLevel::ReadOnly
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -729,5 +827,56 @@ mod tests {
         // have a done bucket depending on the seed.  Either success or a
         // "no done bucket" error is acceptable here.
         let _ = complete_result; // just ensure no panic
+    }
+
+    #[tokio::test]
+    async fn list_task_runs_tool_empty_ok() {
+        let tmp = TempDir::new().unwrap();
+        let cfg = test_config(&tmp).await;
+        let tool = ProjectsListTaskRunsTool::new(cfg);
+
+        // No runs recorded yet → success with an empty JSON array.
+        let result = tool.execute(json!({})).await.unwrap();
+        assert!(
+            !result.is_error,
+            "expected success, got: {}",
+            result.output()
+        );
+        let arr: serde_json::Value = serde_json::from_str(&result.output()).unwrap();
+        assert!(arr.is_array());
+        assert_eq!(arr.as_array().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn list_task_runs_tool_rejects_bad_date() {
+        let tmp = TempDir::new().unwrap();
+        let cfg = test_config(&tmp).await;
+        let tool = ProjectsListTaskRunsTool::new(cfg);
+
+        let result = tool
+            .execute(json!({ "since": "not-a-date" }))
+            .await
+            .unwrap();
+        assert!(result.is_error);
+        assert!(result.output().contains("invalid date"));
+    }
+
+    #[tokio::test]
+    async fn list_task_runs_tool_markdown() {
+        let tmp = TempDir::new().unwrap();
+        let cfg = test_config(&tmp).await;
+        let tool = ProjectsListTaskRunsTool::new(cfg);
+
+        let result = tool
+            .execute_with_options(
+                json!({}),
+                ToolCallOptions {
+                    prefer_markdown: true,
+                },
+            )
+            .await
+            .unwrap();
+        assert!(!result.is_error);
+        assert!(result.markdown_formatted.is_some());
     }
 }

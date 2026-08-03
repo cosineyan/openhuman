@@ -223,6 +223,38 @@ pub struct BucketPatch {
     pub is_done_bucket: Option<bool>,
 }
 
+// ---------------------------------------------------------------------------
+// AI run history (one row per AI task run)
+// ---------------------------------------------------------------------------
+
+/// A persisted record of one AI project-task run. Written when a run starts
+/// (`status="running"`) and updated to a terminal status when it finishes, so
+/// crashed/interrupted runs leave a trace. `task_title`/`model` are denormalized
+/// snapshots so history survives task rename/deletion. Mirrors cron's `CronRun`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ProjectTaskRun {
+    pub run_id: String,
+    pub task_id: String,
+    /// Denormalized task title at run time.
+    pub task_title: String,
+    /// Concrete model that actually ran (e.g. "claude-opus-latest"), if known.
+    pub model: Option<String>,
+    /// Settings-profile id the run started with, if any.
+    pub profile_id: Option<String>,
+    /// Tier alias the run started with (opus/sonnet/haiku/default), if any.
+    pub tier: Option<String>,
+    /// Number of attempts in the configured fallback chain (1 = no fallback).
+    pub fallback_steps: i64,
+    /// Index of the attempt that actually ran (0 = start, >0 = fell back).
+    pub fallback_used: i64,
+    pub started_at: DateTime<Utc>,
+    /// None while still running.
+    pub finished_at: Option<DateTime<Utc>>,
+    pub duration_ms: i64,
+    /// running | done | blocked | cancelled | error | interrupted
+    pub status: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

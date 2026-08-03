@@ -222,6 +222,70 @@ pub fn list_archived_tasks(
     ))
 }
 
+/// Maximum runs returned by a single `list_task_runs` call when no explicit
+/// window narrows the result. Keeps a busy day's summary bounded.
+const TASK_RUNS_DEFAULT_LIMIT: i64 = 500;
+
+/// List AI project-task runs in `[since, until]` (RFC3339 or `YYYY-MM-DD`),
+/// newest first. When BOTH bounds are absent the window defaults to **today
+/// in the server's local timezone** (same day convention as cron), so the
+/// nightly summary cron can call this with no args. This "default = today"
+/// semantics lives here so the native tool and MCP tool share it.
+pub fn list_task_runs(
+    config: &Config,
+    since: Option<&str>,
+    until: Option<&str>,
+    limit: Option<i64>,
+) -> Result<RpcOutcome<Vec<ProjectTaskRun>>, String> {
+    let parse_bound = |raw: &str| -> Result<chrono::DateTime<chrono::Utc>, String> {
+        // Accept full RFC3339 first.
+        if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(raw) {
+            return Ok(dt.with_timezone(&chrono::Utc));
+        }
+        // Accept a bare local date "YYYY-MM-DD" → start of that local day.
+        if let Ok(date) = chrono::NaiveDate::parse_from_str(raw, "%Y-%m-%d") {
+            let naive = date.and_hms_opt(0, 0, 0).unwrap();
+            if let chrono::LocalResult::Single(local) = naive.and_local_timezone(chrono::Local) {
+                return Ok(local.with_timezone(&chrono::Utc));
+            }
+        }
+        Err(format!(
+            "invalid date (expected RFC3339 or YYYY-MM-DD): {raw}"
+        ))
+    };
+
+    let mut since_dt = match since {
+        Some(s) => Some(parse_bound(s)?),
+        None => None,
+    };
+    let mut until_dt = match until {
+        Some(s) => Some(parse_bound(s)?),
+        None => None,
+    };
+
+    // No window at all → default to today (local day).
+    if since_dt.is_none() && until_dt.is_none() {
+        let today = chrono::Local::now().date_naive();
+        let start = today.and_hms_opt(0, 0, 0).unwrap();
+        if let chrono::LocalResult::Single(local_start) = start.and_local_timezone(chrono::Local) {
+            since_dt = Some(local_start.with_timezone(&chrono::Utc));
+        }
+        let end = today.and_hms_opt(23, 59, 59).unwrap();
+        if let chrono::LocalResult::Single(local_end) = end.and_local_timezone(chrono::Local) {
+            until_dt = Some(local_end.with_timezone(&chrono::Utc));
+        }
+    }
+
+    let limit = limit.unwrap_or(TASK_RUNS_DEFAULT_LIMIT).clamp(1, 5000);
+    let runs =
+        store::list_task_runs(config, since_dt, until_dt, limit).map_err(|e| e.to_string())?;
+    log::debug!(
+        "[projects] list_task_runs since={since:?} until={until:?} limit={limit} n={}",
+        runs.len()
+    );
+    Ok(RpcOutcome::single_log(runs, "projects: list_task_runs"))
+}
+
 /// Delete a task by id.
 pub fn delete_task(config: &Config, task_id: &str) -> Result<RpcOutcome<()>, String> {
     store::delete_task(config, task_id).map_err(|e| e.to_string())?;

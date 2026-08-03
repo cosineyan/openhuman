@@ -135,7 +135,8 @@ async fn run_ai_task(
     cancel_token: tokio_util::sync::CancellationToken,
 ) {
     let started_at = Utc::now();
-    log::debug!("{LOG} picking up task={task_id} title={title:?}");
+    let run_id = uuid::Uuid::new_v4().to_string();
+    log::debug!("{LOG} picking up task={task_id} title={title:?} run_id={run_id}");
 
     let find_bucket = |fragment: &str| -> Option<String> {
         buckets
@@ -265,6 +266,31 @@ async fn run_ai_task(
     let _ = store::add_comment(&config, &task_id, "ai", &start_msg);
     emit_task_log(&task_id, &start_msg, "log");
 
+    // Persist a `running` placeholder row for this AI run. It is updated to a
+    // terminal status at the tail; if the process crashes mid-run, startup
+    // cleanup marks it `interrupted`. `model` starts as the first attempt's
+    // model and is overwritten with the fallback winner when the run finishes.
+    let fallback_steps = attempts.len() as i64;
+    if let Err(e) = store::insert_running_run(
+        &config,
+        &crate::openhuman::projects::ProjectTaskRun {
+            run_id: run_id.clone(),
+            task_id: task_id.clone(),
+            task_title: title.clone(),
+            model: Some(first_model.clone()),
+            profile_id: task_settings_profile.clone(),
+            tier: task_model.clone(),
+            fallback_steps,
+            fallback_used: 0,
+            started_at,
+            finished_at: None,
+            duration_ms: 0,
+            status: "running".to_string(),
+        },
+    ) {
+        log::warn!("{LOG} task={task_id} failed to record running run row: {e}");
+    }
+
     // Use existing session if available (resume), otherwise generate a new hint UUID.
     let cc_session_uuid = existing_session_id.unwrap_or_else(
         crate::openhuman::inference::provider::claude_code::session_store::generate_uuid_v4,
@@ -284,6 +310,10 @@ async fn run_ai_task(
     let mut outcome: Result<String, String> = Err("no attempt ran".to_string());
     let mut fwd: tokio::task::JoinHandle<()> = tokio::spawn(async {});
     let mut actual_session_id: Option<String> = None;
+    // Track which attempt actually ran (its model + index) so the run record
+    // reflects the fallback winner rather than the start step.
+    let mut ran_model: Option<String> = None;
+    let mut ran_fallback_used: i64 = 0;
 
     for (idx, (attempt_path, attempt_model)) in attempts.into_iter().enumerate() {
         if idx > 0 {
@@ -309,6 +339,8 @@ async fn run_ai_task(
             outcome = o;
             fwd = f;
             actual_session_id = sid;
+            ran_model = attempt_model.clone();
+            ran_fallback_used = idx as i64;
             break;
         }
 
@@ -317,6 +349,8 @@ async fn run_ai_task(
                 outcome = o;
                 fwd = f;
                 actual_session_id = sid;
+                ran_model = attempt_model.clone();
+                ran_fallback_used = idx as i64;
                 break;
             }
             Err(e) => {
@@ -336,6 +370,8 @@ async fn run_ai_task(
                 outcome = o;
                 fwd = f;
                 actual_session_id = sid;
+                ran_model = attempt_model.clone();
+                ran_fallback_used = idx as i64;
                 break;
             }
         }
@@ -539,6 +575,24 @@ async fn run_ai_task(
 
     crate::openhuman::projects::run_registry::deregister(&task_id);
     log::debug!("{LOG} task={task_id} complete (status={status})");
+
+    // Finalize the run history row: single UPDATE for all four terminal states.
+    // `resolved_model` is the fallback winner's model, falling back to the start
+    // model when the attempt carried none (legacy single-run / app default).
+    let duration_ms = (finished_at - started_at).num_milliseconds();
+    let resolved_model = ran_model.clone().or_else(|| Some(first_model.clone()));
+    if let Err(e) = store::finish_task_run(
+        &config,
+        &run_id,
+        status,
+        finished_at,
+        duration_ms,
+        resolved_model.as_deref(),
+        ran_fallback_used,
+    ) {
+        log::warn!("{LOG} task={task_id} failed to finalize run row run_id={run_id}: {e}");
+    }
+
     // A slot just freed — nudge the dispatcher to pull the next queued task.
     crate::core::event_bus::publish_global(DomainEvent::ProjectTaskCompleted {
         task_id: task_id.clone(),

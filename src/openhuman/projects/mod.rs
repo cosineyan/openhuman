@@ -21,11 +21,15 @@ pub use schemas::{
     all_controller_schemas as all_projects_controller_schemas,
     all_registered_controllers as all_projects_registered_controllers,
 };
-pub(crate) use store::{ensure_default_project, get_project, get_task, list_buckets, list_tasks};
+pub(crate) use store::{
+    cleanup_stale_running_task_runs, ensure_default_project, finish_task_run, get_project,
+    get_task, insert_running_run, list_buckets, list_runs_for_task, list_task_runs, list_tasks,
+};
 pub use tools::{
-    ProjectsAddAttachmentTool, ProjectsCompleteTaskTool, ProjectsCreateTaskTool, ProjectsListTool,
-    ProjectsMoveTaskTool, ProjectsReadAttachmentTool,
+    ProjectsAddAttachmentTool, ProjectsCompleteTaskTool, ProjectsCreateTaskTool,
+    ProjectsListTaskRunsTool, ProjectsListTool, ProjectsMoveTaskTool, ProjectsReadAttachmentTool,
 };
 pub use types::{
-    Bucket, BucketPatch, Project, Task, TaskAttachment, TaskEvent, TaskEventKind, TaskPatch,
+    Bucket, BucketPatch, Project, ProjectTaskRun, Task, TaskAttachment, TaskEvent, TaskEventKind,
+    TaskPatch,
 };

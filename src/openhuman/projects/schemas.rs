@@ -20,6 +20,7 @@ pub fn all_controller_schemas() -> Vec<ControllerSchema> {
         schemas("move_task"),
         schemas("delete_task"),
         schemas("list_archived_tasks"),
+        schemas("list_task_runs"),
         schemas("update_bucket"),
         schemas("list_task_events"),
         schemas("add_comment"),
@@ -60,6 +61,10 @@ pub fn all_registered_controllers() -> Vec<RegisteredController> {
         RegisteredController {
             schema: schemas("list_archived_tasks"),
             handler: handle_list_archived_tasks,
+        },
+        RegisteredController {
+            schema: schemas("list_task_runs"),
+            handler: handle_list_task_runs,
         },
         RegisteredController {
             schema: schemas("update_bucket"),
@@ -301,6 +306,41 @@ pub fn schemas(function: &str) -> ControllerSchema {
                 name: "tasks",
                 ty: TypeSchema::Json,
                 comment: "Archived tasks matching the filter, ordered by archived_at descending.",
+                required: true,
+            }],
+        },
+        "list_task_runs" => ControllerSchema {
+            namespace: "projects",
+            function: "list_task_runs",
+            description: "List AI project-task runs (one row per AI run) with resolved model, \
+                          duration, and terminal status. When both `since` and `until` are omitted \
+                          the window defaults to today (server local day) — suited to a nightly \
+                          summary. History since deploy only; no backfill.",
+            inputs: vec![
+                FieldSchema {
+                    name: "since",
+                    ty: TypeSchema::Option(Box::new(TypeSchema::String)),
+                    comment: "Lower bound on run start (RFC3339 or YYYY-MM-DD, inclusive).",
+                    required: false,
+                },
+                FieldSchema {
+                    name: "until",
+                    ty: TypeSchema::Option(Box::new(TypeSchema::String)),
+                    comment: "Upper bound on run start (RFC3339 or YYYY-MM-DD, inclusive).",
+                    required: false,
+                },
+                FieldSchema {
+                    name: "limit",
+                    ty: TypeSchema::Option(Box::new(TypeSchema::U64)),
+                    comment: "Max rows (default 500, capped 5000), newest first.",
+                    required: false,
+                },
+            ],
+            outputs: vec![FieldSchema {
+                name: "runs",
+                ty: TypeSchema::Json,
+                comment: "ProjectTaskRun[]: run_id, task_id, task_title, model, profile_id, tier, \
+                          fallback_steps, fallback_used, started_at, finished_at, duration_ms, status.",
                 required: true,
             }],
         },
@@ -628,6 +668,22 @@ fn handle_update_bucket(params: Map<String, Value>) -> ControllerFuture {
         let patch: BucketPatch = read_required(&params, "patch")?;
         tracing::debug!(bucket_id = %bucket_id, "[rpc][projects] update_bucket entry");
         to_json(ops::update_bucket(&config, &bucket_id, patch)?)
+    })
+}
+
+fn handle_list_task_runs(params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let config = config_rpc::load_config_with_timeout().await?;
+        let since = params.get("since").and_then(|v| v.as_str());
+        let until = params.get("until").and_then(|v| v.as_str());
+        let limit = params.get("limit").and_then(|v| v.as_i64());
+        tracing::debug!(
+            ?since,
+            ?until,
+            ?limit,
+            "[rpc][projects] list_task_runs entry"
+        );
+        to_json(ops::list_task_runs(&config, since, until, limit)?)
     })
 }
 

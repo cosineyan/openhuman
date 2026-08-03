@@ -1,6 +1,7 @@
 use crate::openhuman::config::Config;
 use crate::openhuman::projects::{
-    Bucket, BucketPatch, Project, Task, TaskAttachment, TaskEvent, TaskEventKind, TaskPatch,
+    Bucket, BucketPatch, Project, ProjectTaskRun, Task, TaskAttachment, TaskEvent, TaskEventKind,
+    TaskPatch,
 };
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
@@ -77,6 +78,23 @@ CREATE TABLE IF NOT EXISTS project_task_attachments (
     created      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_attachments_task ON project_task_attachments(task_id, created);
+CREATE TABLE IF NOT EXISTS project_task_runs (
+    run_id         TEXT PRIMARY KEY,
+    task_id        TEXT NOT NULL,
+    task_title     TEXT NOT NULL,
+    model          TEXT,
+    profile_id     TEXT,
+    tier           TEXT,
+    fallback_steps INTEGER NOT NULL DEFAULT 1,
+    fallback_used  INTEGER NOT NULL DEFAULT 0,
+    started_at     TEXT NOT NULL,
+    finished_at    TEXT,
+    duration_ms    INTEGER NOT NULL DEFAULT 0,
+    status         TEXT NOT NULL,
+    created        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_task_runs_task ON project_task_runs(task_id, started_at);
+CREATE INDEX IF NOT EXISTS idx_task_runs_started ON project_task_runs(started_at);
 ";
 
 // ---------------------------------------------------------------------------
@@ -1397,6 +1415,196 @@ pub fn cleanup_stale_ai_doing_tasks(conn: &Connection) -> Result<()> {
 }
 
 // ---------------------------------------------------------------------------
+// AI run history (project_task_runs)
+// ---------------------------------------------------------------------------
+
+fn row_to_task_run(row: &rusqlite::Row<'_>) -> rusqlite::Result<ProjectTaskRun> {
+    let started_raw: String = row.get(8)?;
+    let finished_raw: Option<String> = row.get(9)?;
+    let started_at = parse_rfc3339(&started_raw).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(8, rusqlite::types::Type::Text, e.into())
+    })?;
+    let finished_at = match finished_raw {
+        Some(raw) => Some(parse_rfc3339(&raw).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(9, rusqlite::types::Type::Text, e.into())
+        })?),
+        None => None,
+    };
+    Ok(ProjectTaskRun {
+        run_id: row.get(0)?,
+        task_id: row.get(1)?,
+        task_title: row.get(2)?,
+        model: row.get(3)?,
+        profile_id: row.get(4)?,
+        tier: row.get(5)?,
+        fallback_steps: row.get(6)?,
+        fallback_used: row.get(7)?,
+        started_at,
+        finished_at,
+        duration_ms: row.get(10)?,
+        status: row.get(11)?,
+    })
+}
+
+/// Insert a `running` placeholder row at the start of an AI run. `finished_at`
+/// is left NULL and `duration_ms` 0 until `finish_task_run` is called.
+pub fn insert_running_run(config: &Config, run: &ProjectTaskRun) -> Result<()> {
+    with_connection(config, |conn| {
+        let now = Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO project_task_runs \
+             (run_id, task_id, task_title, model, profile_id, tier, \
+              fallback_steps, fallback_used, started_at, finished_at, duration_ms, status, created) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, NULL, 0, 'running', ?10)",
+            params![
+                run.run_id,
+                run.task_id,
+                run.task_title,
+                run.model,
+                run.profile_id,
+                run.tier,
+                run.fallback_steps,
+                run.fallback_used,
+                run.started_at.to_rfc3339(),
+                now,
+            ],
+        )
+        .context("Failed to insert running task run")?;
+        log::debug!(
+            "[projects] insert_running_run run_id={} task={}",
+            run.run_id,
+            run.task_id
+        );
+        Ok(())
+    })
+}
+
+/// Update a run row to a terminal status. `model`/`fallback_used` reflect the
+/// attempt that actually ran (fallback winner). No-op if the row is missing.
+pub fn finish_task_run(
+    config: &Config,
+    run_id: &str,
+    status: &str,
+    finished_at: DateTime<Utc>,
+    duration_ms: i64,
+    model: Option<&str>,
+    fallback_used: i64,
+) -> Result<()> {
+    with_connection(config, |conn| {
+        let affected = conn
+            .execute(
+                "UPDATE project_task_runs \
+                 SET status = ?1, finished_at = ?2, duration_ms = ?3, \
+                     model = COALESCE(?4, model), fallback_used = ?5 \
+                 WHERE run_id = ?6",
+                params![
+                    status,
+                    finished_at.to_rfc3339(),
+                    duration_ms,
+                    model,
+                    fallback_used,
+                    run_id,
+                ],
+            )
+            .context("Failed to finish task run")?;
+        log::debug!(
+            "[projects] finish_task_run run_id={run_id} status={status} duration_ms={duration_ms} affected={affected}"
+        );
+        Ok(())
+    })
+}
+
+/// List AI runs whose `started_at` falls in `[since, until]` (either bound
+/// optional), newest first, capped at `limit`. Uses the dynamic-SQL pattern
+/// from `list_archived_tasks`.
+pub fn list_task_runs(
+    config: &Config,
+    since: Option<DateTime<Utc>>,
+    until: Option<DateTime<Utc>>,
+    limit: i64,
+) -> Result<Vec<ProjectTaskRun>> {
+    with_connection(config, |conn| {
+        let mut bound: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+        let mut sql = "SELECT run_id, task_id, task_title, model, profile_id, tier, \
+                    fallback_steps, fallback_used, started_at, finished_at, duration_ms, status \
+             FROM project_task_runs \
+             WHERE 1 = 1"
+            .to_string();
+
+        let mut idx = 1usize;
+        if let Some(since) = since {
+            sql.push_str(&format!(" AND started_at >= ?{idx}"));
+            bound.push(Box::new(since.to_rfc3339()));
+            idx += 1;
+        }
+        if let Some(until) = until {
+            sql.push_str(&format!(" AND started_at <= ?{idx}"));
+            bound.push(Box::new(until.to_rfc3339()));
+            idx += 1;
+        }
+        sql.push_str(&format!(" ORDER BY started_at DESC LIMIT ?{idx}"));
+        bound.push(Box::new(limit.max(0)));
+
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map(
+            rusqlite::params_from_iter(bound.iter().map(|b| b.as_ref())),
+            row_to_task_run,
+        )?;
+        let mut runs = Vec::new();
+        for row in rows {
+            runs.push(row?);
+        }
+        Ok(runs)
+    })
+}
+
+/// List AI runs for a single task, newest first, capped at `limit`.
+pub fn list_runs_for_task(
+    config: &Config,
+    task_id: &str,
+    limit: i64,
+) -> Result<Vec<ProjectTaskRun>> {
+    with_connection(config, |conn| {
+        let mut stmt = conn.prepare(
+            "SELECT run_id, task_id, task_title, model, profile_id, tier, \
+                    fallback_steps, fallback_used, started_at, finished_at, duration_ms, status \
+             FROM project_task_runs \
+             WHERE task_id = ?1 \
+             ORDER BY started_at DESC LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(params![task_id, limit.max(0)], row_to_task_run)?;
+        let mut runs = Vec::new();
+        for row in rows {
+            runs.push(row?);
+        }
+        Ok(runs)
+    })
+}
+
+/// On startup, mark any run still in `running` (the process exited mid-run) as
+/// `interrupted` so history reflects reality. Mirrors `cleanup_stale_ai_doing_tasks`.
+pub fn cleanup_stale_running_task_runs(config: &Config) -> Result<()> {
+    with_connection(config, |conn| {
+        let now = Utc::now().to_rfc3339();
+        let affected = conn
+            .execute(
+                "UPDATE project_task_runs \
+                 SET status = 'interrupted', finished_at = COALESCE(finished_at, ?1) \
+                 WHERE status = 'running'",
+                params![now],
+            )
+            .context("Failed to clean up stale running task runs")?;
+        if affected > 0 {
+            log::info!(
+                "[projects] startup cleanup: marked {affected} stale running run(s) as interrupted"
+            );
+        }
+        Ok(())
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -1649,5 +1857,129 @@ mod tests {
             }),
             "should have a system change event for bucket_id"
         );
+    }
+
+    fn sample_run(run_id: &str, task_id: &str, started_at: DateTime<Utc>) -> ProjectTaskRun {
+        ProjectTaskRun {
+            run_id: run_id.to_string(),
+            task_id: task_id.to_string(),
+            task_title: "Do the thing".to_string(),
+            model: Some("claude-opus-latest".to_string()),
+            profile_id: Some("hyperspace".to_string()),
+            tier: Some("opus".to_string()),
+            fallback_steps: 2,
+            fallback_used: 0,
+            started_at,
+            finished_at: None,
+            duration_ms: 0,
+            status: "running".to_string(),
+        }
+    }
+
+    #[test]
+    fn task_run_insert_finish_roundtrip() {
+        let tmp = TempDir::new().unwrap();
+        let config = test_config(&tmp);
+        ensure_default_project(&config).unwrap();
+
+        let started = Utc::now();
+        let run = sample_run("run-1", "task-1", started);
+        insert_running_run(&config, &run).unwrap();
+
+        // Still running: model = start model, no finished_at.
+        let runs = list_runs_for_task(&config, "task-1", 10).unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].status, "running");
+        assert!(runs[0].finished_at.is_none());
+        assert_eq!(runs[0].fallback_used, 0);
+
+        let finished = started + chrono::Duration::milliseconds(4200);
+        finish_task_run(
+            &config,
+            "run-1",
+            "done",
+            finished,
+            4200,
+            Some("claude-sonnet-latest"),
+            1,
+        )
+        .unwrap();
+
+        let runs = list_runs_for_task(&config, "task-1", 10).unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].status, "done");
+        assert_eq!(runs[0].duration_ms, 4200);
+        assert_eq!(runs[0].fallback_used, 1);
+        // finish_task_run's model overrides the start model (fallback winner).
+        assert_eq!(runs[0].model.as_deref(), Some("claude-sonnet-latest"));
+        assert!(runs[0].finished_at.is_some());
+    }
+
+    #[test]
+    fn finish_task_run_preserves_model_when_none() {
+        let tmp = TempDir::new().unwrap();
+        let config = test_config(&tmp);
+        ensure_default_project(&config).unwrap();
+
+        let run = sample_run("run-x", "task-x", Utc::now());
+        insert_running_run(&config, &run).unwrap();
+        // Pass model = None → COALESCE keeps the original start model.
+        finish_task_run(&config, "run-x", "error", Utc::now(), 100, None, 0).unwrap();
+
+        let runs = list_runs_for_task(&config, "task-x", 10).unwrap();
+        assert_eq!(runs[0].model.as_deref(), Some("claude-opus-latest"));
+        assert_eq!(runs[0].status, "error");
+    }
+
+    #[test]
+    fn list_task_runs_filters_by_started_at_window() {
+        let tmp = TempDir::new().unwrap();
+        let config = test_config(&tmp);
+        ensure_default_project(&config).unwrap();
+
+        let now = Utc::now();
+        let today = sample_run("r-today", "t1", now);
+        let old = sample_run("r-old", "t2", now - chrono::Duration::days(3));
+        insert_running_run(&config, &today).unwrap();
+        insert_running_run(&config, &old).unwrap();
+
+        // Window = last 24h → only today's run.
+        let since = now - chrono::Duration::days(1);
+        let recent = list_task_runs(&config, Some(since), None, 200).unwrap();
+        assert_eq!(recent.len(), 1);
+        assert_eq!(recent[0].run_id, "r-today");
+
+        // No bounds → both, newest first.
+        let all = list_task_runs(&config, None, None, 200).unwrap();
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0].run_id, "r-today");
+        assert_eq!(all[1].run_id, "r-old");
+
+        // Limit honoured.
+        let one = list_task_runs(&config, None, None, 1).unwrap();
+        assert_eq!(one.len(), 1);
+        assert_eq!(one[0].run_id, "r-today");
+    }
+
+    #[test]
+    fn cleanup_stale_running_marks_interrupted() {
+        let tmp = TempDir::new().unwrap();
+        let config = test_config(&tmp);
+        ensure_default_project(&config).unwrap();
+
+        let started = Utc::now();
+        insert_running_run(&config, &sample_run("r-live", "t1", started)).unwrap();
+        insert_running_run(&config, &sample_run("r-done", "t2", started)).unwrap();
+        finish_task_run(&config, "r-done", "done", started, 50, None, 0).unwrap();
+
+        cleanup_stale_running_task_runs(&config).unwrap();
+
+        let runs = list_task_runs(&config, None, None, 200).unwrap();
+        let live = runs.iter().find(|r| r.run_id == "r-live").unwrap();
+        let done = runs.iter().find(|r| r.run_id == "r-done").unwrap();
+        assert_eq!(live.status, "interrupted");
+        assert!(live.finished_at.is_some());
+        // Already-terminal rows are untouched.
+        assert_eq!(done.status, "done");
     }
 }
