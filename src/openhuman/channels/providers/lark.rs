@@ -522,7 +522,12 @@ impl LarkChannel {
                     }
 
                     let channel_msg = ChannelMessage {
-                        id: Uuid::new_v4().to_string(),
+                        // Use Feishu's real message_id (`om_…`) rather than a
+                        // synthetic UUID, so downstream can add/remove reactions
+                        // on the exact inbound message (see handle_resume_turn's
+                        // "working" reaction). It's globally unique, so the
+                        // per-message memory key stays correct.
+                        id: lark_msg.message_id.clone(),
                         sender: lark_msg.chat_id.clone(),
                         reply_target: lark_msg.chat_id.clone(),
                         content: text,
@@ -686,8 +691,16 @@ impl LarkChannel {
             .and_then(|c| c.as_str())
             .unwrap_or(open_id);
 
+        // Prefer Feishu's real message_id (`om_…`) so reactions can target the
+        // inbound message; fall back to a UUID if the payload lacks it.
+        let message_id = event
+            .pointer("/message/message_id")
+            .and_then(|c| c.as_str())
+            .map(str::to_string)
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
+
         messages.push(ChannelMessage {
-            id: Uuid::new_v4().to_string(),
+            id: message_id,
             sender: chat_id.to_string(),
             reply_target: chat_id.to_string(),
             content: text,
@@ -938,6 +951,101 @@ impl LarkChannel {
             if code != 0 {
                 let msg = v.get("msg").and_then(|m| m.as_str()).unwrap_or("(none)");
                 anyhow::bail!("Lark send returned code={code} msg={msg} body={resp_body}");
+            }
+        }
+        Ok(())
+    }
+
+    /// Add an emoji reaction to a message (Feishu
+    /// `POST /im/v1/messages/{message_id}/reactions`). Reactions do NOT push a
+    /// phone notification, so this is the right "bot is working" cue — unlike a
+    /// sent message. Returns the `reaction_id` so it can later be removed.
+    /// Requires `im:message` or `im:message.reactions:write_only` scope, and the
+    /// bot must be in the chat where the message lives.
+    pub async fn add_reaction(&self, message_id: &str, emoji_type: &str) -> anyhow::Result<String> {
+        let url = format!("{}/im/v1/messages/{message_id}/reactions", self.api_base());
+        let body = serde_json::json!({ "reaction_type": { "emoji_type": emoji_type } });
+
+        let post = |token: String| {
+            let url = url.clone();
+            let body = body.clone();
+            let client = self.http_client();
+            async move {
+                client
+                    .post(&url)
+                    .header("Authorization", format!("Bearer {token}"))
+                    .header("Content-Type", "application/json; charset=utf-8")
+                    .json(&body)
+                    .send()
+                    .await
+            }
+        };
+
+        let token = self.get_tenant_access_token().await?;
+        let mut resp = post(token).await?;
+        if resp.status().as_u16() == 401 {
+            self.invalidate_token().await;
+            let new_token = self.get_tenant_access_token().await?;
+            resp = post(new_token).await?;
+        }
+        let status = resp.status();
+        let resp_body = resp.text().await.unwrap_or_default();
+        if !status.is_success() {
+            anyhow::bail!("Lark add_reaction failed: http={status} body={resp_body}");
+        }
+        let v: serde_json::Value = serde_json::from_str(&resp_body)
+            .map_err(|e| anyhow::anyhow!("Lark add_reaction: bad JSON: {e} body={resp_body}"))?;
+        let code = v.get("code").and_then(|c| c.as_i64()).unwrap_or(-1);
+        if code != 0 {
+            let msg = v.get("msg").and_then(|m| m.as_str()).unwrap_or("(none)");
+            anyhow::bail!("Lark add_reaction returned code={code} msg={msg}");
+        }
+        let reaction_id = v
+            .pointer("/data/reaction_id")
+            .and_then(|c| c.as_str())
+            .unwrap_or("")
+            .to_string();
+        Ok(reaction_id)
+    }
+
+    /// Remove a previously-added reaction (Feishu
+    /// `DELETE /im/v1/messages/{message_id}/reactions/{reaction_id}`). Best-effort:
+    /// used to clear the "working" cue once the answer is sent.
+    pub async fn remove_reaction(&self, message_id: &str, reaction_id: &str) -> anyhow::Result<()> {
+        let url = format!(
+            "{}/im/v1/messages/{message_id}/reactions/{reaction_id}",
+            self.api_base()
+        );
+
+        let del = |token: String| {
+            let url = url.clone();
+            let client = self.http_client();
+            async move {
+                client
+                    .delete(&url)
+                    .header("Authorization", format!("Bearer {token}"))
+                    .send()
+                    .await
+            }
+        };
+
+        let token = self.get_tenant_access_token().await?;
+        let mut resp = del(token).await?;
+        if resp.status().as_u16() == 401 {
+            self.invalidate_token().await;
+            let new_token = self.get_tenant_access_token().await?;
+            resp = del(new_token).await?;
+        }
+        let status = resp.status();
+        let resp_body = resp.text().await.unwrap_or_default();
+        if !status.is_success() {
+            anyhow::bail!("Lark remove_reaction failed: http={status} body={resp_body}");
+        }
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&resp_body) {
+            let code = v.get("code").and_then(|c| c.as_i64()).unwrap_or(0);
+            if code != 0 {
+                let msg = v.get("msg").and_then(|m| m.as_str()).unwrap_or("(none)");
+                anyhow::bail!("Lark remove_reaction returned code={code} msg={msg}");
             }
         }
         Ok(())

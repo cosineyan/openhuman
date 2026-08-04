@@ -842,7 +842,38 @@ async fn handle_resume_turn(
         hint_thread_id: Some(binding.claude_session_id.as_str()),
     };
 
-    match provider.chat(request, &model, 0.0).await {
+    // Add an "OnIt" (在处理了) reaction to the user's message so they see the bot
+    // picked it up. Reactions do NOT push a phone notification — unlike sending a
+    // message — so this is the non-intrusive "working" cue the user wanted: quiet
+    // while Claude works, then a real (pushing) message once the answer is ready.
+    // `msg.id` is Feishu's real `om_…` message_id (set by the lark listener).
+    let lark = ctx
+        .config
+        .channels_config
+        .lark
+        .as_ref()
+        .map(crate::openhuman::channels::lark::LarkChannel::from_config);
+    let working_reaction = match lark.as_ref() {
+        Some(l) => match l.add_reaction(&msg.id, "OnIt").await {
+            Ok(id) => Some(id),
+            Err(e) => {
+                tracing::debug!("[lark-resume] working reaction failed: {e}");
+                None
+            }
+        },
+        None => None,
+    };
+
+    let chat_result = provider.chat(request, &model, 0.0).await;
+
+    // Clear the working reaction now that we're about to reply (best-effort).
+    if let (Some(l), Some(reaction_id)) = (lark.as_ref(), working_reaction.as_deref()) {
+        if let Err(e) = l.remove_reaction(&msg.id, reaction_id).await {
+            tracing::debug!("[lark-resume] clearing working reaction failed: {e}");
+        }
+    }
+
+    match chat_result {
         Ok(resp) => {
             let text = resp.text.unwrap_or_default();
             if let Some(channel) = target_channel {
