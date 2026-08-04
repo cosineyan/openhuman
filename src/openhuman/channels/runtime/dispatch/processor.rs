@@ -251,7 +251,41 @@ pub(crate) async fn process_channel_message(
         .cloned()
         .unwrap_or_default();
 
-    let mut history = vec![ChatMessage::system(ctx.system_prompt.as_str())];
+    // Pick the active agent for this turn (always orchestrator) and synthesise
+    // its delegation tool surface. Fresh disk read of
+    // `Config::onboarding_completed` happens inside `resolve_target_agent`.
+    // Resolved here (before the system prompt) so the per-turn orchestrator
+    // prompt can see the same tool scope + connected integrations.
+    let scoping = resolve_target_agent(&msg.channel).await;
+
+    // System prompt: build the web-equivalent orchestrator prompt per turn
+    // (orchestrator persona + native tool-call protocol) so channel turns get
+    // the same behavioral policy web-chat does. Fall back to the legacy static
+    // `ctx.system_prompt` if assembly fails — never regress basic chat.
+    let system_prompt = match super::orchestrator_prompt::build_orchestrator_channel_prompt(
+        ctx.workspace_dir.as_path(),
+        ctx.model.as_str(),
+        ctx.tools_registry.as_ref(),
+        &scoping.extra_tools,
+        scoping
+            .visible_tool_names
+            .as_ref()
+            .unwrap_or(&std::collections::HashSet::new()),
+        ctx.tool_dispatcher.as_ref(),
+        &scoping.connected_integrations,
+    ) {
+        Ok(prompt) => prompt,
+        Err(e) => {
+            tracing::warn!(
+                channel = %msg.channel,
+                error = %e,
+                "[dispatch] orchestrator prompt build failed — falling back to static channel prompt"
+            );
+            ctx.system_prompt.as_str().to_string()
+        }
+    };
+
+    let mut history = vec![ChatMessage::system(system_prompt)];
     history.append(&mut prior_turns);
     history.push(ChatMessage::user(&enriched_message));
 
@@ -380,10 +414,6 @@ pub(crate) async fn process_channel_message(
     // The agent handler owns the history vector — we `mem::take` the
     // local one to avoid an unnecessary clone; `history` is not read
     // again below.
-    // Pick the active agent for this turn (always orchestrator) and
-    // synthesise its delegation tool surface. Fresh disk read of
-    // `Config::onboarding_completed` happens inside `resolve_target_agent`.
-    let scoping = resolve_target_agent(&msg.channel).await;
 
     // A channel's explicitly-registered `tools_registry` tools are always visible
     // to the model. The resolved agent's visible-tool scope is meant to filter the

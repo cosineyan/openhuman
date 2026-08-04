@@ -20,6 +20,7 @@ fn list_tools_exposes_base_mcp_surface_when_searxng_disabled() {
             "agent.run_subagent",
             "memory.search",
             "memory.recall",
+            "memory.profile_person",
             "tree.read_chunk",
             "tree.browse",
             "tree.top_entities",

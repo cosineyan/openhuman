@@ -8,6 +8,7 @@
 //!   [`run_message_dispatch_loop`]) and approval-surface gate.
 
 mod helpers;
+mod orchestrator_prompt;
 mod processor;
 mod routing;
 

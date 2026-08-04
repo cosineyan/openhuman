@@ -586,6 +586,7 @@ mod tests {
             "agent.run_subagent",
             "memory.search",
             "memory.recall",
+            "memory.profile_person",
             "memory.store",
             "memory.note",
             "tree.read_chunk",

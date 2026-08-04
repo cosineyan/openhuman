@@ -589,6 +589,31 @@ impl ToolDispatcher for NativeToolDispatcher {
     }
 }
 
+/// Select a tool dispatcher the same way the session builder does, so callers
+/// outside the `Agent` construction path (e.g. channel runtimes) can render
+/// the *same* tool-call protocol instructions in their system prompt.
+///
+/// Mirrors the core selection in
+/// `agent/harness/session/builder/factory.rs` (the `dispatcher_choice` match):
+/// an explicit `config.agent.tool_dispatcher` of `"native"`/`"xml"`/`"pformat"`
+/// wins; otherwise native-capable providers get [`NativeToolDispatcher`] and
+/// text-only providers fall back to P-Format. The `integrations_agent`
+/// grammar-rule workaround is NOT replicated here — this helper is for the
+/// generic channel/orchestrator path.
+pub fn select_tool_dispatcher(
+    dispatcher_choice: &str,
+    supports_native: bool,
+    tools: &[Box<dyn Tool>],
+) -> Box<dyn ToolDispatcher> {
+    match dispatcher_choice {
+        "native" => Box::new(NativeToolDispatcher),
+        "xml" => Box::new(XmlToolDispatcher),
+        "pformat" => Box::new(PFormatToolDispatcher::new(pformat::build_registry(tools))),
+        _ if supports_native => Box::new(NativeToolDispatcher),
+        _ => Box::new(PFormatToolDispatcher::new(pformat::build_registry(tools))),
+    }
+}
+
 #[cfg(test)]
 #[path = "dispatcher_tests.rs"]
 mod tests;

@@ -456,6 +456,13 @@ pub async fn run_dispatch_harness(options: DispatchHarnessOptions) -> DispatchHa
         message_timeout_secs: options.timeout_secs,
         multimodal: MultimodalConfig::default(),
         multimodal_files: MultimodalFileConfig::default(),
+        config: Arc::new(crate::openhuman::config::Config::default()),
+        tool_dispatcher: crate::openhuman::agent::dispatcher::select_tool_dispatcher(
+            "",
+            false,
+            &[Box::new(HarnessTool) as Box<dyn Tool>],
+        )
+        .into(),
     });
 
     process_channel_message(

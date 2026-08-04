@@ -3,9 +3,7 @@
 
 use super::helpers::prefetch_tool_memory_rules_blocking;
 use super::should_synthesize_delegation_tools;
-use crate::openhuman::agent::dispatcher::{
-    NativeToolDispatcher, PFormatToolDispatcher, XmlToolDispatcher,
-};
+use crate::openhuman::agent::dispatcher::XmlToolDispatcher;
 use crate::openhuman::agent::harness::definition::{
     AgentDefinitionRegistry, PromptSource, ToolScope,
 };
@@ -943,15 +941,11 @@ impl Agent {
         // reference back into the tools Vec.
         let pformat_registry = crate::openhuman::agent::pformat::build_registry(&tools);
         let tool_dispatcher: Box<dyn crate::openhuman::agent::dispatcher::ToolDispatcher> =
-            match dispatcher_choice.as_str() {
-                "native" => Box::new(NativeToolDispatcher),
-                "xml" => Box::new(XmlToolDispatcher),
-                "pformat" => Box::new(PFormatToolDispatcher::new(pformat_registry.clone())),
-                _ if supports_native => Box::new(NativeToolDispatcher),
-                // Default for text-only providers: P-Format. Flip the
-                // `agent.tool_dispatcher` config to `"xml"` to revert.
-                _ => Box::new(PFormatToolDispatcher::new(pformat_registry.clone())),
-            };
+            crate::openhuman::agent::dispatcher::select_tool_dispatcher(
+                dispatcher_choice.as_str(),
+                supports_native,
+                &tools,
+            );
 
         // Provider-side grammar decoders (e.g. Fireworks) compile every
         // tool JSON schema into a grammar and index its rules with a

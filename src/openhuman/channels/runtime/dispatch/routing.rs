@@ -26,6 +26,11 @@ pub(super) struct AgentScoping {
     pub(super) target_agent_id: Option<String>,
     pub(super) visible_tool_names: Option<HashSet<String>>,
     pub(super) extra_tools: Vec<Box<dyn Tool>>,
+    /// Connected Composio integrations fetched while synthesising delegation
+    /// tools. Carried out so the per-turn orchestrator prompt can render the
+    /// delegation guide without a second fetch. Empty when the target agent
+    /// has no `subagents` (no fetch performed) or the fetch timed out.
+    pub(super) connected_integrations: Vec<crate::openhuman::context::prompt::ConnectedIntegration>,
 }
 
 impl AgentScoping {
@@ -39,6 +44,7 @@ impl AgentScoping {
             target_agent_id: None,
             visible_tool_names: None,
             extra_tools: Vec::new(),
+            connected_integrations: Vec::new(),
         }
     }
 }
@@ -109,7 +115,7 @@ pub(super) async fn resolve_target_agent(channel: &str) -> AgentScoping {
     // Wrap the Composio fetch in a 3-second timeout so a slow/unresponsive
     // Composio API can never block turn dispatch indefinitely.
     const COMPOSIO_FETCH_TIMEOUT_SECS: u64 = 3;
-    let extra_tools = if !definition.subagents.is_empty() {
+    let (extra_tools, connected_integrations) = if !definition.subagents.is_empty() {
         let connected = match tokio::time::timeout(
             Duration::from_secs(COMPOSIO_FETCH_TIMEOUT_SECS),
             fetch_connected_integrations(&config),
@@ -133,9 +139,13 @@ pub(super) async fn resolve_target_agent(channel: &str) -> AgentScoping {
             connected_integration_count = connected.len(),
             "[dispatch::routing] fetched connected integrations for delegation expansion"
         );
-        orchestrator_tools::collect_orchestrator_tools(definition, registry, &connected)
+        let tools =
+            orchestrator_tools::collect_orchestrator_tools(definition, registry, &connected);
+        // Carry `connected` out so the per-turn orchestrator prompt can render
+        // the delegation guide without a second Composio fetch.
+        (tools, connected)
     } else {
-        Vec::new()
+        (Vec::new(), Vec::new())
     };
 
     let visible_tool_names = build_visible_tool_set(definition, &extra_tools);
@@ -156,6 +166,7 @@ pub(super) async fn resolve_target_agent(channel: &str) -> AgentScoping {
         target_agent_id: Some(target_id.to_string()),
         visible_tool_names,
         extra_tools,
+        connected_integrations,
     }
 }
 

@@ -30,6 +30,7 @@ pub fn all_controller_schemas() -> Vec<ControllerSchema> {
         schemas("search_entities"),
         schemas("drill_down"),
         schemas("fetch_leaves"),
+        schemas("profile_person"),
     ]
 }
 
@@ -56,6 +57,10 @@ pub fn all_registered_controllers() -> Vec<RegisteredController> {
         RegisteredController {
             schema: schemas("fetch_leaves"),
             handler: handle_fetch_leaves,
+        },
+        RegisteredController {
+            schema: schemas("profile_person"),
+            handler: handle_profile_person,
         },
     ]
 }
@@ -296,6 +301,36 @@ pub fn schemas(function: &str) -> ControllerSchema {
                 required: true,
             }],
         },
+        "profile_person" => ControllerSchema {
+            namespace: NAMESPACE,
+            function: "profile_person",
+            description: "Profile a specific person: fetch their live org chart \
+                 (manager, direct reports, department) from Microsoft Graph and \
+                 merge it with recalled memory about them. Provide at least `name` \
+                 or `email`. This is the authoritative source for org-chart data — \
+                 do NOT answer person-profile questions from conversation history.",
+            inputs: vec![
+                FieldSchema {
+                    name: "name",
+                    ty: TypeSchema::Option(Box::new(TypeSchema::String)),
+                    comment: "Person's display name (e.g. \"Sue Alexander\"). \
+                     Provide this or `email`.",
+                    required: false,
+                },
+                FieldSchema {
+                    name: "email",
+                    ty: TypeSchema::Option(Box::new(TypeSchema::String)),
+                    comment: "Person's email address. Provide this or `name`.",
+                    required: false,
+                },
+            ],
+            outputs: vec![FieldSchema {
+                name: "content",
+                ty: TypeSchema::Array(Box::new(TypeSchema::Ref("ToolContent"))),
+                comment: "Profile content blocks (org chart + recalled memory).",
+                required: true,
+            }],
+        },
         _ => ControllerSchema {
             namespace: NAMESPACE,
             function: "unknown",
@@ -358,6 +393,22 @@ fn handle_fetch_leaves(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
+/// Profile a person via the native `profile_person` tool (Graph org chart +
+/// recalled memory). Delegates straight to the tool's `execute` so the MCP
+/// surface and the in-process agent share one implementation. Serialises the
+/// tool's `ToolResult` (content blocks + `is_error`) to JSON.
+fn handle_profile_person(params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        use crate::openhuman::memory::query::ProfilePersonTool;
+        use crate::openhuman::tools::Tool;
+        let result = ProfilePersonTool
+            .execute(Value::Object(params))
+            .await
+            .map_err(|e| format!("profile_person failed: {e:#}"))?;
+        serde_json::to_value(&result).map_err(|e| format!("serialize profile_person result: {e}"))
+    })
+}
+
 fn parse_value<T: DeserializeOwned>(v: Value) -> Result<T, String> {
     serde_json::from_value(v).map_err(|e| format!("invalid params: {e}"))
 }
@@ -382,6 +433,7 @@ mod tests {
                 "search_entities",
                 "drill_down",
                 "fetch_leaves",
+                "profile_person",
             ]
         );
     }
@@ -389,7 +441,7 @@ mod tests {
     #[test]
     fn registered_controllers_use_memory_tree_namespace() {
         let controllers = all_registered_controllers();
-        assert_eq!(controllers.len(), 5);
+        assert_eq!(controllers.len(), 6);
         assert!(controllers.iter().all(|c| c.schema.namespace == NAMESPACE));
     }
 

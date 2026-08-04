@@ -67,6 +67,13 @@ pub(crate) struct ChannelRuntimeContext {
     pub(crate) message_timeout_secs: u64,
     pub(crate) multimodal: crate::openhuman::config::MultimodalConfig,
     pub(crate) multimodal_files: crate::openhuman::config::MultimodalFileConfig,
+    /// Full config, kept so per-turn prompt assembly can pick a tool
+    /// dispatcher and read agent settings the same way the web path does.
+    pub(crate) config: Arc<crate::openhuman::config::Config>,
+    /// Tool dispatcher selected once at startup (native / XML / P-Format),
+    /// mirroring the session builder's choice. Drives the tool-call protocol
+    /// instructions injected into the per-turn orchestrator system prompt.
+    pub(crate) tool_dispatcher: Arc<dyn crate::openhuman::agent::dispatcher::ToolDispatcher>,
 }
 
 pub(crate) fn conversation_memory_key(msg: &super::traits::ChannelMessage) -> String {

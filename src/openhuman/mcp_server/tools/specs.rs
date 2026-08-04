@@ -102,6 +102,30 @@ pub fn base_tool_specs() -> Vec<McpToolSpec> {
             annotations: read_only_local_annotations(),
         },
         McpToolSpec {
+            name: "memory.profile_person",
+            title: "Profile Person",
+            description: "Profile a specific person: fetch their live org chart (manager, direct reports, department) \
+                          from Microsoft Graph and merge it with recalled memory about them. Provide at least `name` \
+                          or `email`. This is the authoritative source for org-chart data — use it (not conversation \
+                          history) whenever the user asks to profile / \"tell me about\" / \"who is\" a person.",
+            rpc_method: Some("openhuman.memory_tree_profile_person"),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Person's display name (e.g. \"Sue Alexander\"). Provide this or `email`."
+                    },
+                    "email": {
+                        "type": "string",
+                        "description": "Person's email address. Provide this or `name`."
+                    }
+                },
+                "additionalProperties": false
+            }),
+            annotations: read_only_local_annotations(),
+        },
+        McpToolSpec {
             name: "tree.read_chunk",
             title: "Read Memory Chunk",
             description: "Read one memory-tree chunk by id. Use this to inspect the source text behind search or recall results. The response includes a `body` field with the full original text (not truncated), and a `chunk` field with metadata.",

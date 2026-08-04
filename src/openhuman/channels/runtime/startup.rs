@@ -744,6 +744,18 @@ pub async fn start_channels(mut config: Config) -> Result<()> {
     let message_timeout_secs =
         effective_channel_message_timeout_secs(config.channels_config.message_timeout_secs);
 
+    // Select the tool dispatcher once, the same way the session builder does,
+    // so per-turn channel prompts can render the matching tool-call protocol
+    // (native / XML / P-Format). Channels reuse this across turns.
+    let tool_dispatcher: Arc<dyn crate::openhuman::agent::dispatcher::ToolDispatcher> =
+        crate::openhuman::agent::dispatcher::select_tool_dispatcher(
+            config.agent.tool_dispatcher.as_str(),
+            provider.supports_native_tools(),
+            tools_registry.as_ref(),
+        )
+        .into();
+    let config_arc = Arc::new(config.clone());
+
     let runtime_ctx = Arc::new(ChannelRuntimeContext {
         channels_by_name,
         provider: Arc::clone(&provider),
@@ -767,6 +779,8 @@ pub async fn start_channels(mut config: Config) -> Result<()> {
         message_timeout_secs,
         multimodal: config.multimodal.clone(),
         multimodal_files: config.multimodal_files.clone(),
+        config: config_arc,
+        tool_dispatcher,
     });
 
     run_message_dispatch_loop(rx, runtime_ctx, max_in_flight_messages).await;

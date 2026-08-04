@@ -6,10 +6,10 @@ use crate::openhuman::tools::SEARXNG_MAX_RESULTS;
 use super::types::{
     McpToolSpec, ToolCallError, DEFAULT_LIMIT, MAX_LIMIT, MEMORY_NOTE_ARGUMENTS,
     MEMORY_QUERY_SOURCE_ARGUMENTS, MEMORY_SMART_WALK_ARGUMENTS, MEMORY_STORE_ARGUMENTS,
-    PROJECTS_LIST_TASK_RUNS_ARGUMENTS, QUERY_ARGUMENTS, SEARXNG_SEARCH_ARGUMENTS,
-    SUBAGENT_RUN_ARGUMENTS, TREE_BROWSE_ARGUMENTS, TREE_LIST_SOURCES_ARGUMENTS,
-    TREE_READ_CHUNK_ARGUMENTS, TREE_TAG_ARGUMENTS, TREE_TAG_MAX_TAGS, TREE_TAG_MAX_TAG_LENGTH,
-    TREE_TOP_ENTITIES_ARGUMENTS,
+    PROFILE_PERSON_ARGUMENTS, PROJECTS_LIST_TASK_RUNS_ARGUMENTS, QUERY_ARGUMENTS,
+    SEARXNG_SEARCH_ARGUMENTS, SUBAGENT_RUN_ARGUMENTS, TREE_BROWSE_ARGUMENTS,
+    TREE_LIST_SOURCES_ARGUMENTS, TREE_READ_CHUNK_ARGUMENTS, TREE_TAG_ARGUMENTS, TREE_TAG_MAX_TAGS,
+    TREE_TAG_MAX_TAG_LENGTH, TREE_TOP_ENTITIES_ARGUMENTS,
 };
 
 pub fn build_rpc_params(
@@ -39,6 +39,25 @@ pub fn build_rpc_params(
                 ("query".to_string(), Value::String(query)),
                 ("k".to_string(), Value::from(limit)),
             ]))
+        }
+        "memory.profile_person" => {
+            reject_unexpected_arguments(&args, PROFILE_PERSON_ARGUMENTS)?;
+            // At least one of name/email is required; both optional individually.
+            let name = optional_non_empty_string(&args, "name")?;
+            let email = optional_non_empty_string(&args, "email")?;
+            if name.is_none() && email.is_none() {
+                return Err(ToolCallError::InvalidParams(
+                    "memory.profile_person requires at least `name` or `email`".to_string(),
+                ));
+            }
+            let mut params = Map::new();
+            if let Some(name) = name {
+                params.insert("name".to_string(), Value::String(name));
+            }
+            if let Some(email) = email {
+                params.insert("email".to_string(), Value::String(email));
+            }
+            Ok(params)
         }
         "searxng_search" => {
             reject_unexpected_arguments(&args, SEARXNG_SEARCH_ARGUMENTS)?;
