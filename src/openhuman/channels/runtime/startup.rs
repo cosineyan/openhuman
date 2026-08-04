@@ -605,7 +605,9 @@ pub async fn start_channels(mut config: Config) -> Result<()> {
 
     if let Some(ref lk) = config.channels_config.lark {
         channels.push(Arc::new(
-            LarkChannel::from_config(lk).with_card_action_tx(card_action_tx.clone()),
+            LarkChannel::from_config(lk)
+                .with_card_action_tx(card_action_tx.clone())
+                .with_config(Arc::new(config.clone())),
         ));
     }
 

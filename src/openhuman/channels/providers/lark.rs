@@ -157,6 +157,16 @@ pub struct LarkChannel {
     /// instance only; notification-only instances leave it None.
     card_action_tx:
         Option<tokio::sync::mpsc::Sender<crate::openhuman::channels::traits::CardAction>>,
+    /// Core config, wired for the listening instance only. Needed to look up
+    /// `feishu_session_bindings` (resume groups skip the @-mention gate) and,
+    /// via the API, to count members of a group. Notification-only instances
+    /// leave this None.
+    config: Option<Arc<crate::openhuman::config::Config>>,
+    /// Cache of `chat_id → is_two_member_group`, so the @-mention exemption
+    /// for "just me + bot" groups costs one members API call per group, not one
+    /// per message. Entries never change (membership of a bot DM group is fixed
+    /// for our purposes), so no TTL is needed.
+    two_member_cache: Arc<RwLock<HashMap<String, bool>>>,
 }
 
 impl LarkChannel {
@@ -178,6 +188,8 @@ impl LarkChannel {
             tenant_token: Arc::new(RwLock::new(None)),
             ws_seen_ids: Arc::new(RwLock::new(HashMap::new())),
             card_action_tx: None,
+            config: None,
+            two_member_cache: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -203,6 +215,14 @@ impl LarkChannel {
         tx: tokio::sync::mpsc::Sender<crate::openhuman::channels::traits::CardAction>,
     ) -> Self {
         self.card_action_tx = Some(tx);
+        self
+    }
+
+    /// Attach the core config so the listening instance can consult
+    /// `feishu_session_bindings` and the members API for the group @-mention
+    /// exemption. Only the listening instance needs this.
+    pub fn with_config(mut self, config: Arc<crate::openhuman::config::Config>) -> Self {
+        self.config = Some(config);
         self
     }
 
@@ -491,8 +511,13 @@ impl LarkChannel {
                     let text = text.trim().to_string();
                     if text.is_empty() { continue; }
 
-                    // Group-chat: only respond when explicitly @-mentioned
-                    if lark_msg.chat_type == "group" && !should_respond_in_group(&lark_msg.mentions) {
+                    // Group-chat: normally only respond when explicitly @-mentioned.
+                    // Exception: "just me + bot" groups (resume-bound, or any
+                    // 2-member group) respond to every message — no @ needed.
+                    if lark_msg.chat_type == "group"
+                        && !should_respond_in_group(&lark_msg.mentions)
+                        && !self.group_exempt_from_mention(&lark_msg.chat_id).await
+                    {
                         continue;
                     }
 
@@ -774,6 +799,89 @@ impl LarkChannel {
         Ok(chat_id)
     }
 
+    /// Decide whether an inbound group message should be answered even though it
+    /// does not @-mention the bot. Two "just me + bot" cases are exempted:
+    ///   1. **Resume groups** — the chat is bound to a task's Claude Code session
+    ///      in `feishu_session_bindings`. O(1) local lookup, no API call.
+    ///   2. **Any 2-member group** — the group contains exactly the user + the
+    ///      bot. Confirmed via the members API and cached per chat_id.
+    /// Returns false (i.e. still require @) on any lookup/API failure — the safe
+    /// default is the existing behaviour.
+    async fn group_exempt_from_mention(&self, chat_id: &str) -> bool {
+        let Some(config) = self.config.as_ref() else {
+            return false;
+        };
+
+        // 1. Resume-bound group → always exempt (cheap local lookup).
+        match crate::openhuman::projects::store::get_binding_by_chat(config, chat_id) {
+            Ok(Some(_)) => {
+                tracing::debug!("[lark] group {chat_id} is resume-bound, skipping @ requirement");
+                return true;
+            }
+            Ok(None) => {}
+            Err(e) => tracing::warn!("[lark] binding lookup failed for {chat_id}: {e}"),
+        }
+
+        // 2. Otherwise, exempt only if it's a 2-member group (user + bot).
+        self.is_two_member_group(chat_id).await
+    }
+
+    /// True when the group has exactly two members (the user and the bot).
+    /// Result is cached per chat_id to keep this to one API call per group.
+    async fn is_two_member_group(&self, chat_id: &str) -> bool {
+        if let Some(cached) = self.two_member_cache.read().await.get(chat_id).copied() {
+            return cached;
+        }
+        let is_two = match self.count_chat_members(chat_id).await {
+            Ok(n) => n == 2,
+            Err(e) => {
+                tracing::warn!("[lark] member count failed for {chat_id}: {e}");
+                return false; // don't cache failures; require @ this round
+            }
+        };
+        self.two_member_cache
+            .write()
+            .await
+            .insert(chat_id.to_string(), is_two);
+        tracing::debug!("[lark] group {chat_id} member-count exempt={is_two}");
+        is_two
+    }
+
+    /// Count members of a Feishu group via `GET /im/v1/chats/{chat_id}/members`.
+    /// Reads only the first page's `member_total`, which is the full count.
+    async fn count_chat_members(&self, chat_id: &str) -> anyhow::Result<usize> {
+        let url = format!(
+            "{}/im/v1/chats/{chat_id}/members?page_size=1",
+            self.api_base()
+        );
+        let get_once = |token: String| {
+            let url = url.clone();
+            let client = self.http_client();
+            async move {
+                client
+                    .get(&url)
+                    .header("Authorization", format!("Bearer {token}"))
+                    .send()
+                    .await
+            }
+        };
+
+        let token = self.get_tenant_access_token().await?;
+        let mut resp = get_once(token).await?;
+        if resp.status().as_u16() == 401 {
+            self.invalidate_token().await;
+            let new_token = self.get_tenant_access_token().await?;
+            resp = get_once(new_token).await?;
+        }
+
+        let status = resp.status();
+        let resp_body = resp.text().await.unwrap_or_default();
+        if !status.is_success() {
+            anyhow::bail!("Lark list members failed: http={status} body={resp_body}");
+        }
+        parse_member_total(&resp_body)
+    }
+
     /// POST an interactive card (already-built JSON) to a recipient. Shared by
     /// `send()` and the completion-notice/resume-button paths. Handles token,
     /// 401-retry-once, and the Feishu business-`code` check.
@@ -1034,6 +1142,24 @@ fn strip_at_placeholders(text: &str) -> String {
 /// In group chats, only respond when the bot is explicitly @-mentioned.
 fn should_respond_in_group(mentions: &[serde_json::Value]) -> bool {
     !mentions.is_empty()
+}
+
+/// Extract `data.member_total` from a Feishu `GET .../members` response body,
+/// enforcing the business `code == 0` check. Split out from the HTTP call so it
+/// can be unit-tested without a network round-trip.
+fn parse_member_total(resp_body: &str) -> anyhow::Result<usize> {
+    let v: serde_json::Value = serde_json::from_str(resp_body)
+        .map_err(|e| anyhow::anyhow!("Lark list members: bad JSON: {e} body={resp_body}"))?;
+    let code = v.get("code").and_then(|c| c.as_i64()).unwrap_or(-1);
+    if code != 0 {
+        let msg = v.get("msg").and_then(|m| m.as_str()).unwrap_or("(none)");
+        anyhow::bail!("Lark list members returned code={code} msg={msg}");
+    }
+    let total = v
+        .pointer("/data/member_total")
+        .and_then(|c| c.as_u64())
+        .ok_or_else(|| anyhow::anyhow!("Lark list members: missing data.member_total"))?;
+    Ok(total as usize)
 }
 
 /// Parse a Feishu `card.action.trigger` event payload into a `CardAction`.
@@ -1401,6 +1527,10 @@ pub mod test_support {
 
     pub fn markdown_to_lark_card_for_test(md: &str) -> serde_json::Value {
         markdown_to_lark_card(md)
+    }
+
+    pub fn parse_member_total_for_test(resp_body: &str) -> anyhow::Result<usize> {
+        parse_member_total(resp_body)
     }
 
     pub fn strip_at_placeholders_for_test(text: &str) -> String {

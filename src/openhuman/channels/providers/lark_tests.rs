@@ -797,3 +797,28 @@ fn lark_config_defaults_notify_target_none() {
     let parsed: LarkConfig = serde_json::from_str(json).unwrap();
     assert!(parsed.notify_target.is_none());
 }
+
+#[test]
+fn parse_member_total_reads_two_member_group() {
+    let body = r#"{"code":0,"msg":"success","data":{"member_total":2,"items":[]}}"#;
+    assert_eq!(parse_member_total(body).unwrap(), 2);
+}
+
+#[test]
+fn parse_member_total_reads_larger_group() {
+    let body = r#"{"code":0,"data":{"member_total":5}}"#;
+    assert_eq!(parse_member_total(body).unwrap(), 5);
+}
+
+#[test]
+fn parse_member_total_errors_on_business_code() {
+    let body = r#"{"code":99991672,"msg":"no permission"}"#;
+    let err = parse_member_total(body).unwrap_err().to_string();
+    assert!(err.contains("99991672"), "err was: {err}");
+}
+
+#[test]
+fn parse_member_total_errors_on_missing_total() {
+    let body = r#"{"code":0,"data":{}}"#;
+    assert!(parse_member_total(body).is_err());
+}
