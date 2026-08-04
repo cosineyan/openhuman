@@ -653,10 +653,15 @@ impl Channel for LarkChannel {
         let token = self.get_tenant_access_token().await?;
         let url = self.send_message_url();
 
-        let content = serde_json::json!({ "text": message.content }).to_string();
+        // Feishu's `text` message type renders no Markdown, so the agent's
+        // `**bold**` / `# headings` / ```` ``` ```` show up as raw syntax. Send an
+        // interactive card with a `markdown` element instead — `lark_md` renders
+        // bold/italic/links/lists/dividers. `markdown_to_lark_card` downgrades the
+        // few constructs lark_md can't handle (headings, fenced code, tables).
+        let content = markdown_to_lark_card(&message.content).to_string();
         let body = serde_json::json!({
             "receive_id": message.recipient,
-            "msg_type": "text",
+            "msg_type": "interactive",
             "content": content,
         });
 
@@ -899,6 +904,100 @@ fn should_respond_in_group(mentions: &[serde_json::Value]) -> bool {
     !mentions.is_empty()
 }
 
+/// Normalize standard Markdown (what the agent produces) into Feishu `lark_md`,
+/// the Markdown dialect accepted inside an interactive card's `markdown` element.
+///
+/// `lark_md` renders inline `**bold**`, `*italic*`, `~~strike~~`, `[text](url)`,
+/// ordered/unordered lists, and `---` dividers natively, so those pass through
+/// untouched. It does NOT understand three things the agent commonly emits, so
+/// we downgrade them here to keep output readable rather than leaking raw syntax:
+///
+/// 1. ATX headings (`# H1` … `###### H6`) → `**bold**` on their own line.
+/// 2. Fenced code blocks (```` ``` ````): drop the fence lines, keep the body as
+///    plain text (lark_md has no block-code element; inline `` `code` `` is kept).
+/// 3. Table separator rows (`|---|:--:|`): dropped, since lark_md has no table
+///    syntax — the header/body rows survive as pipe-delimited text.
+fn normalize_markdown_for_lark(md: &str) -> String {
+    let mut out: Vec<String> = Vec::new();
+    let mut in_fence = false;
+
+    for line in md.lines() {
+        let trimmed = line.trim_start();
+
+        // Toggle fenced code blocks; drop the fence delimiter lines themselves.
+        if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+            in_fence = !in_fence;
+            continue;
+        }
+        if in_fence {
+            // Keep code body verbatim as plain text.
+            out.push(line.to_string());
+            continue;
+        }
+
+        // Table separator rows like `|---|---|` or `| :--- | ---: |` → drop.
+        if is_table_separator_row(trimmed) {
+            continue;
+        }
+
+        // ATX headings → bold. Count leading `#` (1..=6) followed by a space.
+        if let Some(heading) = atx_heading_to_bold(trimmed) {
+            out.push(heading);
+            continue;
+        }
+
+        out.push(line.to_string());
+    }
+
+    // If an unterminated fence left us "inside" a block, that's fine — the body
+    // was already emitted as plain text above.
+    out.join("\n")
+}
+
+/// `# Heading` (1–6 `#` then a space) → `**Heading**`. Returns `None` otherwise.
+fn atx_heading_to_bold(trimmed: &str) -> Option<String> {
+    let hashes = trimmed.chars().take_while(|&c| c == '#').count();
+    if (1..=6).contains(&hashes) {
+        let rest = &trimmed[hashes..];
+        if let Some(text) = rest.strip_prefix(' ') {
+            let text = text.trim_end();
+            if text.is_empty() {
+                return Some(String::new());
+            }
+            return Some(format!("**{text}**"));
+        }
+    }
+    None
+}
+
+/// True for Markdown table separator rows: a pipe-delimited line whose cells are
+/// only dashes/colons/spaces (e.g. `|---|:--:|`, `| :--- | ---: |`).
+fn is_table_separator_row(trimmed: &str) -> bool {
+    if !trimmed.contains('|') || !trimmed.contains('-') {
+        return false;
+    }
+    let body = trimmed.trim_matches('|');
+    body.split('|').all(|cell| {
+        let c = cell.trim();
+        !c.is_empty() && c.chars().all(|ch| ch == '-' || ch == ':')
+    })
+}
+
+/// Wrap normalized `lark_md` text into an interactive card payload (the value
+/// of the `content` field for a `msg_type: "interactive"` message).
+fn markdown_to_lark_card(md: &str) -> serde_json::Value {
+    let body = normalize_markdown_for_lark(md);
+    serde_json::json!({
+        "config": { "wide_screen_mode": true },
+        "elements": [
+            {
+                "tag": "markdown",
+                "content": body,
+            }
+        ]
+    })
+}
+
 #[cfg(test)]
 #[path = "lark_tests.rs"]
 mod tests;
@@ -914,6 +1013,14 @@ pub mod test_support {
 
     pub fn parse_post_content_for_test(content: &str) -> Option<String> {
         parse_post_content(content)
+    }
+
+    pub fn normalize_markdown_for_lark_for_test(md: &str) -> String {
+        normalize_markdown_for_lark(md)
+    }
+
+    pub fn markdown_to_lark_card_for_test(md: &str) -> serde_json::Value {
+        markdown_to_lark_card(md)
     }
 
     pub fn strip_at_placeholders_for_test(text: &str) -> String {

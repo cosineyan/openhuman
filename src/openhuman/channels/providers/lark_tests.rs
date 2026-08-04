@@ -611,3 +611,76 @@ fn lark_parse_event_payload_post_type_extracts_readable_text() {
     assert_eq!(msgs.len(), 1);
     assert!(msgs[0].content.contains("Title"));
 }
+
+// ── markdown → lark_md normalization ───────────────────────────
+
+#[test]
+fn normalize_passes_inline_markup_through_unchanged() {
+    // lark_md renders these natively — must not be mangled.
+    let md = "**bold** and *italic* and ~~strike~~ and [link](https://x) and `code`";
+    assert_eq!(normalize_markdown_for_lark(md), md);
+}
+
+#[test]
+fn normalize_converts_atx_headings_to_bold() {
+    assert_eq!(normalize_markdown_for_lark("# Title"), "**Title**");
+    assert_eq!(
+        normalize_markdown_for_lark("### Sub heading"),
+        "**Sub heading**"
+    );
+    assert_eq!(normalize_markdown_for_lark("###### Deep"), "**Deep**");
+}
+
+#[test]
+fn normalize_leaves_seven_hashes_alone() {
+    // 7+ hashes is not a valid ATX heading — pass through untouched.
+    let md = "####### not a heading";
+    assert_eq!(normalize_markdown_for_lark(md), md);
+}
+
+#[test]
+fn normalize_requires_space_after_hashes() {
+    // `#tag` is not a heading.
+    assert_eq!(normalize_markdown_for_lark("#tag"), "#tag");
+}
+
+#[test]
+fn normalize_strips_fence_lines_keeps_code_body() {
+    let md = "before\n```rust\nlet x = 1;\n```\nafter";
+    assert_eq!(normalize_markdown_for_lark(md), "before\nlet x = 1;\nafter");
+}
+
+#[test]
+fn normalize_handles_tilde_fences() {
+    let md = "~~~\ncode\n~~~";
+    assert_eq!(normalize_markdown_for_lark(md), "code");
+}
+
+#[test]
+fn normalize_drops_table_separator_row_keeps_rows() {
+    let md = "| A | B |\n|---|---|\n| 1 | 2 |";
+    assert_eq!(normalize_markdown_for_lark(md), "| A | B |\n| 1 | 2 |");
+}
+
+#[test]
+fn normalize_drops_aligned_table_separator() {
+    let md = "| A | B |\n| :--- | ---: |\n| 1 | 2 |";
+    assert_eq!(normalize_markdown_for_lark(md), "| A | B |\n| 1 | 2 |");
+}
+
+#[test]
+fn normalize_keeps_data_rows_that_merely_contain_dashes() {
+    // A real content row with a dash must NOT be mistaken for a separator.
+    let md = "| a-b | c |";
+    assert_eq!(normalize_markdown_for_lark(md), "| a-b | c |");
+}
+
+#[test]
+fn markdown_to_lark_card_builds_interactive_payload() {
+    let card = markdown_to_lark_card("# Hi\nbody");
+    assert_eq!(card["config"]["wide_screen_mode"], serde_json::json!(true));
+    let elements = card["elements"].as_array().expect("elements array");
+    assert_eq!(elements.len(), 1);
+    assert_eq!(elements[0]["tag"], "markdown");
+    assert_eq!(elements[0]["content"], "**Hi**\nbody");
+}
