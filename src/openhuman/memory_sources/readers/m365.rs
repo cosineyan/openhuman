@@ -119,14 +119,31 @@ fn read_token_by_key(config: &Config, key: &str) -> Result<String, String> {
 // ---------------------------------------------------------------------------
 
 pub(crate) async fn graph_get(token: &str, url: &str) -> Result<serde_json::Value, String> {
+    graph_get_with_prefer(token, url, None).await
+}
+
+/// Like `graph_get`, but attaches a `Prefer` request header when `prefer` is
+/// `Some`. Used to request `IdType="ImmutableId"` so that message ids survive
+/// folder moves — without this, moving a mail to the "ai-processed" folder
+/// rotates its default (mutable) Graph id, which defeats the
+/// `(source_id, rule_id)` email-automation dedup key and re-creates the task.
+pub(crate) async fn graph_get_with_prefer(
+    token: &str,
+    url: &str,
+    prefer: Option<&str>,
+) -> Result<serde_json::Value, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| format!("build http client: {e}"))?;
-    let resp = client
+    let mut req = client
         .get(url)
         .header("Authorization", format!("Bearer {token}"))
-        .header("Content-Type", "application/json")
+        .header("Content-Type", "application/json");
+    if let Some(prefer) = prefer {
+        req = req.header("Prefer", prefer);
+    }
+    let resp = req
         .send()
         .await
         .map_err(|e| format!("graph request failed: {e}"))?;
@@ -268,7 +285,10 @@ impl SourceReader for OutlookMailReader {
             "{GRAPH_BASE}/me/messages?$top={top}&$filter=receivedDateTime ge {since}\
              &$select=id,subject,receivedDateTime,from&$orderby=receivedDateTime desc"
         );
-        let data = graph_get(&token, &url).await?;
+        // Request immutable ids so a message keeps the same id after it is moved
+        // between folders (e.g. into "ai-processed" after a task is created).
+        // Otherwise the mutable id rotates on move and breaks email-automation dedup.
+        let data = graph_get_with_prefer(&token, &url, Some("IdType=\"ImmutableId\"")).await?;
         let items = data
             .get("value")
             .and_then(|v| v.as_array())
