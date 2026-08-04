@@ -256,6 +256,35 @@ pub(crate) async fn process_channel_message(
     println!("  ⏳ Processing message...");
     let started_at = Instant::now();
 
+    // Feishu single-chats and non-resume groups get no typing indicator (Lark
+    // implements none), so add an "OnIt" (在处理了) reaction on the user's
+    // message as a silent "working" cue — reactions don't push a phone
+    // notification, unlike a message. Removed just before the reply is sent
+    // (see below). Mirrors the resume path's cue. `msg.id` is the real `om_…`.
+    // Placed after provider init (past its early return) so add and remove sit
+    // on the same no-early-return path and the reaction can't be left dangling.
+    let (lark_working, lark_reaction_id) = if msg.channel == "lark" {
+        let lark = ctx
+            .config
+            .channels_config
+            .lark
+            .as_ref()
+            .map(crate::openhuman::channels::lark::LarkChannel::from_config);
+        let reaction_id = match lark.as_ref() {
+            Some(l) => match l.add_reaction(&msg.id, "OnIt").await {
+                Ok(id) => Some(id),
+                Err(e) => {
+                    tracing::debug!("[lark] working reaction failed: {e}");
+                    None
+                }
+            },
+            None => None,
+        };
+        (lark, reaction_id)
+    } else {
+        (None, None)
+    };
+
     // Build history from per-sender conversation cache
     let mut prior_turns = ctx
         .conversation_histories
@@ -556,6 +585,14 @@ pub(crate) async fn process_channel_message(
     }
     if let Some(handle) = typing_task {
         log_worker_join_result(handle.await);
+    }
+
+    // Clear the Feishu "working" reaction now that we're about to reply
+    // (best-effort). The reply message itself is what pushes to the phone.
+    if let (Some(l), Some(reaction_id)) = (lark_working.as_ref(), lark_reaction_id.as_deref()) {
+        if let Err(e) = l.remove_reaction(&msg.id, reaction_id).await {
+            tracing::debug!("[lark] clearing working reaction failed: {e}");
+        }
     }
 
     let (success, response_text) = match llm_result {
