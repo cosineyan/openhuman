@@ -86,6 +86,11 @@ function formToParams(f: FormState) {
     model: f.model,
     fallback_direction: f.fallbackDirection,
     fallback_end: f.fallbackEnd,
+    // This panel exists to create project-board tasks on a schedule, so the
+    // fired job must deliver via "task" (which calls projects::create_task).
+    // Without this the backend defaults delivery to "none" and nothing ever
+    // lands on the board.
+    delivery: { mode: 'task' as const, best_effort: true },
   };
 }
 
