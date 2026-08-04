@@ -6,7 +6,8 @@ use crate::openhuman::tools::SEARXNG_MAX_RESULTS;
 use super::types::{
     McpToolSpec, ToolCallError, DEFAULT_LIMIT, MAX_LIMIT, MEMORY_NOTE_ARGUMENTS,
     MEMORY_QUERY_SOURCE_ARGUMENTS, MEMORY_SMART_WALK_ARGUMENTS, MEMORY_STORE_ARGUMENTS,
-    PROFILE_PERSON_ARGUMENTS, PROJECTS_LIST_TASK_RUNS_ARGUMENTS, QUERY_ARGUMENTS,
+    PROFILE_PERSON_ARGUMENTS, PROJECTS_CREATE_TASK_ARGUMENTS, PROJECTS_LIST_TASKS_ARGUMENTS,
+    PROJECTS_LIST_TASK_RUNS_ARGUMENTS, PROJECTS_UPDATE_TASK_ARGUMENTS, QUERY_ARGUMENTS,
     SEARXNG_SEARCH_ARGUMENTS, SUBAGENT_RUN_ARGUMENTS, TREE_BROWSE_ARGUMENTS,
     TREE_LIST_SOURCES_ARGUMENTS, TREE_READ_CHUNK_ARGUMENTS, TREE_TAG_ARGUMENTS, TREE_TAG_MAX_TAGS,
     TREE_TAG_MAX_TAG_LENGTH, TREE_TOP_ENTITIES_ARGUMENTS,
@@ -284,6 +285,56 @@ pub fn build_rpc_params(
             if let Some(limit) = optional_i64(&args, "limit")? {
                 params.insert("limit".to_string(), Value::from(limit));
             }
+            Ok(params)
+        }
+        "projects.list_tasks" => {
+            reject_unexpected_arguments(&args, PROJECTS_LIST_TASKS_ARGUMENTS)?;
+            // Maps to openhuman.projects_get_board, which takes no params.
+            Ok(Map::new())
+        }
+        "projects.create_task" => {
+            reject_unexpected_arguments(&args, PROJECTS_CREATE_TASK_ARGUMENTS)?;
+            let mut params = Map::new();
+            params.insert(
+                "title".to_string(),
+                Value::String(required_non_empty_string(&args, "title")?),
+            );
+            if let Some(description) = optional_non_empty_string(&args, "description")? {
+                params.insert("description".to_string(), Value::String(description));
+            }
+            if let Some(bucket_id) = optional_non_empty_string(&args, "bucket_id")? {
+                params.insert("bucket_id".to_string(), Value::String(bucket_id));
+            }
+            if let Some(priority) = optional_i64(&args, "priority")? {
+                params.insert("priority".to_string(), Value::from(priority));
+            }
+            if let Some(due_date) = optional_non_empty_string(&args, "due_date")? {
+                params.insert("due_date".to_string(), Value::String(due_date));
+            }
+            if let Some(model) = optional_non_empty_string(&args, "model")? {
+                params.insert("model".to_string(), Value::String(model));
+            }
+            Ok(params)
+        }
+        "projects.update_task" => {
+            reject_unexpected_arguments(&args, PROJECTS_UPDATE_TASK_ARGUMENTS)?;
+            let mut params = Map::new();
+            params.insert(
+                "task_id".to_string(),
+                Value::String(required_non_empty_string(&args, "task_id")?),
+            );
+            // The controller deserializes `patch` into a TaskPatch (all fields
+            // optional). Pass it through verbatim as a JSON object; reject a
+            // missing or non-object patch here with a clear message.
+            let patch = args
+                .get("patch")
+                .ok_or_else(|| ToolCallError::InvalidParams("`patch` is required".to_string()))?;
+            if !patch.is_object() {
+                return Err(ToolCallError::InvalidParams(
+                    "`patch` must be an object of task fields to change".to_string(),
+                ));
+            }
+            params.insert("patch".to_string(), patch.clone());
             Ok(params)
         }
         _ => Err(ToolCallError::InvalidParams(format!(

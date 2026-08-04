@@ -309,6 +309,42 @@ pub fn base_tool_specs() -> Vec<McpToolSpec> {
             input_schema: projects_list_task_runs_schema(),
             annotations: read_only_local_annotations(),
         },
+        McpToolSpec {
+            name: "projects.list_tasks",
+            title: "List Project Tasks",
+            description: "List the current project board — all buckets (columns like Todo / \
+                          Doing / Done / Blocked) and the tasks in each, with their id, title, \
+                          description, assignee, done state, and model. Read-only snapshot of \
+                          current board state (not run history). Use this to find a task's id \
+                          before updating it, or to see what's on the board.",
+            rpc_method: Some("openhuman.projects_get_board"),
+            input_schema: no_args_schema(),
+            annotations: read_only_local_annotations(),
+        },
+        McpToolSpec {
+            name: "projects.create_task",
+            title: "Create Project Task",
+            description: "Create a new task on the project board. Only `title` is required; \
+                          `description` becomes the task body (and the instruction if it's run by \
+                          AI). Optionally set `bucket_id` (defaults to the first/Todo bucket), \
+                          `priority`, `due_date` (RFC3339 or YYYY-MM-DD), and `model`. Returns the \
+                          created task including its `id`.",
+            rpc_method: Some("openhuman.projects_create_task"),
+            input_schema: projects_create_task_schema(),
+            annotations: projects_write_annotations(),
+        },
+        McpToolSpec {
+            name: "projects.update_task",
+            title: "Update Project Task",
+            description: "Update an existing task by `task_id`. Pass a `patch` object with only \
+                          the fields to change: `title`, `description` (null clears it), \
+                          `bucket_id` (move columns), `priority`, `assignee` (\"me\" or \"ai\"), \
+                          `done`, `model`, `archived`. Omitted fields are left unchanged. Use \
+                          projects.list_tasks first to find the task_id.",
+            rpc_method: Some("openhuman.projects_update_task"),
+            input_schema: projects_update_task_schema(),
+            annotations: projects_write_annotations(),
+        },
     ]
 }
 
@@ -338,6 +374,21 @@ pub fn write_local_annotations() -> Value {
         "readOnlyHint": false,
         "destructiveHint": true,
         "idempotentHint": true,
+        "openWorldHint": false
+    })
+}
+
+/// Annotation preset for the project-task write tools (`projects.create_task`,
+/// `projects.update_task`). These mutate local project state (no external I/O →
+/// `openWorldHint: false`). `create_task` mints a fresh task on every call, so
+/// it is NOT idempotent; `update_task` overwrites fields on an existing task.
+/// We conservatively mark the pair non-idempotent and non-destructive (no
+/// hard delete happens here — update can archive, but that is reversible).
+pub fn projects_write_annotations() -> Value {
+    json!({
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
         "openWorldHint": false
     })
 }
@@ -435,6 +486,80 @@ fn projects_list_task_runs_schema() -> Value {
             }
         },
         "required": [],
+        "additionalProperties": false
+    })
+}
+
+fn projects_create_task_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "title": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Task title (required)."
+            },
+            "description": {
+                "type": "string",
+                "description": "Task body. If the task is run by AI, this is the instruction it executes."
+            },
+            "bucket_id": {
+                "type": "string",
+                "description": "Target bucket/column id. Omit to use the board's first (Todo) bucket. Use projects.list_tasks to discover bucket ids."
+            },
+            "priority": {
+                "type": "integer",
+                "description": "Optional priority (higher = more important)."
+            },
+            "due_date": {
+                "type": "string",
+                "description": "Optional due date — RFC3339 or YYYY-MM-DD."
+            },
+            "model": {
+                "type": "string",
+                "description": "Optional model tier/id to use when this task is run by AI."
+            }
+        },
+        "required": ["title"],
+        "additionalProperties": false
+    })
+}
+
+fn projects_update_task_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "task_id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Id of the task to update (from projects.list_tasks)."
+            },
+            "patch": {
+                "type": "object",
+                "description": "Fields to change; omitted fields are left unchanged.",
+                "properties": {
+                    "title": { "type": "string" },
+                    "description": {
+                        "type": ["string", "null"],
+                        "description": "New body; null clears the description."
+                    },
+                    "bucket_id": {
+                        "type": "string",
+                        "description": "Move the task to this bucket/column."
+                    },
+                    "priority": { "type": "integer" },
+                    "assignee": {
+                        "type": ["string", "null"],
+                        "description": "\"me\" or \"ai\" (assigning \"ai\" makes AI pick it up); null unassigns."
+                    },
+                    "done": { "type": "boolean" },
+                    "model": { "type": "string" },
+                    "archived": { "type": "boolean" }
+                },
+                "additionalProperties": true
+            }
+        },
+        "required": ["task_id", "patch"],
         "additionalProperties": false
     })
 }

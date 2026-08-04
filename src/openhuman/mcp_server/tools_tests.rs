@@ -22,12 +22,20 @@ fn list_tools_exposes_base_mcp_surface_when_searxng_disabled() {
             "memory.recall",
             "memory.profile_person",
             "tree.read_chunk",
+            "tree.suppress_chunk",
+            "tree.restore_chunk",
             "tree.browse",
             "tree.top_entities",
             "tree.list_sources",
+            "memory.smart_walk",
+            "memory.query_source",
             "memory.store",
             "memory.note",
             "tree.tag",
+            "projects.list_task_runs",
+            "projects.list_tasks",
+            "projects.create_task",
+            "projects.update_task",
         ]
     );
 }
@@ -66,6 +74,8 @@ fn read_only_tools_are_marked_read_only_and_closed_world() {
         "memory.store",
         "memory.note",
         "tree.tag",
+        "projects.create_task",
+        "projects.update_task",
     ];
     let open_world_read_only = ["searxng_search"];
     for spec in tool_specs() {
@@ -952,4 +962,92 @@ fn projects_list_task_runs_rejects_unknown_arg() {
     assert!(
         matches!(err, ToolCallError::InvalidParams(message) if message.contains("unexpected argument"))
     );
+}
+
+#[test]
+fn projects_task_write_tools_registered_and_marked_write() {
+    for (name, rpc) in [
+        ("projects.create_task", "openhuman.projects_create_task"),
+        ("projects.update_task", "openhuman.projects_update_task"),
+    ] {
+        let spec = base_tool_specs()
+            .into_iter()
+            .find(|s| s.name == name)
+            .unwrap_or_else(|| panic!("{name} spec present"));
+        let rpc_method = spec.rpc_method.expect("rpc_method set");
+        assert_eq!(rpc_method, rpc);
+        assert!(
+            all::schema_for_rpc_method(rpc_method).is_some(),
+            "RPC method {rpc} must be registered"
+        );
+        assert_eq!(
+            spec.annotations["readOnlyHint"],
+            json!(false),
+            "{name} must advertise readOnlyHint=false"
+        );
+        assert!(
+            super::super::write_dispatch::is_write_tool(name),
+            "{name} must route through the write path"
+        );
+    }
+}
+
+#[test]
+fn projects_list_tasks_maps_to_get_board_read_only() {
+    let spec = base_tool_specs()
+        .into_iter()
+        .find(|s| s.name == "projects.list_tasks")
+        .expect("projects.list_tasks spec present");
+    assert_eq!(spec.rpc_method, Some("openhuman.projects_get_board"));
+    assert_eq!(spec.annotations["readOnlyHint"], json!(true));
+    let params = build_rpc_params("projects.list_tasks", json!({})).expect("empty ok");
+    assert!(params.is_empty());
+}
+
+#[test]
+fn projects_create_task_params_pass_through() {
+    let params = build_rpc_params(
+        "projects.create_task",
+        json!({ "title": "Nightly summary", "description": "do it", "priority": 2 }),
+    )
+    .expect("params");
+    assert_eq!(params["title"], "Nightly summary");
+    assert_eq!(params["description"], "do it");
+    assert_eq!(params["priority"], 2);
+}
+
+#[test]
+fn projects_create_task_requires_title() {
+    let err = build_rpc_params("projects.create_task", json!({ "description": "no title" }))
+        .expect_err("title required");
+    assert!(matches!(err, ToolCallError::InvalidParams(_)));
+}
+
+#[test]
+fn projects_update_task_passes_patch_object_through() {
+    let params = build_rpc_params(
+        "projects.update_task",
+        json!({ "task_id": "t-1", "patch": { "done": true, "bucket_id": "b-2" } }),
+    )
+    .expect("params");
+    assert_eq!(params["task_id"], "t-1");
+    assert_eq!(params["patch"]["done"], json!(true));
+    assert_eq!(params["patch"]["bucket_id"], "b-2");
+}
+
+#[test]
+fn projects_update_task_rejects_non_object_patch() {
+    let err = build_rpc_params(
+        "projects.update_task",
+        json!({ "task_id": "t-1", "patch": "not-an-object" }),
+    )
+    .expect_err("patch must be object");
+    assert!(matches!(err, ToolCallError::InvalidParams(_)));
+}
+
+#[test]
+fn projects_update_task_requires_task_id() {
+    let err = build_rpc_params("projects.update_task", json!({ "patch": { "done": true } }))
+        .expect_err("task_id required");
+    assert!(matches!(err, ToolCallError::InvalidParams(_)));
 }

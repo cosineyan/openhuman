@@ -69,7 +69,11 @@ pub async fn call_tool(
             enforce_act_policy(spec.name).await?;
             return run_subagent_tool(&params).await;
         }
-        "memory.store" | "memory.note" | "tree.tag" => {
+        "memory.store"
+        | "memory.note"
+        | "tree.tag"
+        | "projects.create_task"
+        | "projects.update_task" => {
             let config = write_dispatch::load_write_config(spec.name).await?;
             if let Err(err) = write_dispatch::enforce_write_policy_for_config(spec.name, &config) {
                 write_dispatch::audit_write_rejection(
@@ -82,10 +86,14 @@ pub async fn call_tool(
                 );
                 return Err(err);
             }
-            params.insert(
-                "source_type".to_string(),
-                Value::String(client_info.to_string()),
-            );
+            // The memory write tools carry provenance in a `source_type` param
+            // (memory_doc_put reads it); the projects task writes don't take it.
+            if matches!(spec.name, "memory.store" | "memory.note" | "tree.tag") {
+                params.insert(
+                    "source_type".to_string(),
+                    Value::String(client_info.to_string()),
+                );
+            }
             if let Err(err) = validate_controller_params(&spec, &params) {
                 write_dispatch::audit_write_rejection(
                     &config,

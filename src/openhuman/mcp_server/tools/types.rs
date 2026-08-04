@@ -31,6 +31,16 @@ pub const MEMORY_QUERY_SOURCE_ARGUMENTS: &[&str] = &[
     "limit",
 ];
 pub const PROJECTS_LIST_TASK_RUNS_ARGUMENTS: &[&str] = &["since", "until", "limit"];
+pub const PROJECTS_CREATE_TASK_ARGUMENTS: &[&str] = &[
+    "title",
+    "description",
+    "bucket_id",
+    "priority",
+    "due_date",
+    "model",
+];
+pub const PROJECTS_UPDATE_TASK_ARGUMENTS: &[&str] = &["task_id", "patch"];
+pub const PROJECTS_LIST_TASKS_ARGUMENTS: &[&str] = &[];
 /// Upper bound on the number of tags `tree.tag` accepts per call.
 /// Matches the "explicit rejection over silent clamping" pattern used
 /// elsewhere in the MCP layer; prevents a misbehaving client from

@@ -56,7 +56,9 @@ pub(super) async fn dispatch_write_tool(
     client_info: &str,
     config: &Config,
 ) -> Result<Value, ToolCallError> {
-    let rpc_method = "openhuman.memory_doc_put";
+    let rpc_method = write_rpc_method_for(tool_name).ok_or_else(|| {
+        ToolCallError::Internal(format!("MCP write tool `{tool_name}` has no RPC mapping"))
+    })?;
 
     tracing::debug!(
         tool = tool_name,
@@ -234,7 +236,26 @@ pub(super) fn audit_write_rejection_without_config(
 }
 
 pub(super) fn is_write_tool(tool_name: &str) -> bool {
-    matches!(tool_name, "memory.store" | "memory.note" | "tree.tag")
+    matches!(
+        tool_name,
+        "memory.store"
+            | "memory.note"
+            | "tree.tag"
+            | "projects.create_task"
+            | "projects.update_task"
+    )
+}
+
+/// Registered JSON-RPC method backing each MCP write tool. `None` for a
+/// non-write tool. Keeping this here (rather than reading `spec.rpc_method`)
+/// keeps the write path self-contained and auditable.
+fn write_rpc_method_for(tool_name: &str) -> Option<&'static str> {
+    match tool_name {
+        "memory.store" | "memory.note" | "tree.tag" => Some("openhuman.memory_doc_put"),
+        "projects.create_task" => Some("openhuman.projects_create_task"),
+        "projects.update_task" => Some("openhuman.projects_update_task"),
+        _ => None,
+    }
 }
 
 fn summarize_rejected_write_args(
@@ -259,15 +280,24 @@ fn now_ms() -> i64 {
 }
 
 fn extract_document_id(value: &Value) -> Option<String> {
-    value
+    // memory writes return { document_id } (bare or under result); projects
+    // task writes return the Task object with an `id` (bare or under result).
+    // The audit `resulting_chunk_id` column stores whichever id applies.
+    let direct = value
         .get("document_id")
-        .or_else(|| {
-            value
-                .get("result")
-                .and_then(|result| result.get("document_id"))
-        })
+        .or_else(|| value.get("id"))
         .and_then(Value::as_str)
-        .map(str::to_string)
+        .map(str::to_string);
+    if direct.is_some() {
+        return direct;
+    }
+    value.get("result").and_then(|result| {
+        result
+            .get("document_id")
+            .or_else(|| result.get("id"))
+            .and_then(Value::as_str)
+            .map(str::to_string)
+    })
 }
 
 fn summarize_write_args(tool_name: &str, arguments: &Value) -> Value {
@@ -315,6 +345,29 @@ fn summarize_write_args(tool_name: &str, arguments: &Value) -> Value {
                         .filter_map(Value::as_str)
                         .map(str::to_string)
                         .collect::<Vec<_>>()
+                })
+                .unwrap_or_default(),
+        }),
+        "projects.create_task" => json!({
+            "title": args
+                .get("title")
+                .and_then(Value::as_str)
+                .map(|title| first_chars(title, 128))
+                .unwrap_or_default(),
+            "bucket_id": args.get("bucket_id").and_then(Value::as_str).unwrap_or_default(),
+            "has_description": args.get("description").and_then(Value::as_str).is_some(),
+            "model": args.get("model").and_then(Value::as_str).unwrap_or_default(),
+        }),
+        "projects.update_task" => json!({
+            "task_id": args.get("task_id").and_then(Value::as_str).unwrap_or_default(),
+            // Log which fields the patch touches, not their values.
+            "patch_keys": args
+                .get("patch")
+                .and_then(Value::as_object)
+                .map(|p| {
+                    let mut keys = p.keys().cloned().collect::<Vec<_>>();
+                    keys.sort();
+                    keys
                 })
                 .unwrap_or_default(),
         }),
