@@ -333,11 +333,12 @@ fn move_task_to_done(config: &Config, task_id: &str) -> anyhow::Result<bool> {
 
 /// Derive the claude session file path from workspace_dir and session_uuid.
 /// claude stores sessions at `~/.claude/projects/<sanitized-cwd>/<uuid>.jsonl`
-/// where sanitized-cwd strips the leading `/` and replaces `/` with `-`.
+/// where sanitized-cwd replaces EVERY `/` with `-`, including the leading one
+/// (so `/Users/x/proj` → `-Users-x-proj`, with a leading dash).
 fn resolve_session_path(workspace_dir: &str, session_uuid: &str) -> Option<PathBuf> {
     let home = directories::UserDirs::new()?.home_dir().to_path_buf();
-    // Sanitize: strip leading '/', replace '/' with '-'.
-    let sanitized = workspace_dir.trim_start_matches('/').replace('/', "-");
+    // Sanitize: replace every '/' with '-' (leading slash → leading dash).
+    let sanitized = workspace_dir.replace('/', "-");
     let project_dir = home.join(".claude").join("projects").join(&sanitized);
     Some(project_dir.join(format!("{session_uuid}.jsonl")))
 }
