@@ -56,6 +56,21 @@ impl SendMessage {
     }
 }
 
+/// An interactive-card action (button click) received from a channel. Kept
+/// separate from `ChannelMessage` — a card action triggers a side-effect
+/// (e.g. open a resume group), not a conversational agent turn.
+#[derive(Debug, Clone)]
+pub struct CardAction {
+    /// Channel name, e.g. "lark".
+    pub channel: String,
+    /// Chat the card was in (Feishu `oc_…`), when present.
+    pub chat_id: String,
+    /// User who clicked (Feishu `open_id` `ou_…`), when present.
+    pub open_id: String,
+    /// The card element's `value` payload (e.g. `{"action":"resume_task","task_id":…}`).
+    pub action_value: serde_json::Value,
+}
+
 /// Core channel trait — implement for any messaging platform
 #[async_trait]
 pub trait Channel: Send + Sync {

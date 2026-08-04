@@ -95,6 +95,15 @@ CREATE TABLE IF NOT EXISTS project_task_runs (
 );
 CREATE INDEX IF NOT EXISTS idx_task_runs_task ON project_task_runs(task_id, started_at);
 CREATE INDEX IF NOT EXISTS idx_task_runs_started ON project_task_runs(started_at);
+
+CREATE TABLE IF NOT EXISTS feishu_session_bindings (
+    chat_id              TEXT PRIMARY KEY,
+    task_id              TEXT NOT NULL,
+    claude_session_id    TEXT NOT NULL,
+    claude_workspace_dir TEXT NOT NULL,
+    created              TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_feishu_bindings_task ON feishu_session_bindings(task_id);
 ";
 
 // ---------------------------------------------------------------------------
@@ -129,6 +138,9 @@ pub fn with_connection<T>(config: &Config, f: impl FnOnce(&Connection) -> Result
     add_column_if_missing(&conn, "project_tasks", "model", "TEXT")?;
     add_column_if_missing(&conn, "project_tasks", "fallback_direction", "TEXT")?;
     add_column_if_missing(&conn, "project_tasks", "fallback_end", "TEXT")?;
+    // Records the Feishu resume group already opened for this task (so clicking
+    // the resume button twice reuses the group instead of creating a new one).
+    add_column_if_missing(&conn, "project_tasks", "feishu_resume_chat_id", "TEXT")?;
 
     // Fix tasks that are marked done=1 but live in a non-done bucket — can
     // happen when a task was moved back from a done bucket via a code path that
@@ -246,6 +258,7 @@ fn row_to_task(row: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
         model: row.get(20).unwrap_or(None),
         fallback_direction: row.get(21).unwrap_or(None),
         fallback_end: row.get(22).unwrap_or(None),
+        feishu_resume_chat_id: row.get(23).unwrap_or(None),
     })
 }
 
@@ -501,7 +514,8 @@ pub fn get_task(config: &Config, task_id: &str) -> Result<Task> {
                     done, done_at, priority, due_date, hex_color,
                     position, idx, created, updated,
                     assignee, ai_plan, parent_task_id,
-                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end
+                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end,
+                    feishu_resume_chat_id
              FROM project_tasks WHERE id = ?1",
             params![task_id],
             row_to_task,
@@ -519,7 +533,8 @@ pub fn list_tasks(config: &Config, project_id: &str, bucket_id: Option<&str>) ->
                         done, done_at, priority, due_date, hex_color,
                         position, idx, created, updated,
                         assignee, ai_plan, parent_task_id,
-                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end
+                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end,
+                    feishu_resume_chat_id
                  FROM project_tasks
                  WHERE project_id = ?1 AND bucket_id = ?2 AND parent_task_id IS NULL
                    AND (archived = 0 OR archived IS NULL)
@@ -535,7 +550,8 @@ pub fn list_tasks(config: &Config, project_id: &str, bucket_id: Option<&str>) ->
                         done, done_at, priority, due_date, hex_color,
                         position, idx, created, updated,
                         assignee, ai_plan, parent_task_id,
-                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end
+                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end,
+                    feishu_resume_chat_id
                  FROM project_tasks
                  WHERE project_id = ?1 AND parent_task_id IS NULL
                    AND (archived = 0 OR archived IS NULL)
@@ -570,7 +586,8 @@ pub fn list_archived_tasks(
                     done, done_at, priority, due_date, hex_color,
                     position, idx, created, updated,
                     assignee, ai_plan, parent_task_id,
-                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end
+                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end,
+                    feishu_resume_chat_id
              FROM project_tasks
              WHERE project_id = ?1 AND archived = 1 AND parent_task_id IS NULL"
             .to_string();
@@ -640,7 +657,8 @@ pub fn list_subtasks(config: &Config, parent_task_id: &str) -> Result<Vec<Task>>
                     done, done_at, priority, due_date, hex_color,
                     position, idx, created, updated,
                     assignee, ai_plan, parent_task_id,
-                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end
+                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end,
+                    feishu_resume_chat_id
              FROM project_tasks
              WHERE parent_task_id = ?1
              ORDER BY created ASC",
@@ -728,7 +746,8 @@ pub fn create_task(
                     done, done_at, priority, due_date, hex_color,
                     position, idx, created, updated,
                     assignee, ai_plan, parent_task_id,
-                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end
+                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end,
+                    feishu_resume_chat_id
              FROM project_tasks WHERE id = ?1",
             params![task_id],
             row_to_task,
@@ -766,7 +785,8 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch, actor: &st
                         done, done_at, priority, due_date, hex_color,
                         position, idx, created, updated,
                         assignee, ai_plan, parent_task_id,
-                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end
+                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end,
+                    feishu_resume_chat_id
                  FROM project_tasks WHERE id = ?1",
                 params![task_id],
                 row_to_task,
@@ -944,7 +964,8 @@ pub fn update_task(config: &Config, task_id: &str, patch: &TaskPatch, actor: &st
                     done, done_at, priority, due_date, hex_color,
                     position, idx, created, updated,
                     assignee, ai_plan, parent_task_id,
-                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end
+                    archived, archived_at, settings_profile, model, fallback_direction, fallback_end,
+                    feishu_resume_chat_id
              FROM project_tasks WHERE id = ?1",
             params![task_id],
             row_to_task,
@@ -1605,6 +1626,109 @@ pub fn cleanup_stale_running_task_runs(config: &Config) -> Result<()> {
 }
 
 // ---------------------------------------------------------------------------
+// Feishu session bindings (chat_id ↔ task ↔ Claude Code session)
+// ---------------------------------------------------------------------------
+
+/// Bind a Feishu group chat to a task's Claude Code session. Idempotent on
+/// chat_id (a re-bind overwrites — a chat only ever maps to one session).
+pub fn bind_feishu_session(
+    config: &Config,
+    chat_id: &str,
+    task_id: &str,
+    claude_session_id: &str,
+    claude_workspace_dir: &str,
+) -> Result<()> {
+    with_connection(config, |conn| {
+        let now = Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO feishu_session_bindings \
+             (chat_id, task_id, claude_session_id, claude_workspace_dir, created) \
+             VALUES (?1, ?2, ?3, ?4, ?5) \
+             ON CONFLICT(chat_id) DO UPDATE SET \
+               task_id = excluded.task_id, \
+               claude_session_id = excluded.claude_session_id, \
+               claude_workspace_dir = excluded.claude_workspace_dir",
+            params![
+                chat_id,
+                task_id,
+                claude_session_id,
+                claude_workspace_dir,
+                now
+            ],
+        )
+        .context("Failed to bind feishu session")?;
+        log::debug!(
+            "[projects] bind_feishu_session chat={chat_id} task={task_id} session={claude_session_id}"
+        );
+        Ok(())
+    })
+}
+
+/// Reverse lookup for dispatch: given an inbound Feishu chat_id, return its
+/// session binding (if the chat is a resume group). `None` for normal chats.
+pub fn get_binding_by_chat(
+    config: &Config,
+    chat_id: &str,
+) -> Result<Option<crate::openhuman::projects::FeishuSessionBinding>> {
+    with_connection(config, |conn| {
+        let binding = conn
+            .query_row(
+                "SELECT chat_id, task_id, claude_session_id, claude_workspace_dir, created \
+                 FROM feishu_session_bindings WHERE chat_id = ?1",
+                params![chat_id],
+                |row| {
+                    let created_raw: String = row.get(4)?;
+                    Ok(crate::openhuman::projects::FeishuSessionBinding {
+                        chat_id: row.get(0)?,
+                        task_id: row.get(1)?,
+                        claude_session_id: row.get(2)?,
+                        claude_workspace_dir: row.get(3)?,
+                        created: parse_rfc3339(&created_raw).map_err(sql_err)?,
+                    })
+                },
+            )
+            .optional()
+            .context("Failed to read feishu session binding")?;
+        Ok(binding)
+    })
+}
+
+/// Update the persisted CC session id for a bound chat (the driver may mint a
+/// fresh real UUID on resume — keep the binding pointing at the live session).
+pub fn update_binding_session(
+    config: &Config,
+    chat_id: &str,
+    claude_session_id: &str,
+) -> Result<()> {
+    with_connection(config, |conn| {
+        conn.execute(
+            "UPDATE feishu_session_bindings SET claude_session_id = ?2 WHERE chat_id = ?1",
+            params![chat_id, claude_session_id],
+        )
+        .context("Failed to update feishu binding session")?;
+        Ok(())
+    })
+}
+
+/// Record (or clear) the Feishu resume group opened for a task, so a second
+/// click reuses the existing group instead of creating a duplicate.
+pub fn set_task_feishu_resume_chat(
+    config: &Config,
+    task_id: &str,
+    chat_id: Option<&str>,
+) -> Result<()> {
+    with_connection(config, |conn| {
+        conn.execute(
+            "UPDATE project_tasks SET feishu_resume_chat_id = ?2, updated = datetime('now') \
+             WHERE id = ?1",
+            params![task_id, chat_id],
+        )
+        .context("Failed to set task feishu_resume_chat_id")?;
+        Ok(())
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -1981,5 +2105,45 @@ mod tests {
         assert!(live.finished_at.is_some());
         // Already-terminal rows are untouched.
         assert_eq!(done.status, "done");
+    }
+
+    #[test]
+    fn feishu_binding_roundtrip_and_reverse_lookup() {
+        let tmp = TempDir::new().unwrap();
+        let config = test_config(&tmp);
+
+        // No binding initially.
+        assert!(get_binding_by_chat(&config, "oc_group1").unwrap().is_none());
+
+        bind_feishu_session(&config, "oc_group1", "task-1", "uuid-aaa", "/ws/dir").unwrap();
+        let b = get_binding_by_chat(&config, "oc_group1")
+            .unwrap()
+            .expect("binding should exist");
+        assert_eq!(b.task_id, "task-1");
+        assert_eq!(b.claude_session_id, "uuid-aaa");
+        assert_eq!(b.claude_workspace_dir, "/ws/dir");
+
+        // Re-bind same chat overwrites (a chat maps to one session).
+        bind_feishu_session(&config, "oc_group1", "task-1", "uuid-bbb", "/ws/dir").unwrap();
+        assert_eq!(
+            get_binding_by_chat(&config, "oc_group1")
+                .unwrap()
+                .unwrap()
+                .claude_session_id,
+            "uuid-bbb"
+        );
+
+        // update_binding_session refreshes the live session id.
+        update_binding_session(&config, "oc_group1", "uuid-ccc").unwrap();
+        assert_eq!(
+            get_binding_by_chat(&config, "oc_group1")
+                .unwrap()
+                .unwrap()
+                .claude_session_id,
+            "uuid-ccc"
+        );
+
+        // Unrelated chat still has no binding.
+        assert!(get_binding_by_chat(&config, "oc_other").unwrap().is_none());
     }
 }

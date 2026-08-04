@@ -144,6 +144,11 @@ pub struct Task {
     #[serde(default)]
     pub archived: bool,
     pub archived_at: Option<DateTime<Utc>>,
+    /// Feishu resume group already opened for this task, if any. Set when the
+    /// user clicks the completion card's "resume in group" button; reused on
+    /// subsequent clicks so we don't create a duplicate group.
+    #[serde(default)]
+    pub feishu_resume_chat_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
@@ -253,6 +258,18 @@ pub struct ProjectTaskRun {
     pub duration_ms: i64,
     /// running | done | blocked | cancelled | error | interrupted
     pub status: String,
+}
+
+/// Binds a Feishu group chat to a task's Claude Code session so messages sent
+/// in that group resume (`--resume`) the same CC session. Keyed by chat_id
+/// (the reverse lookup dispatch needs: it only has the inbound chat_id).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FeishuSessionBinding {
+    pub chat_id: String,
+    pub task_id: String,
+    pub claude_session_id: String,
+    pub claude_workspace_dir: String,
+    pub created: DateTime<Utc>,
 }
 
 #[cfg(test)]

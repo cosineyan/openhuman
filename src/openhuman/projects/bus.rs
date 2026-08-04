@@ -603,7 +603,7 @@ async fn run_ai_task(
             status,
             response_text,
         );
-        notify_lark_completion(&config, notice);
+        notify_lark_completion(&config, notice, task_id.clone());
     }
 
     // A slot just freed — nudge the dispatcher to pull the next queued task.
@@ -1108,7 +1108,7 @@ fn build_lark_completion_md(
 /// Fire-and-forget push of a completion notice to the configured Feishu/Lark
 /// chat. No-op when Lark is not configured or `notify_target` is unset. Never
 /// blocks or fails the task: send errors are logged at warn level only.
-fn notify_lark_completion(config: &Config, notice: String) {
+fn notify_lark_completion(config: &Config, notice: String, task_id: String) {
     let Some(lark) = config.channels_config.lark.as_ref() else {
         return;
     };
@@ -1122,13 +1122,12 @@ fn notify_lark_completion(config: &Config, notice: String) {
     };
 
     use crate::openhuman::channels::lark::LarkChannel;
-    use crate::openhuman::channels::traits::{Channel, SendMessage};
 
     let channel = LarkChannel::from_config(lark);
     let target = target.to_string();
     tokio::spawn(async move {
         match channel
-            .send(&SendMessage::new(notice, target.clone()))
+            .send_completion_card_with_resume(&target, &notice, &task_id)
             .await
         {
             Ok(()) => log::debug!("[projects] lark completion notice sent to {target}"),

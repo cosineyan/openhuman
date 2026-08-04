@@ -184,6 +184,20 @@ pub(crate) async fn process_channel_message(
     }
 
     let history_key = conversation_history_key(&msg);
+
+    // Feishu resume group? If this chat is bound to a task's Claude Code session,
+    // run the turn directly against ClaudeCodeProvider with --resume so it
+    // continues that session (with full prior work history), instead of the
+    // normal stateless channel path. Only lark chats can be bound.
+    if msg.channel == "lark" {
+        if let Ok(Some(binding)) =
+            crate::openhuman::projects::store::get_binding_by_chat(ctx.config.as_ref(), &msg.sender)
+        {
+            handle_resume_turn(ctx.as_ref(), &msg, target_channel.as_ref(), &binding).await;
+            return;
+        }
+    }
+
     let route = get_route_selection(ctx.as_ref(), &history_key);
     let active_provider = match get_or_create_provider(ctx.as_ref(), &route.provider).await {
         Ok(provider) => provider,
@@ -770,6 +784,85 @@ pub(crate) async fn process_channel_message(
         success,
         workspace_dir: ctx.workspace_dir.as_ref().clone(),
     });
+}
+
+/// Run one turn against a bound task's Claude Code session using `--resume`, so
+/// a Feishu resume group continues the same CC session (with full prior work
+/// history) instead of a fresh stateless channel turn. Mirrors the web
+/// run-task direct-provider pattern. Reply is posted back to the same chat.
+async fn handle_resume_turn(
+    ctx: &ChannelRuntimeContext,
+    msg: &traits::ChannelMessage,
+    target_channel: Option<&Arc<dyn crate::openhuman::channels::traits::Channel>>,
+    binding: &crate::openhuman::projects::FeishuSessionBinding,
+) {
+    use crate::openhuman::inference::provider::claude_code::{
+        workspace_dir_from_config, ClaudeCodeProvider,
+    };
+    use crate::openhuman::inference::provider::{ChatRequest, Provider};
+    use std::path::PathBuf;
+
+    println!(
+        "  ↩️ [lark] resume turn chat={} task={} session={}",
+        msg.sender, binding.task_id, binding.claude_session_id
+    );
+
+    // Arg semantics (mirror projects::run_agent): `workspace_dir` is openhuman's
+    // internal config dir; `project_dir` is the CC cwd where the session lives
+    // (the task's claude_workspace_dir = action_dir). Passing the same value for
+    // both breaks `--resume` (the CLI can't locate the session transcript).
+    let workspace = workspace_dir_from_config(ctx.config.as_ref());
+    let project_dir = PathBuf::from(&binding.claude_workspace_dir);
+    let model = ctx.model.as_ref().clone();
+    let provider = match ClaudeCodeProvider::from_env(model.clone(), workspace, project_dir, None) {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::warn!(
+                "[lark-resume] provider init failed task={}: {e}",
+                binding.task_id
+            );
+            if let Some(channel) = target_channel {
+                let _ = channel
+                    .send(&SendMessage::new(
+                        format!("⚠️ 无法恢复这个任务的会话:{e}"),
+                        &msg.sender,
+                    ))
+                    .await;
+            }
+            return;
+        }
+    };
+
+    let messages = vec![ChatMessage::user(&msg.content)];
+    let request = ChatRequest {
+        messages: &messages,
+        tools: None,
+        stream: None,
+        max_tokens: None,
+        hint_thread_id: Some(binding.claude_session_id.as_str()),
+    };
+
+    match provider.chat(request, &model, 0.0).await {
+        Ok(resp) => {
+            let text = resp.text.unwrap_or_default();
+            if let Some(channel) = target_channel {
+                if let Err(e) = channel.send(&SendMessage::new(text, &msg.sender)).await {
+                    eprintln!("  ❌ [lark-resume] reply failed: {e}");
+                }
+            }
+        }
+        Err(e) => {
+            tracing::warn!("[lark-resume] chat failed task={}: {e}", binding.task_id);
+            if let Some(channel) = target_channel {
+                let _ = channel
+                    .send(&SendMessage::new(
+                        format!("⚠️ 恢复会话时出错:{e}"),
+                        &msg.sender,
+                    ))
+                    .await;
+            }
+        }
+    }
 }
 
 pub(crate) async fn run_message_dispatch_loop(

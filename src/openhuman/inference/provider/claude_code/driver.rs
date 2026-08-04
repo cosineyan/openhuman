@@ -176,6 +176,98 @@ fn is_stale_session_error(stderr: &str) -> bool {
         || stderr.contains("Expected message role 'user'")
 }
 
+/// Resolve the on-disk session transcript path for a given project cwd + UUID.
+/// Claude stores sessions at `~/.claude/projects/<sanitized-cwd>/<uuid>.jsonl`
+/// where sanitized-cwd replaces every `/` with `-` — including the leading
+/// slash, so an absolute `/Users/x/proj` becomes `-Users-x-proj`.
+fn session_transcript_path(project_dir: &std::path::Path, session_uuid: &str) -> Option<PathBuf> {
+    let home = directories::UserDirs::new()?.home_dir().to_path_buf();
+    let sanitized = project_dir.display().to_string().replace('/', "-");
+    Some(
+        home.join(".claude")
+            .join("projects")
+            .join(sanitized)
+            .join(format!("{session_uuid}.jsonl")),
+    )
+}
+
+/// Strip `thinking` blocks from a persisted session transcript so `--resume`
+/// doesn't replay model/endpoint-bound thinking signatures that a different
+/// model/endpoint will reject (`400 Invalid signature in thinking block`).
+///
+/// Rewrites the `.jsonl` in place: for every line whose `message.content` is an
+/// array, drops blocks with `"type":"thinking"` (and `"redacted_thinking"`),
+/// leaving text/tool_use/tool_result intact. Lines without such content pass
+/// through byte-for-byte. Idempotent (a sanitized file is a fixed point). A
+/// missing file is a no-op (fresh session, nothing to strip yet).
+fn sanitize_session_thinking(
+    project_dir: &std::path::Path,
+    session_uuid: &str,
+) -> anyhow::Result<()> {
+    let Some(path) = session_transcript_path(project_dir, session_uuid) else {
+        return Ok(());
+    };
+    if !path.exists() {
+        return Ok(());
+    }
+    let raw = std::fs::read_to_string(&path)
+        .map_err(|e| anyhow::anyhow!("read session transcript {}: {e}", path.display()))?;
+
+    let (out, changed) = strip_thinking_from_jsonl(&raw);
+
+    if changed {
+        std::fs::write(&path, out)
+            .map_err(|e| anyhow::anyhow!("write sanitized transcript {}: {e}", path.display()))?;
+        log::debug!(
+            "[claude-code][driver] stripped thinking blocks from session {session_uuid} before resume"
+        );
+    }
+    Ok(())
+}
+
+/// Pure transform behind [`sanitize_session_thinking`]: drop `thinking` /
+/// `redacted_thinking` blocks from each line's `message.content` array. Returns
+/// the rewritten text and whether anything changed. Non-JSON / blank lines pass
+/// through. Idempotent.
+fn strip_thinking_from_jsonl(raw: &str) -> (String, bool) {
+    let mut changed = false;
+    let mut out = String::with_capacity(raw.len());
+    for line in raw.lines() {
+        if line.trim().is_empty() {
+            out.push('\n');
+            continue;
+        }
+        match serde_json::from_str::<serde_json::Value>(line) {
+            Ok(mut v) => {
+                if let Some(content) = v
+                    .get_mut("message")
+                    .and_then(|m| m.get_mut("content"))
+                    .and_then(|c| c.as_array_mut())
+                {
+                    let before = content.len();
+                    content.retain(|b| {
+                        !matches!(
+                            b.get("type").and_then(|t| t.as_str()),
+                            Some("thinking") | Some("redacted_thinking")
+                        )
+                    });
+                    if content.len() != before {
+                        changed = true;
+                    }
+                }
+                out.push_str(&serde_json::to_string(&v).unwrap_or_else(|_| line.to_string()));
+                out.push('\n');
+            }
+            // Non-JSON line (shouldn't happen) — preserve verbatim.
+            Err(_) => {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+    }
+    (out, changed)
+}
+
 /// Write a CC `--mcp-config` JSON pointing at OpenHuman's in-process HTTP MCP
 /// server (running in the unjailed core). CC connects over loopback, so the
 /// MCP server is NOT a child of the sandboxed `claude` and keeps full access
@@ -263,6 +355,20 @@ async fn run_turn_inner(ctx: &TurnContext<'_>, force_new: bool) -> anyhow::Resul
     } else {
         stored.expect("checked Some above")
     };
+
+    // Before resuming, strip any `thinking` blocks from the persisted session
+    // transcript. Thinking blocks carry a model/endpoint-bound `signature`; a
+    // session first run on one model (e.g. a local Qwen) can't be resumed
+    // against another (Anthropic sonnet) — the API 400s with "Invalid
+    // signature in thinking block". Dropping the thinking blocks keeps the
+    // conversation + tool history and lets the resume succeed. Idempotent.
+    if !is_new {
+        if let Err(e) = sanitize_session_thinking(&ctx.project_dir, &cc_session_id) {
+            log::warn!(
+                "[claude-code][driver] failed to sanitize session {cc_session_id} thinking blocks: {e}"
+            );
+        }
+    }
 
     // Set up a per-turn scratch dir for --mcp-config and any other transient
     // state. Best-effort cleanup at end of turn.
@@ -616,6 +722,76 @@ async fn run_turn_inner(ctx: &TurnContext<'_>, force_new: bool) -> anyhow::Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn session_transcript_path_keeps_leading_dash() {
+        // Absolute cwd → sanitized dir has a LEADING dash (every '/' → '-').
+        let p = session_transcript_path(
+            std::path::Path::new("/Users/me/OpenHuman/projects"),
+            "abc-123",
+        )
+        .expect("path");
+        let s = p.display().to_string();
+        assert!(
+            s.contains("/.claude/projects/-Users-me-OpenHuman-projects/abc-123.jsonl"),
+            "unexpected transcript path: {s}"
+        );
+    }
+
+    #[test]
+    fn strip_thinking_removes_only_thinking_blocks() {
+        let raw = concat!(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"hi"}]}}"#,
+            "\n",
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"hmm","signature":"sig123"},{"type":"text","text":"hello"}]}}"#,
+            "\n",
+        );
+        let (out, changed) = strip_thinking_from_jsonl(raw);
+        assert!(changed);
+        assert!(!out.contains("\"thinking\""));
+        assert!(!out.contains("sig123"));
+        // Text + user content survive.
+        assert!(out.contains("\"hello\""));
+        assert!(out.contains("\"hi\""));
+    }
+
+    #[test]
+    fn strip_thinking_is_idempotent_and_noop_without_thinking() {
+        let raw = concat!(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"done"}]}}"#,
+            "\n",
+        );
+        let (out1, changed1) = strip_thinking_from_jsonl(raw);
+        assert!(!changed1, "no thinking → no change");
+        let (_out2, changed2) = strip_thinking_from_jsonl(&out1);
+        assert!(!changed2, "second pass is a fixed point");
+    }
+
+    #[test]
+    fn strip_thinking_preserves_non_message_lines() {
+        let raw = concat!(
+            r#"{"type":"file-history-snapshot","timestamp":"t"}"#,
+            "\n",
+            r#"not json at all"#,
+            "\n",
+        );
+        let (out, changed) = strip_thinking_from_jsonl(raw);
+        assert!(!changed);
+        assert!(out.contains("file-history-snapshot"));
+        assert!(out.contains("not json at all"));
+    }
+
+    #[test]
+    fn strip_thinking_also_drops_redacted_thinking() {
+        let raw = concat!(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"redacted_thinking","data":"x"},{"type":"text","text":"ok"}]}}"#,
+            "\n",
+        );
+        let (out, changed) = strip_thinking_from_jsonl(raw);
+        assert!(changed);
+        assert!(!out.contains("redacted_thinking"));
+        assert!(out.contains("\"ok\""));
+    }
 
     #[test]
     fn write_mcp_http_config_emits_http_url_with_bearer_header() {

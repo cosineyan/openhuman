@@ -30,6 +30,6 @@ pub use tools::{
     ProjectsListTaskRunsTool, ProjectsListTool, ProjectsMoveTaskTool, ProjectsReadAttachmentTool,
 };
 pub use types::{
-    Bucket, BucketPatch, Project, ProjectTaskRun, Task, TaskAttachment, TaskEvent, TaskEventKind,
-    TaskPatch,
+    Bucket, BucketPatch, FeishuSessionBinding, Project, ProjectTaskRun, Task, TaskAttachment,
+    TaskEvent, TaskEventKind, TaskPatch,
 };

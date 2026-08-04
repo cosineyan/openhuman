@@ -152,6 +152,11 @@ pub struct LarkChannel {
     tenant_token: Arc<RwLock<Option<String>>>,
     /// Dedup set: WS message_ids seen in last ~30 min to prevent double-dispatch
     ws_seen_ids: Arc<RwLock<HashMap<String, Instant>>>,
+    /// When set, `card.action.trigger` events (button clicks) are forwarded here
+    /// instead of being dropped. Wired by the channel runtime for the listening
+    /// instance only; notification-only instances leave it None.
+    card_action_tx:
+        Option<tokio::sync::mpsc::Sender<crate::openhuman::channels::traits::CardAction>>,
 }
 
 impl LarkChannel {
@@ -172,6 +177,7 @@ impl LarkChannel {
             receive_mode: crate::openhuman::config::schema::LarkReceiveMode::default(),
             tenant_token: Arc::new(RwLock::new(None)),
             ws_seen_ids: Arc::new(RwLock::new(HashMap::new())),
+            card_action_tx: None,
         }
     }
 
@@ -187,6 +193,17 @@ impl LarkChannel {
         ch.use_feishu = config.use_feishu;
         ch.receive_mode = config.receive_mode.clone();
         ch
+    }
+
+    /// Attach a card-action sink so `card.action.trigger` events (button clicks)
+    /// are forwarded to the card-action dispatch loop. Only the listening
+    /// instance needs this; notification-only instances omit it.
+    pub fn with_card_action_tx(
+        mut self,
+        tx: tokio::sync::mpsc::Sender<crate::openhuman::channels::traits::CardAction>,
+    ) -> Self {
+        self.card_action_tx = Some(tx);
+        self
     }
 
     fn http_client(&self) -> reqwest::Client {
@@ -409,6 +426,17 @@ impl LarkChannel {
                         Ok(e) => e,
                         Err(e) => { tracing::error!("Lark: event JSON: {e}"); continue; }
                     };
+                    // Card button clicks arrive as `card.action.trigger` — route
+                    // them to the card-action sink (side-effect, not a chat turn).
+                    if event.header.event_type == "card.action.trigger" {
+                        if let Some(ref tx) = self.card_action_tx {
+                            if let Some(ca) = parse_card_action(&event.event) {
+                                tracing::debug!("Lark WS: card action from {} in {}", ca.open_id, ca.chat_id);
+                                let _ = tx.send(ca).await;
+                            }
+                        }
+                        continue;
+                    }
                     if event.header.event_type != "im.message.receive_v1" { continue; }
 
                     let recv: MsgReceivePayload = match serde_json::from_value(event.event) {
@@ -654,74 +682,13 @@ impl Channel for LarkChannel {
     }
 
     async fn send(&self, message: &SendMessage) -> anyhow::Result<()> {
-        let token = self.get_tenant_access_token().await?;
-        let url = self.send_message_url(&message.recipient);
-
         // Feishu's `text` message type renders no Markdown, so the agent's
         // `**bold**` / `# headings` / ```` ``` ```` show up as raw syntax. Send an
         // interactive card with a `markdown` element instead — `lark_md` renders
         // bold/italic/links/lists/dividers. `markdown_to_lark_card` downgrades the
         // few constructs lark_md can't handle (headings, fenced code, tables).
-        let content = markdown_to_lark_card(&message.content).to_string();
-        let body = serde_json::json!({
-            "receive_id": message.recipient,
-            "msg_type": "interactive",
-            "content": content,
-        });
-        tracing::debug!(
-            target: "openhuman::channels",
-            recipient = %message.recipient,
-            card = %content,
-            "[lark] send interactive card"
-        );
-
-        let resp = self
-            .http_client()
-            .post(&url)
-            .header("Authorization", format!("Bearer {token}"))
-            .header("Content-Type", "application/json; charset=utf-8")
-            .json(&body)
-            .send()
-            .await?;
-
-        if resp.status().as_u16() == 401 {
-            // Token expired, invalidate and retry once
-            self.invalidate_token().await;
-            let new_token = self.get_tenant_access_token().await?;
-            let retry_resp = self
-                .http_client()
-                .post(&url)
-                .header("Authorization", format!("Bearer {new_token}"))
-                .header("Content-Type", "application/json; charset=utf-8")
-                .json(&body)
-                .send()
-                .await?;
-
-            if !retry_resp.status().is_success() {
-                let err = retry_resp.text().await.unwrap_or_default();
-                anyhow::bail!("Lark send failed after token refresh: {err}");
-            }
-            return Ok(());
-        }
-
-        if !resp.status().is_success() {
-            let err = resp.text().await.unwrap_or_default();
-            anyhow::bail!("Lark send failed: {err}");
-        }
-
-        // Feishu often returns HTTP 200 with a non-zero business `code` when it
-        // rejects the payload (e.g. a malformed card). Surface that instead of
-        // silently treating it as success.
-        let resp_body = resp.text().await.unwrap_or_default();
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&resp_body) {
-            let code = v.get("code").and_then(|c| c.as_i64()).unwrap_or(0);
-            if code != 0 {
-                let msg = v.get("msg").and_then(|m| m.as_str()).unwrap_or("(none)");
-                anyhow::bail!("Lark send returned code={code} msg={msg} body={resp_body}");
-            }
-        }
-
-        Ok(())
+        let card = markdown_to_lark_card(&message.content);
+        self.post_interactive_card(&message.recipient, &card).await
     }
 
     async fn listen(&self, tx: tokio::sync::mpsc::Sender<ChannelMessage>) -> anyhow::Result<()> {
@@ -738,6 +705,149 @@ impl Channel for LarkChannel {
 }
 
 impl LarkChannel {
+    /// Create a Feishu group chat and invite the given user open_ids. Returns
+    /// the new chat_id (`oc_…`). Reuses the token + client + 401-retry + business
+    /// `code` checks that `send()` uses.
+    ///
+    /// Requires the app to hold `im:chat` (create group) permission and the
+    /// invited users to be within the app's visible scope.
+    pub async fn create_group(
+        &self,
+        name: &str,
+        invite_open_ids: &[String],
+    ) -> anyhow::Result<String> {
+        let url = format!("{}/im/v1/chats?user_id_type=open_id", self.api_base());
+        let body = serde_json::json!({
+            "name": name,
+            "chat_mode": "group",
+            "chat_type": "private",
+            "manager_ids": [],
+            "user_id_list": invite_open_ids,
+        });
+
+        let send_once = |token: String| {
+            let url = url.clone();
+            let body = body.clone();
+            let client = self.http_client();
+            async move {
+                client
+                    .post(&url)
+                    .header("Authorization", format!("Bearer {token}"))
+                    .header("Content-Type", "application/json; charset=utf-8")
+                    .json(&body)
+                    .send()
+                    .await
+            }
+        };
+
+        let token = self.get_tenant_access_token().await?;
+        let mut resp = send_once(token).await?;
+        if resp.status().as_u16() == 401 {
+            self.invalidate_token().await;
+            let new_token = self.get_tenant_access_token().await?;
+            resp = send_once(new_token).await?;
+        }
+
+        let status = resp.status();
+        let resp_body = resp.text().await.unwrap_or_default();
+        if !status.is_success() {
+            anyhow::bail!("Lark create_group failed: http={status} body={resp_body}");
+        }
+        let v: serde_json::Value = serde_json::from_str(&resp_body)
+            .map_err(|e| anyhow::anyhow!("Lark create_group: bad JSON: {e} body={resp_body}"))?;
+        let code = v.get("code").and_then(|c| c.as_i64()).unwrap_or(-1);
+        if code != 0 {
+            let msg = v.get("msg").and_then(|m| m.as_str()).unwrap_or("(none)");
+            anyhow::bail!("Lark create_group returned code={code} msg={msg}");
+        }
+        let chat_id = v
+            .pointer("/data/chat_id")
+            .and_then(|c| c.as_str())
+            .ok_or_else(|| anyhow::anyhow!("Lark create_group: missing data.chat_id"))?
+            .to_string();
+        tracing::info!(
+            target: "openhuman::channels",
+            chat_id = %chat_id,
+            invited = invite_open_ids.len(),
+            "[lark] created resume group"
+        );
+        Ok(chat_id)
+    }
+
+    /// POST an interactive card (already-built JSON) to a recipient. Shared by
+    /// `send()` and the completion-notice/resume-button paths. Handles token,
+    /// 401-retry-once, and the Feishu business-`code` check.
+    pub(crate) async fn post_interactive_card(
+        &self,
+        recipient: &str,
+        card: &serde_json::Value,
+    ) -> anyhow::Result<()> {
+        let url = self.send_message_url(recipient);
+        let content = card.to_string();
+        let body = serde_json::json!({
+            "receive_id": recipient,
+            "msg_type": "interactive",
+            "content": content,
+        });
+        tracing::debug!(
+            target: "openhuman::channels",
+            recipient = %recipient,
+            card = %content,
+            "[lark] post interactive card"
+        );
+
+        let post = |token: String| {
+            let url = url.clone();
+            let body = body.clone();
+            let client = self.http_client();
+            async move {
+                client
+                    .post(&url)
+                    .header("Authorization", format!("Bearer {token}"))
+                    .header("Content-Type", "application/json; charset=utf-8")
+                    .json(&body)
+                    .send()
+                    .await
+            }
+        };
+
+        let token = self.get_tenant_access_token().await?;
+        let mut resp = post(token).await?;
+        if resp.status().as_u16() == 401 {
+            self.invalidate_token().await;
+            let new_token = self.get_tenant_access_token().await?;
+            resp = post(new_token).await?;
+        }
+        if !resp.status().is_success() {
+            let err = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Lark send failed: {err}");
+        }
+        // Feishu often returns HTTP 200 with a non-zero business `code` when it
+        // rejects the payload — surface that instead of silently succeeding.
+        let resp_body = resp.text().await.unwrap_or_default();
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&resp_body) {
+            let code = v.get("code").and_then(|c| c.as_i64()).unwrap_or(0);
+            if code != 0 {
+                let msg = v.get("msg").and_then(|m| m.as_str()).unwrap_or("(none)");
+                anyhow::bail!("Lark send returned code={code} msg={msg} body={resp_body}");
+            }
+        }
+        Ok(())
+    }
+
+    /// Send a completion-notice card that carries a "resume in new group"
+    /// button. Clicking it fires a `card.action.trigger` event whose
+    /// `action.value` is `{"action":"resume_task","task_id":<task_id>}`.
+    pub async fn send_completion_card_with_resume(
+        &self,
+        recipient: &str,
+        md: &str,
+        task_id: &str,
+    ) -> anyhow::Result<()> {
+        let card = completion_card_with_resume_button(md, task_id);
+        self.post_interactive_card(recipient, &card).await
+    }
+
     /// HTTP callback server (legacy — requires a public endpoint).
     /// Use `listen()` (WS long-connection) for new deployments.
     pub async fn listen_http(
@@ -926,6 +1036,34 @@ fn should_respond_in_group(mentions: &[serde_json::Value]) -> bool {
     !mentions.is_empty()
 }
 
+/// Parse a Feishu `card.action.trigger` event payload into a `CardAction`.
+/// The relevant fields (Feishu card callback v2):
+/// - operator open_id: `/operator/open_id`
+/// - chat id:          `/context/open_chat_id`
+/// - button value:     `/action/value` (the JSON we set in the button)
+/// Returns None when the payload lacks a usable action value.
+fn parse_card_action(
+    event: &serde_json::Value,
+) -> Option<crate::openhuman::channels::traits::CardAction> {
+    let action_value = event.pointer("/action/value")?.clone();
+    let open_id = event
+        .pointer("/operator/open_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let chat_id = event
+        .pointer("/context/open_chat_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    Some(crate::openhuman::channels::traits::CardAction {
+        channel: "lark".to_string(),
+        chat_id,
+        open_id,
+        action_value,
+    })
+}
+
 /// Pick the Feishu `receive_id_type` for a recipient by its ID prefix:
 /// `ou_…` is a user open_id, everything else (notably `oc_…` chat IDs, the
 /// value used for all inbound replies) is treated as a chat_id.
@@ -1057,6 +1195,34 @@ fn markdown_to_lark_card(md: &str) -> serde_json::Value {
         "schema": "2.0",
         "config": { "wide_screen_mode": true },
         "body": { "elements": elements }
+    })
+}
+
+/// Build a completion-notice card that appends a "resume in new group" button
+/// after the notice body. The button's `value` encodes the resume action +
+/// task_id; clicking it fires a `card.action.trigger` event the WS listener
+/// routes to the card-action handler (creates a group + resumes the session).
+///
+/// Uses schema 1.0 with a trailing `action` module (button). We keep the body
+/// as a single `markdown` element — completion notices don't contain tables.
+fn completion_card_with_resume_button(md: &str, task_id: &str) -> serde_json::Value {
+    serde_json::json!({
+        "config": { "wide_screen_mode": true },
+        "elements": [
+            { "tag": "markdown", "content": normalize_markdown_for_lark(md) },
+            { "tag": "hr" },
+            {
+                "tag": "action",
+                "actions": [
+                    {
+                        "tag": "button",
+                        "text": { "tag": "plain_text", "content": "💬 在群里继续这个任务" },
+                        "type": "primary",
+                        "value": { "action": "resume_task", "task_id": task_id }
+                    }
+                ]
+            }
+        ]
     })
 }
 

@@ -7,11 +7,13 @@
 //! * [`processor`] — core message pipeline ([`process_channel_message`],
 //!   [`run_message_dispatch_loop`]) and approval-surface gate.
 
+mod card_action;
 mod helpers;
 mod orchestrator_prompt;
 mod processor;
 mod routing;
 
+pub(crate) use card_action::run_card_action_loop;
 pub(crate) use processor::{process_channel_message, run_message_dispatch_loop};
 
 // `channel_has_approval_surface` stays pub(crate) on processor; re-export so

@@ -436,6 +436,11 @@ pub async fn start_channels(mut config: Config) -> Result<()> {
     // Collect active channels
     let mut channels: Vec<Arc<dyn Channel>> = Vec::new();
 
+    // Independent card-action bus (Feishu button clicks). Kept separate from the
+    // ChannelMessage bus: a card action triggers a side-effect (open a resume
+    // group), not a conversational turn.
+    let (card_action_tx, card_action_rx) = tokio::sync::mpsc::channel::<traits::CardAction>(32);
+
     if let Some(ref tg) = config.channels_config.telegram {
         tracing::info!(
             channel = "telegram",
@@ -599,7 +604,9 @@ pub async fn start_channels(mut config: Config) -> Result<()> {
     }
 
     if let Some(ref lk) = config.channels_config.lark {
-        channels.push(Arc::new(LarkChannel::from_config(lk)));
+        channels.push(Arc::new(
+            LarkChannel::from_config(lk).with_card_action_tx(card_action_tx.clone()),
+        ));
     }
 
     if let Some(ref dt) = config.channels_config.dingtalk {
@@ -755,6 +762,15 @@ pub async fn start_channels(mut config: Config) -> Result<()> {
         )
         .into();
     let config_arc = Arc::new(config.clone());
+
+    // Spawn the independent card-action handler (Feishu resume-button clicks →
+    // open group + bind session). Drop our tx copy so the loop ends when all
+    // channels stop.
+    drop(card_action_tx);
+    let card_handler_config = Arc::clone(&config_arc);
+    tokio::spawn(async move {
+        super::dispatch::run_card_action_loop(card_action_rx, card_handler_config).await;
+    });
 
     let runtime_ctx = Arc::new(ChannelRuntimeContext {
         channels_by_name,
