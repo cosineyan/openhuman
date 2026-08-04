@@ -722,7 +722,9 @@ async fn deliver_if_configured(config: &Config, job: &CronJob, output: &str) -> 
         // instead the *prompt* drives the task so AI produces the result.
         "task" => {
             let title = job.name.as_deref().unwrap_or("Scheduled Task");
-            let now = chrono::Utc::now().format("%Y-%m-%d").to_string();
+            // Local calendar date, not UTC — a job fired late evening local time
+            // should be dated "today" as the user sees it, not tomorrow (UTC).
+            let now = chrono::Local::now().format("%Y-%m-%d").to_string();
             let task_title = format!("{} — {}", title, now);
             let prompt = job.prompt.clone().unwrap_or_default();
             let create_result = crate::openhuman::projects::create_task(
