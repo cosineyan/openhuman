@@ -75,20 +75,31 @@ pub async fn call_tool(
         | "projects.create_task"
         | "projects.update_task" => {
             let config = write_dispatch::load_write_config(spec.name).await?;
-            if let Err(err) = write_dispatch::enforce_write_policy_for_config(spec.name, &config) {
-                write_dispatch::audit_write_rejection(
-                    &config,
-                    spec.name,
-                    &audit_arguments,
-                    Some(&params),
-                    client_info,
-                    &err,
-                );
-                return Err(err);
-            }
-            // The memory write tools carry provenance in a `source_type` param
-            // (memory_doc_put reads it); the projects task writes don't take it.
-            if matches!(spec.name, "memory.store" | "memory.note" | "tree.tag") {
+            // The memory write tools stay behind OpenHuman's own autonomy gate
+            // (they mutate the local memory tree, which the autonomy tier is
+            // meant to govern). The projects task writes deliberately DO NOT:
+            // they are only ever reached through an explicit user request in an
+            // MCP client (Claude Code), whose own permission model is the
+            // authoritative gate. Applying OpenHuman's agent-autonomy tier to a
+            // user-initiated task edit is a category error, so skip it here.
+            // Audit logging + param validation below still apply to both.
+            let openhuman_gated = matches!(spec.name, "memory.store" | "memory.note" | "tree.tag");
+            if openhuman_gated {
+                if let Err(err) =
+                    write_dispatch::enforce_write_policy_for_config(spec.name, &config)
+                {
+                    write_dispatch::audit_write_rejection(
+                        &config,
+                        spec.name,
+                        &audit_arguments,
+                        Some(&params),
+                        client_info,
+                        &err,
+                    );
+                    return Err(err);
+                }
+                // Provenance param read by memory_doc_put; not taken by the
+                // projects RPCs.
                 params.insert(
                     "source_type".to_string(),
                     Value::String(client_info.to_string()),
