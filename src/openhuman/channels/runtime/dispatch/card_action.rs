@@ -70,19 +70,17 @@ async fn handle_resume_task(config: &Arc<Config>, action: &CardAction) -> anyhow
             anyhow::anyhow!("task {task_id} has no Claude Code session to resume (never ran?)")
         })?;
 
-    // Reuse the existing resume group if this task already has one.
-    if let Some(existing) = task
+    // Each click opens a FRESH group. Feishu can't tell us whether the user is
+    // still in a previously-opened group (they may have left it), so honoring a
+    // re-click by always creating a new group is the only way to guarantee the
+    // user lands somewhere they can actually chat. Clear the old chat's binding
+    // so a stale group no longer resumes this session.
+    if let Some(old_chat) = task
         .feishu_resume_chat_id
         .as_deref()
         .filter(|s| !s.is_empty())
     {
-        let _ = lark
-            .send(&SendMessage::new(
-                format!("↩️ 这个任务已有一个继续群,请到那边继续:{existing}"),
-                action.chat_id.clone(),
-            ))
-            .await;
-        return Ok(());
+        let _ = store::clear_binding(config, old_chat);
     }
 
     // Create a new group and invite the clicker.

@@ -1710,6 +1710,19 @@ pub fn update_binding_session(
     })
 }
 
+/// Remove a chat's session binding (e.g. a resume group the user left, replaced
+/// by a freshly-opened one). Idempotent — a missing row is a no-op.
+pub fn clear_binding(config: &Config, chat_id: &str) -> Result<()> {
+    with_connection(config, |conn| {
+        conn.execute(
+            "DELETE FROM feishu_session_bindings WHERE chat_id = ?1",
+            params![chat_id],
+        )
+        .context("Failed to clear feishu binding")?;
+        Ok(())
+    })
+}
+
 /// Record (or clear) the Feishu resume group opened for a task, so a second
 /// click reuses the existing group instead of creating a duplicate.
 pub fn set_task_feishu_resume_chat(
