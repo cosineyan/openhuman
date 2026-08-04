@@ -107,6 +107,7 @@ mod tests {
             use_feishu: false,
             receive_mode: crate::openhuman::config::schema::LarkReceiveMode::Websocket,
             port: None,
+            notify_target: None,
         };
 
         assert_eq!(telegram.allowed_users.len(), 1);

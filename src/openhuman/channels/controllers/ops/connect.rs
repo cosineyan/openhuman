@@ -439,6 +439,13 @@ pub async fn connect_channel(
             .transpose()?;
         let allowed_users = parse_allowed_users(creds_map.get("allowed_users"));
         let allowed_users_count = allowed_users.len();
+        // Optional chat_id/open_id for project-task completion notices.
+        let notify_target = creds_map
+            .get("notify_target")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
 
         let mut persisted = config.clone();
         persisted.channels_config.lark = Some(LarkConfig {
@@ -450,6 +457,7 @@ pub async fn connect_channel(
             use_feishu,
             receive_mode,
             port,
+            notify_target,
         });
 
         persisted

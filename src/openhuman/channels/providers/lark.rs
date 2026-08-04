@@ -213,8 +213,12 @@ impl LarkChannel {
         format!("{}/auth/v3/tenant_access_token/internal", self.api_base())
     }
 
-    fn send_message_url(&self) -> String {
-        format!("{}/im/v1/messages?receive_id_type=chat_id", self.api_base())
+    fn send_message_url(&self, recipient: &str) -> String {
+        format!(
+            "{}/im/v1/messages?receive_id_type={}",
+            self.api_base(),
+            receive_id_type_for(recipient)
+        )
     }
 
     /// POST /callback/ws/endpoint → (wss_url, client_config)
@@ -651,7 +655,7 @@ impl Channel for LarkChannel {
 
     async fn send(&self, message: &SendMessage) -> anyhow::Result<()> {
         let token = self.get_tenant_access_token().await?;
-        let url = self.send_message_url();
+        let url = self.send_message_url(&message.recipient);
 
         // Feishu's `text` message type renders no Markdown, so the agent's
         // `**bold**` / `# headings` / ```` ``` ```` show up as raw syntax. Send an
@@ -664,6 +668,12 @@ impl Channel for LarkChannel {
             "msg_type": "interactive",
             "content": content,
         });
+        tracing::debug!(
+            target: "openhuman::channels",
+            recipient = %message.recipient,
+            card = %content,
+            "[lark] send interactive card"
+        );
 
         let resp = self
             .http_client()
@@ -697,6 +707,18 @@ impl Channel for LarkChannel {
         if !resp.status().is_success() {
             let err = resp.text().await.unwrap_or_default();
             anyhow::bail!("Lark send failed: {err}");
+        }
+
+        // Feishu often returns HTTP 200 with a non-zero business `code` when it
+        // rejects the payload (e.g. a malformed card). Surface that instead of
+        // silently treating it as success.
+        let resp_body = resp.text().await.unwrap_or_default();
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&resp_body) {
+            let code = v.get("code").and_then(|c| c.as_i64()).unwrap_or(0);
+            if code != 0 {
+                let msg = v.get("msg").and_then(|m| m.as_str()).unwrap_or("(none)");
+                anyhow::bail!("Lark send returned code={code} msg={msg} body={resp_body}");
+            }
         }
 
         Ok(())
@@ -904,6 +926,17 @@ fn should_respond_in_group(mentions: &[serde_json::Value]) -> bool {
     !mentions.is_empty()
 }
 
+/// Pick the Feishu `receive_id_type` for a recipient by its ID prefix:
+/// `ou_…` is a user open_id, everything else (notably `oc_…` chat IDs, the
+/// value used for all inbound replies) is treated as a chat_id.
+fn receive_id_type_for(recipient: &str) -> &'static str {
+    if recipient.starts_with("ou_") {
+        "open_id"
+    } else {
+        "chat_id"
+    }
+}
+
 /// Normalize standard Markdown (what the agent produces) into Feishu `lark_md`,
 /// the Markdown dialect accepted inside an interactive card's `markdown` element.
 ///
@@ -985,16 +1018,197 @@ fn is_table_separator_row(trimmed: &str) -> bool {
 
 /// Wrap normalized `lark_md` text into an interactive card payload (the value
 /// of the `content` field for a `msg_type: "interactive"` message).
+///
+/// lark_md has no table syntax, so when the Markdown contains a GFM table we
+/// switch to a schema-2.0 card and render each table as a native `table`
+/// element, with the surrounding prose kept as `markdown` elements. When there
+/// is no table we emit the simpler (and widely verified) 1.0 single-markdown
+/// card — zero behavior change for the common case.
 fn markdown_to_lark_card(md: &str) -> serde_json::Value {
-    let body = normalize_markdown_for_lark(md);
-    serde_json::json!({
-        "config": { "wide_screen_mode": true },
-        "elements": [
-            {
-                "tag": "markdown",
-                "content": body,
+    let segments = split_markdown_segments(md);
+    let has_table = segments.iter().any(|s| matches!(s, MdSegment::Table(_)));
+
+    if !has_table {
+        return serde_json::json!({
+            "config": { "wide_screen_mode": true },
+            "elements": [
+                { "tag": "markdown", "content": normalize_markdown_for_lark(md) }
+            ]
+        });
+    }
+
+    let mut elements: Vec<serde_json::Value> = Vec::new();
+    for seg in segments {
+        match seg {
+            MdSegment::Text(text) => {
+                let normalized = normalize_markdown_for_lark(&text);
+                if !normalized.trim().is_empty() {
+                    elements.push(serde_json::json!({
+                        "tag": "markdown",
+                        "content": normalized,
+                    }));
+                }
             }
-        ]
+            MdSegment::Table(table) => elements.push(build_table_element(&table)),
+        }
+    }
+
+    serde_json::json!({
+        "schema": "2.0",
+        "config": { "wide_screen_mode": true },
+        "body": { "elements": elements }
+    })
+}
+
+/// A parsed slice of Markdown: either free-form prose or one GFM table.
+#[derive(Debug, PartialEq)]
+enum MdSegment {
+    Text(String),
+    Table(MdTable),
+}
+
+/// A parsed GFM table: header cells + body rows (each already split into cells).
+#[derive(Debug, PartialEq)]
+struct MdTable {
+    headers: Vec<String>,
+    rows: Vec<Vec<String>>,
+}
+
+/// Split Markdown into alternating prose / table segments. A table is a header
+/// row of `| … |` cells immediately followed by a separator row (`|---|`), then
+/// zero or more body rows. Everything else accumulates into Text segments.
+/// Fenced code blocks are passed through as Text (never parsed as tables).
+fn split_markdown_segments(md: &str) -> Vec<MdSegment> {
+    let lines: Vec<&str> = md.lines().collect();
+    let mut segments: Vec<MdSegment> = Vec::new();
+    let mut text_buf: Vec<String> = Vec::new();
+    let mut in_fence = false;
+    let mut i = 0;
+
+    let flush_text = |buf: &mut Vec<String>, segs: &mut Vec<MdSegment>| {
+        if !buf.is_empty() {
+            segs.push(MdSegment::Text(buf.join("\n")));
+            buf.clear();
+        }
+    };
+
+    while i < lines.len() {
+        let line = lines[i];
+        let trimmed = line.trim_start();
+
+        if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+            in_fence = !in_fence;
+            text_buf.push(line.to_string());
+            i += 1;
+            continue;
+        }
+
+        // A table starts when this line looks like a row and the NEXT line is a
+        // separator row. Never inside a code fence.
+        if !in_fence
+            && is_table_row(trimmed)
+            && i + 1 < lines.len()
+            && is_table_separator_row(lines[i + 1].trim_start())
+        {
+            flush_text(&mut text_buf, &mut segments);
+            let headers = split_table_row(trimmed);
+            i += 2; // consume header + separator
+            let mut rows: Vec<Vec<String>> = Vec::new();
+            while i < lines.len() {
+                let row_trimmed = lines[i].trim_start();
+                if !is_table_row(row_trimmed) || is_table_separator_row(row_trimmed) {
+                    break;
+                }
+                rows.push(split_table_row(row_trimmed));
+                i += 1;
+            }
+            segments.push(MdSegment::Table(MdTable { headers, rows }));
+            continue;
+        }
+
+        text_buf.push(line.to_string());
+        i += 1;
+    }
+
+    flush_text(&mut text_buf, &mut segments);
+    segments
+}
+
+/// A pipe-delimited table row (must contain a `|`). Separators also match this,
+/// so callers check `is_table_separator_row` first when it matters.
+fn is_table_row(trimmed: &str) -> bool {
+    trimmed.contains('|') && !trimmed.is_empty()
+}
+
+/// Split a `| a | b | c |` row into trimmed cell strings, dropping the empty
+/// leading/trailing cells produced by the outer pipes. Inline emphasis markers
+/// are stripped so cells render as clean text (Feishu table cells are plain).
+fn split_table_row(trimmed: &str) -> Vec<String> {
+    trimmed
+        .trim()
+        .trim_matches('|')
+        .split('|')
+        .map(|c| strip_inline_markdown(c.trim()))
+        .collect()
+}
+
+/// Remove inline Markdown emphasis markers (`**`, `*`, `~~`, `` ` ``) so table
+/// cells don't show raw asterisks (Feishu table cells render as plain text).
+fn strip_inline_markdown(s: &str) -> String {
+    s.replace("**", "")
+        .replace("~~", "")
+        .replace('*', "")
+        .replace('`', "")
+}
+
+/// Build a Feishu schema-2.0 `table` element from a parsed Markdown table.
+/// Columns are keyed `c0`, `c1`, … internally; the header text becomes each
+/// column's `display_name`. Extra/short cells are tolerated (missing cells are
+/// rendered empty) so a ragged row never drops the whole table.
+fn build_table_element(table: &MdTable) -> serde_json::Value {
+    let col_count = table
+        .headers
+        .len()
+        .max(table.rows.iter().map(|r| r.len()).max().unwrap_or(0));
+
+    let columns: Vec<serde_json::Value> = (0..col_count)
+        .map(|idx| {
+            let name = format!("c{idx}");
+            let display = table.headers.get(idx).cloned().unwrap_or_default();
+            serde_json::json!({
+                "name": name,
+                "display_name": display,
+                "data_type": "text",
+                "horizontal_align": "left",
+                "width": "auto",
+            })
+        })
+        .collect();
+
+    let rows: Vec<serde_json::Value> = table
+        .rows
+        .iter()
+        .map(|cells| {
+            let mut obj = serde_json::Map::new();
+            for idx in 0..col_count {
+                let val = cells.get(idx).cloned().unwrap_or_default();
+                obj.insert(format!("c{idx}"), serde_json::Value::String(val));
+            }
+            serde_json::Value::Object(obj)
+        })
+        .collect();
+
+    serde_json::json!({
+        "tag": "table",
+        "page_size": 10,
+        "row_height": "low",
+        "header_style": {
+            "background_style": "grey",
+            "bold": true,
+            "lines": 1,
+        },
+        "columns": columns,
+        "rows": rows,
     })
 }
 
@@ -1093,7 +1307,7 @@ pub mod test_support {
         channel.use_feishu = use_feishu;
         (
             channel.tenant_access_token_url(),
-            channel.send_message_url(),
+            channel.send_message_url("oc_test"),
         )
     }
 }

@@ -280,6 +280,7 @@ fn lark_config_serde() {
         use_feishu: false,
         receive_mode: LarkReceiveMode::default(),
         port: None,
+        notify_target: None,
     };
     let json = serde_json::to_string(&lc).unwrap();
     let parsed: LarkConfig = serde_json::from_str(&json).unwrap();
@@ -301,6 +302,7 @@ fn lark_config_toml_roundtrip() {
         use_feishu: false,
         receive_mode: LarkReceiveMode::Webhook,
         port: Some(9898),
+        notify_target: None,
     };
     let toml_str = toml::to_string(&lc).unwrap();
     let parsed: LarkConfig = toml::from_str(&toml_str).unwrap();
@@ -333,6 +335,7 @@ fn lark_from_config_preserves_mode_and_region() {
         use_feishu: false,
         receive_mode: LarkReceiveMode::Webhook,
         port: Some(9898),
+        notify_target: None,
     };
 
     let ch = LarkChannel::from_config(&cfg);
@@ -683,4 +686,114 @@ fn markdown_to_lark_card_builds_interactive_payload() {
     assert_eq!(elements.len(), 1);
     assert_eq!(elements[0]["tag"], "markdown");
     assert_eq!(elements[0]["content"], "**Hi**\nbody");
+}
+
+// ── markdown table → Feishu schema-2.0 table element ───────────
+
+#[test]
+fn split_segments_no_table_is_single_text() {
+    let segs = split_markdown_segments("just some **prose**\nmore text");
+    assert_eq!(segs.len(), 1);
+    assert!(matches!(&segs[0], MdSegment::Text(_)));
+}
+
+#[test]
+fn split_segments_detects_table_between_prose() {
+    let md = "before\n| A | B |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\nafter";
+    let segs = split_markdown_segments(md);
+    assert_eq!(segs.len(), 3, "text, table, text");
+    match &segs[1] {
+        MdSegment::Table(t) => {
+            assert_eq!(t.headers, vec!["A", "B"]);
+            assert_eq!(t.rows.len(), 2);
+            assert_eq!(t.rows[0], vec!["1", "2"]);
+            assert_eq!(t.rows[1], vec!["3", "4"]);
+        }
+        _ => panic!("segment 1 should be a table"),
+    }
+    assert!(matches!(&segs[0], MdSegment::Text(t) if t == "before"));
+    assert!(matches!(&segs[2], MdSegment::Text(t) if t == "after"));
+}
+
+#[test]
+fn split_table_row_strips_inline_markdown_in_cells() {
+    let cells = split_table_row("| **8.0d** | `x` | ~~old~~ |");
+    assert_eq!(cells, vec!["8.0d", "x", "old"]);
+}
+
+#[test]
+fn table_pipes_in_fence_are_not_parsed_as_table() {
+    let md = "```\n| A | B |\n|---|---|\n```";
+    let segs = split_markdown_segments(md);
+    // All prose (inside a code fence), no table.
+    assert!(segs.iter().all(|s| matches!(s, MdSegment::Text(_))));
+}
+
+#[test]
+fn card_with_table_uses_schema_2_and_table_element() {
+    let md = "Your quota:\n| Type | Remaining |\n|---|---|\n| AL | **8.0d** |";
+    let card = markdown_to_lark_card(md);
+    assert_eq!(card["schema"], "2.0");
+    let elements = card["body"]["elements"]
+        .as_array()
+        .expect("body.elements array");
+    // First a markdown prose element, then the table.
+    assert_eq!(elements[0]["tag"], "markdown");
+    let table = &elements[1];
+    assert_eq!(table["tag"], "table");
+    let cols = table["columns"].as_array().expect("columns");
+    assert_eq!(cols.len(), 2);
+    assert_eq!(cols[0]["display_name"], "Type");
+    assert_eq!(cols[1]["display_name"], "Remaining");
+    let rows = table["rows"].as_array().expect("rows");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["c0"], "AL");
+    assert_eq!(rows[0]["c1"], "8.0d");
+}
+
+#[test]
+fn card_without_table_stays_schema_1() {
+    let card = markdown_to_lark_card("no table here, just **bold**");
+    assert!(card.get("schema").is_none());
+    assert_eq!(card["elements"][0]["tag"], "markdown");
+}
+
+#[test]
+fn table_tolerates_ragged_rows() {
+    // A short row must not drop the table; missing cells render empty.
+    let md = "| A | B | C |\n|---|---|---|\n| 1 | 2 |";
+    let card = markdown_to_lark_card(md);
+    let table = &card["body"]["elements"][0];
+    assert_eq!(table["columns"].as_array().unwrap().len(), 3);
+    let row0 = &table["rows"][0];
+    assert_eq!(row0["c0"], "1");
+    assert_eq!(row0["c1"], "2");
+    assert_eq!(row0["c2"], "");
+}
+
+// ── receive_id_type_for ────────────────────────────────────────
+
+#[test]
+fn receive_id_type_open_id_for_ou_prefix() {
+    assert_eq!(receive_id_type_for("ou_abc123"), "open_id");
+}
+
+#[test]
+fn receive_id_type_chat_id_for_oc_prefix() {
+    assert_eq!(receive_id_type_for("oc_chat456"), "chat_id");
+}
+
+#[test]
+fn receive_id_type_defaults_to_chat_id() {
+    // Anything not an ou_ open_id (incl. inbound reply chat IDs) → chat_id.
+    assert_eq!(receive_id_type_for("something_else"), "chat_id");
+    assert_eq!(receive_id_type_for(""), "chat_id");
+}
+
+#[test]
+fn lark_config_defaults_notify_target_none() {
+    use crate::openhuman::config::schema::LarkConfig;
+    let json = r#"{"app_id":"a","app_secret":"s"}"#;
+    let parsed: LarkConfig = serde_json::from_str(json).unwrap();
+    assert!(parsed.notify_target.is_none());
 }

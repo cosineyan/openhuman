@@ -593,6 +593,19 @@ async fn run_ai_task(
         log::warn!("{LOG} task={task_id} failed to finalize run row run_id={run_id}: {e}");
     }
 
+    // Push a completion notice to the configured Feishu/Lark chat. Skipped when
+    // the task was cancelled by the user, or when no notify_target is set.
+    if !was_cancelled {
+        let notice = build_lark_completion_md(
+            &title,
+            description.as_deref(),
+            resolved_model.as_deref(),
+            status,
+            response_text,
+        );
+        notify_lark_completion(&config, notice);
+    }
+
     // A slot just freed — nudge the dispatcher to pull the next queued task.
     crate::core::event_bus::publish_global(DomainEvent::ProjectTaskCompleted {
         task_id: task_id.clone(),
@@ -1048,4 +1061,139 @@ fn notify_teams_chat(
             ),
         }
     });
+}
+
+/// Max characters of AI output embedded in a Feishu completion notice. Feishu
+/// interactive cards cap total content length; the full output always remains
+/// on the task as an attached log, so truncating the notice is safe.
+const LARK_NOTICE_MAX_RESPONSE: usize = 3000;
+
+/// Compose the Markdown body of a project-task completion notice. The AI output
+/// (`response`) may be Markdown or plain text; the Lark channel renders it via
+/// `lark_md` on send, so it is embedded verbatim (only length-capped here).
+fn build_lark_completion_md(
+    title: &str,
+    description: Option<&str>,
+    model: Option<&str>,
+    status: &str,
+    response: &str,
+) -> String {
+    let (emoji, label) = match status {
+        "done" => ("✅", "done"),
+        "error" => ("❌", "error"),
+        // "blocked" and any other terminal state.
+        _ => ("⚠️", status),
+    };
+
+    let mut md = String::new();
+    md.push_str(&format!("## {emoji} Task {label}: {title}\n\n"));
+    md.push_str(&format!("**Model:** {}\n", model.unwrap_or("(unknown)")));
+    md.push_str(&format!("**Status:** {status}\n"));
+    if let Some(desc) = description.map(str::trim).filter(|d| !d.is_empty()) {
+        md.push_str(&format!("\n**Description:**\n{desc}\n"));
+    }
+    md.push_str("\n---\n\n");
+
+    let response = response.trim();
+    if response.chars().count() > LARK_NOTICE_MAX_RESPONSE {
+        let truncated: String = response.chars().take(LARK_NOTICE_MAX_RESPONSE).collect();
+        md.push_str(&truncated);
+        md.push_str("\n\n…（输出已截断，完整内容见 task 附件日志）");
+    } else {
+        md.push_str(response);
+    }
+    md
+}
+
+/// Fire-and-forget push of a completion notice to the configured Feishu/Lark
+/// chat. No-op when Lark is not configured or `notify_target` is unset. Never
+/// blocks or fails the task: send errors are logged at warn level only.
+fn notify_lark_completion(config: &Config, notice: String) {
+    let Some(lark) = config.channels_config.lark.as_ref() else {
+        return;
+    };
+    let Some(target) = lark
+        .notify_target
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    else {
+        return;
+    };
+
+    use crate::openhuman::channels::lark::LarkChannel;
+    use crate::openhuman::channels::traits::{Channel, SendMessage};
+
+    let channel = LarkChannel::from_config(lark);
+    let target = target.to_string();
+    tokio::spawn(async move {
+        match channel
+            .send(&SendMessage::new(notice, target.clone()))
+            .await
+        {
+            Ok(()) => log::debug!("[projects] lark completion notice sent to {target}"),
+            Err(e) => {
+                log::warn!("[projects] lark completion notice failed for {target}: {e}")
+            }
+        }
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_lark_completion_md;
+
+    #[test]
+    fn completion_md_done_has_check_emoji_and_fields() {
+        let md = build_lark_completion_md(
+            "Ship the thing",
+            Some("Do the work"),
+            Some("claude-sonnet-5"),
+            "done",
+            "**All done.**",
+        );
+        assert!(md.contains("## ✅ Task done: Ship the thing"));
+        assert!(md.contains("**Model:** claude-sonnet-5"));
+        assert!(md.contains("**Status:** done"));
+        assert!(md.contains("**Description:**\nDo the work"));
+        assert!(md.contains("**All done.**"));
+    }
+
+    #[test]
+    fn completion_md_blocked_and_error_emojis() {
+        let blocked = build_lark_completion_md("T", None, None, "blocked", "x");
+        assert!(blocked.contains("## ⚠️ Task blocked: T"));
+        let error = build_lark_completion_md("T", None, None, "error", "x");
+        assert!(error.contains("## ❌ Task error: T"));
+    }
+
+    #[test]
+    fn completion_md_omits_empty_description() {
+        let md = build_lark_completion_md("T", Some("   "), Some("m"), "done", "body");
+        assert!(!md.contains("**Description:**"));
+        let md_none = build_lark_completion_md("T", None, Some("m"), "done", "body");
+        assert!(!md_none.contains("**Description:**"));
+    }
+
+    #[test]
+    fn completion_md_unknown_model_placeholder() {
+        let md = build_lark_completion_md("T", None, None, "done", "body");
+        assert!(md.contains("**Model:** (unknown)"));
+    }
+
+    #[test]
+    fn completion_md_truncates_long_response() {
+        let long = "a".repeat(5000);
+        let md = build_lark_completion_md("T", None, Some("m"), "done", &long);
+        assert!(md.contains("输出已截断"));
+        // Body should not contain the full 5000-char run.
+        assert!(!md.contains(&"a".repeat(5000)));
+    }
+
+    #[test]
+    fn completion_md_keeps_short_response_whole() {
+        let md = build_lark_completion_md("T", None, Some("m"), "done", "short answer");
+        assert!(md.contains("short answer"));
+        assert!(!md.contains("输出已截断"));
+    }
 }

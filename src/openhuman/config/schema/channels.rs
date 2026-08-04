@@ -289,6 +289,10 @@ pub struct LarkConfig {
     pub receive_mode: LarkReceiveMode,
     #[serde(default)]
     pub port: Option<u16>,
+    /// Optional chat_id (oc_…) or open_id (ou_…) that project-task completion
+    /// notifications are pushed to. When unset, no completion notice is sent.
+    #[serde(default)]
+    pub notify_target: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]

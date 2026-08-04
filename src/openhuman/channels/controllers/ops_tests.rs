@@ -353,7 +353,8 @@ async fn connect_lark_api_key_persists_runtime_config() {
             "use_feishu": true,
             "receive_mode": "webhook",
             "port": "8080",
-            "allowed_users": "ou_abc, ou_def"
+            "allowed_users": "ou_abc, ou_def",
+            "notify_target": "oc_notify123"
         }),
     )
     .await
@@ -406,6 +407,10 @@ async fn connect_lark_api_key_persists_runtime_config() {
         .and_then(toml::Value::as_array)
         .expect("allowed_users array");
     assert_eq!(allowed.len(), 2);
+    assert_eq!(
+        lark.get("notify_target").and_then(toml::Value::as_str),
+        Some("oc_notify123")
+    );
 }
 
 #[tokio::test]
@@ -453,6 +458,7 @@ async fn disconnect_lark_api_key_clears_runtime_config() {
         use_feishu: false,
         receive_mode: crate::openhuman::config::schema::LarkReceiveMode::Websocket,
         port: None,
+        notify_target: None,
     });
     config
         .save()

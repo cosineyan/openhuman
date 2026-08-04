@@ -183,6 +183,7 @@ fn lark_uses_api_key_auth_with_app_id_and_secret_required() {
         "receive_mode",
         "port",
         "allowed_users",
+        "notify_target",
     ] {
         let field = spec
             .fields

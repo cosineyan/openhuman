@@ -394,6 +394,14 @@ fn lark_definition() -> ChannelDefinition {
                     required: false,
                     placeholder: "Comma-separated open_id / union_id; leave empty to allow any",
                 },
+                FieldRequirement {
+                    key: "notify_target",
+                    label: "Notify Target (task completion)",
+                    field_type: "string",
+                    required: false,
+                    placeholder:
+                        "Optional — chat_id (oc_...) or open_id (ou_...) for AI task completion notices",
+                },
             ],
             auth_action: None,
         }],
