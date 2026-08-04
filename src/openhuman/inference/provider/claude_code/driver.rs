@@ -270,26 +270,25 @@ async fn run_turn_inner(ctx: &TurnContext<'_>, force_new: bool) -> anyhow::Resul
         .prefix("openhuman-cc-")
         .tempdir()
         .map_err(|e| anyhow::anyhow!("create scratch dir: {e}"))?;
-    // Do NOT attach OpenHuman's own in-process MCP server to a CC turn that
-    // OpenHuman itself is driving. On this path the MCP tools are an attractive
-    // nuisance that can never succeed: `event_mapper` surfaces every `mcp__`
-    // tool_use block BACK to the OpenHuman harness (rather than letting CC
-    // execute it via the MCP server), and the harness resolves tools by their
-    // bare native name (`memory_tree`, `profile_person`, …), so the prefixed
-    // `mcp__openhuman__<tool>` name never matches → "unknown tool" → the
-    // no-progress circuit breaker trips and the turn returns nothing. Leaving
-    // the config off forces the model onto the bare-name tool protocol from the
-    // system prompt, which the harness resolves correctly. The standalone
-    // "external Claude Code connects to OpenHuman's MCP server" product is a
-    // SEPARATE entry point (`openhuman-core mcp`) and is unaffected.
+    // Attach OpenHuman's own in-process HTTP MCP server to this CC turn so the
+    // model can reach OpenHuman's memory/tools as `mcp__openhuman__<tool>`. CC
+    // executes those calls ITSELF against the loopback MCP server (which runs in
+    // the unjailed core, so it keeps full `~/.openhuman` access even while CC's
+    // own raw file tools are walled off by the jail), receives the tool_result
+    // from the MCP server, and loops internally to final text. `event_mapper`
+    // treats every `mcp__` / built-in `tool_use` block as CC-executed and does
+    // NOT surface it back to the OpenHuman harness — that re-routing was the old
+    // bug (harness resolves tools by bare native name, so `mcp__openhuman__…`
+    // never matched → unknown tool → no-progress circuit breaker → empty reply).
     //
-    // Opt back in with `OPENHUMAN_CLAUDE_CODE_MCP_BRIDGE=1` (e.g. once the
-    // event_mapper learns to let CC execute MCP calls itself instead of
-    // re-routing them to the harness).
+    // Opt OUT with `OPENHUMAN_CLAUDE_CODE_MCP_BRIDGE=0` (falls back to the
+    // system-prompt bare-name tool protocol). The standalone "external Claude
+    // Code connects to OpenHuman's MCP server" product is a SEPARATE entry point
+    // (`openhuman-core mcp`) and is unaffected either way.
     let mut mcp_config_path: Option<PathBuf> = None;
     let mcp_bridge_enabled = std::env::var("OPENHUMAN_CLAUDE_CODE_MCP_BRIDGE")
-        .map(|v| v == "1")
-        .unwrap_or(false);
+        .map(|v| v != "0")
+        .unwrap_or(true);
     if mcp_bridge_enabled {
         // Point CC at OpenHuman's in-process HTTP MCP server (unjailed core), so
         // the memory bridge survives CC's `.openhuman` jail deny.

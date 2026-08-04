@@ -23,20 +23,18 @@ use crate::openhuman::inference::provider::traits::{
 #[derive(Debug, Clone)]
 struct BlockState {
     kind: BlockKind,
-    call_id: Option<String>,
-    tool_name: Option<String>,
-    text_accum: String,
-    input_accum: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum BlockKind {
     Text,
     Thinking,
-    Tool,
-    /// A CC built-in tool call (Bash, Read, Write, …). CC executes these
-    /// internally; we track the block so we can ignore its deltas cleanly
-    /// but never surface it as a ToolCall to the OpenHuman harness.
+    /// A tool call executed entirely inside the CC process — either a CC
+    /// built-in (Bash, Read, Write, …) or an OpenHuman MCP tool
+    /// (`mcp__openhuman__*`) run against the driver-attached `--mcp-config`
+    /// HTTP server. We track the block to ignore its deltas cleanly, but never
+    /// surface it as a `ToolCall` to the OpenHuman harness — CC owns execution
+    /// and loops to final text on its own.
     CcBuiltin,
 }
 
@@ -136,10 +134,6 @@ impl EventMapper {
                     index,
                     BlockState {
                         kind: BlockKind::Text,
-                        call_id: None,
-                        tool_name: None,
-                        text_accum: String::new(),
-                        input_accum: String::new(),
                     },
                 );
                 Vec::new()
@@ -149,60 +143,49 @@ impl EventMapper {
                     index,
                     BlockState {
                         kind: BlockKind::Thinking,
-                        call_id: None,
-                        tool_name: None,
-                        text_accum: String::new(),
-                        input_accum: String::new(),
                     },
                 );
                 Vec::new()
             }
             "tool_use" => {
-                let call_id = block
+                let has_id = block
                     .get("id")
                     .and_then(Value::as_str)
-                    .filter(|s| !s.is_empty())
-                    .map(str::to_string);
-                let tool_name = block
+                    .is_some_and(|s| !s.is_empty());
+                let has_name = block
                     .get("name")
                     .and_then(Value::as_str)
-                    .filter(|s| !s.is_empty())
-                    .map(str::to_string);
-                if call_id.is_none() || tool_name.is_none() {
+                    .is_some_and(|s| !s.is_empty());
+                if !has_id || !has_name {
                     log::warn!(
                         "[claude-code][event-mapper] skipping tool_use block with missing id or name"
                     );
                     return Vec::new();
                 }
-                let call_id = call_id.unwrap();
-                let tool_name = tool_name.unwrap();
 
-                // CC built-in tools (Bash, Read, Write, Edit, etc.) are
-                // executed entirely inside the CC process. OpenHuman must NOT
-                // intercept them — doing so causes "not in visible tool set"
-                // errors because these tools are not registered in OpenHuman's
-                // tool registry. Only MCP tools (prefixed "mcp__") need to be
-                // forwarded to the OpenHuman harness.
-                let is_mcp = tool_name.starts_with("mcp__");
+                // ALL tool_use blocks on this path are executed inside the CC
+                // process and must NOT be surfaced to the OpenHuman harness:
+                //   - CC built-ins (Bash, Read, Write, Edit, …) run natively.
+                //   - OpenHuman's MCP tools (prefixed "mcp__openhuman__") run
+                //     against the `--mcp-config` HTTP server that the driver
+                //     attaches (unjailed core → full ~/.openhuman access). CC
+                //     calls the MCP tool, receives the `tool_result` from the
+                //     MCP server itself, and continues its own agentic loop to
+                //     final text.
+                // Surfacing either kind back to the harness is a bug: the
+                // harness resolves tools by bare native name, so a prefixed
+                // `mcp__openhuman__<tool>` never matches → unknown tool → the
+                // no-progress circuit breaker trips and the turn returns
+                // nothing. So we track every tool_use block as `CcBuiltin`
+                // (deltas dropped, never emitted as a `ToolCall`) and let CC
+                // own execution end-to-end.
                 self.blocks.insert(
                     index,
                     BlockState {
-                        kind: if is_mcp {
-                            BlockKind::Tool
-                        } else {
-                            BlockKind::CcBuiltin
-                        },
-                        call_id: Some(call_id.clone()),
-                        tool_name: Some(tool_name.clone()),
-                        text_accum: String::new(),
-                        input_accum: String::new(),
+                        kind: BlockKind::CcBuiltin,
                     },
                 );
-                if is_mcp {
-                    vec![ProviderDelta::ToolCallStart { call_id, tool_name }]
-                } else {
-                    Vec::new()
-                }
+                Vec::new()
             }
             _ => Vec::new(),
         }
@@ -214,7 +197,7 @@ impl EventMapper {
             None => return Vec::new(),
         };
         let dtype = delta.get("type").and_then(Value::as_str).unwrap_or("");
-        let Some(state) = self.blocks.get_mut(&index) else {
+        let Some(state) = self.blocks.get(&index) else {
             return Vec::new();
         };
         match (state.kind.clone(), dtype) {
@@ -224,7 +207,6 @@ impl EventMapper {
                     .and_then(Value::as_str)
                     .unwrap_or("")
                     .to_string();
-                state.text_accum.push_str(&text);
                 self.final_text.push_str(&text);
                 vec![ProviderDelta::TextDelta { delta: text }]
             }
@@ -235,47 +217,18 @@ impl EventMapper {
                     .or_else(|| delta.get("text").and_then(Value::as_str))
                     .unwrap_or("")
                     .to_string();
-                state.text_accum.push_str(&text);
                 vec![ProviderDelta::ThinkingDelta { delta: text }]
             }
-            (BlockKind::Tool, "input_json_delta") => {
-                let partial = delta
-                    .get("partial_json")
-                    .and_then(Value::as_str)
-                    .unwrap_or("")
-                    .to_string();
-                state.input_accum.push_str(&partial);
-                let call_id = state.call_id.clone().unwrap_or_default();
-                vec![ProviderDelta::ToolCallArgsDelta {
-                    call_id,
-                    delta: partial,
-                }]
-            }
+            // CcBuiltin `input_json_delta`s are dropped — CC executes the tool
+            // (built-in or MCP) itself; the harness never sees the args.
             _ => Vec::new(),
         }
     }
 
     fn on_block_stop(&mut self, index: u64) -> Vec<ProviderDelta> {
-        let Some(state) = self.blocks.remove(&index) else {
-            return Vec::new();
-        };
-        if state.kind == BlockKind::Tool {
-            let call_id = state.call_id.unwrap_or_default();
-            let name = state.tool_name.unwrap_or_default();
-            let arguments = if state.input_accum.trim().is_empty() {
-                "{}".to_string()
-            } else {
-                state.input_accum.clone()
-            };
-            self.tool_calls.push(ToolCall {
-                id: call_id,
-                name,
-                arguments,
-                // Claude Code CLI events carry no OpenAI-compat extra_content.
-                extra_content: None,
-            });
-        }
-        // CcBuiltin blocks are silently dropped — CC handles them internally.
+        // Every tool_use block is CC-executed (built-in or MCP), so nothing is
+        // surfaced to the harness on stop. We only remove the tracked state.
+        self.blocks.remove(&index);
         Vec::new()
     }
 
@@ -335,21 +288,56 @@ mod tests {
     }
 
     #[test]
-    fn tool_call_assembles_input() {
+    fn mcp_tool_use_is_cc_executed_not_surfaced() {
+        // OpenHuman MCP tools (`mcp__openhuman__*`) are executed by CC itself
+        // against the driver-attached MCP server. The event_mapper must NOT
+        // surface them to the harness: no ToolCallStart, no ToolCallArgsDelta,
+        // and an empty `tool_calls` on the aggregated response.
         let mut m = EventMapper::new();
-        let start = json!({"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"call_1","name":"memory_search"}});
-        let d_args = json!({"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"q\":\"foo\"}"}});
+        let start = json!({"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"call_1","name":"mcp__openhuman__memory_recall"}});
+        let d_args = json!({"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"query\":\"foo\"}"}});
         let stop = json!({"type":"content_block_stop","index":1});
         let starts = m.handle(ClaudeCodeEvent::StreamEvent { event: start });
         assert!(
-            matches!(&starts[0], ProviderDelta::ToolCallStart { tool_name, .. } if tool_name == "memory_search")
+            starts.is_empty(),
+            "mcp tool_use must not emit ToolCallStart"
         );
         let args = m.handle(ClaudeCodeEvent::StreamEvent { event: d_args });
-        assert!(matches!(&args[0], ProviderDelta::ToolCallArgsDelta { .. }));
+        assert!(
+            args.is_empty(),
+            "mcp tool_use args must not emit ToolCallArgsDelta"
+        );
         m.handle(ClaudeCodeEvent::StreamEvent { event: stop });
-        assert_eq!(m.tool_calls.len(), 1);
-        assert_eq!(m.tool_calls[0].name, "memory_search");
-        assert_eq!(m.tool_calls[0].arguments, r#"{"q":"foo"}"#);
+        assert!(
+            m.tool_calls.is_empty(),
+            "mcp tool_use must not be pushed to tool_calls"
+        );
+        assert!(m.into_response().tool_calls.is_empty());
+    }
+
+    #[test]
+    fn builtin_tool_use_is_not_surfaced() {
+        // CC built-ins (Read/Bash/…) are handled inside CC too — same rule.
+        let mut m = EventMapper::new();
+        let start = json!({"type":"content_block_start","index":2,"content_block":{"type":"tool_use","id":"call_2","name":"Read"}});
+        let stop = json!({"type":"content_block_stop","index":2});
+        let starts = m.handle(ClaudeCodeEvent::StreamEvent { event: start });
+        assert!(starts.is_empty());
+        m.handle(ClaudeCodeEvent::StreamEvent { event: stop });
+        assert!(m.tool_calls.is_empty());
+    }
+
+    #[test]
+    fn tool_use_with_missing_name_is_skipped() {
+        let mut m = EventMapper::new();
+        let start = json!({"type":"content_block_start","index":3,"content_block":{"type":"tool_use","id":"call_3"}});
+        let starts = m.handle(ClaudeCodeEvent::StreamEvent { event: start });
+        assert!(starts.is_empty());
+        // No block tracked, so a stray stop is a no-op and nothing is surfaced.
+        m.handle(ClaudeCodeEvent::StreamEvent {
+            event: json!({"type":"content_block_stop","index":3}),
+        });
+        assert!(m.tool_calls.is_empty());
     }
 
     #[test]
