@@ -270,26 +270,49 @@ async fn run_turn_inner(ctx: &TurnContext<'_>, force_new: bool) -> anyhow::Resul
         .prefix("openhuman-cc-")
         .tempdir()
         .map_err(|e| anyhow::anyhow!("create scratch dir: {e}"))?;
-    // Point CC at OpenHuman's in-process HTTP MCP server (unjailed core), so
-    // the memory bridge survives CC's `.openhuman` jail deny.
+    // Do NOT attach OpenHuman's own in-process MCP server to a CC turn that
+    // OpenHuman itself is driving. On this path the MCP tools are an attractive
+    // nuisance that can never succeed: `event_mapper` surfaces every `mcp__`
+    // tool_use block BACK to the OpenHuman harness (rather than letting CC
+    // execute it via the MCP server), and the harness resolves tools by their
+    // bare native name (`memory_tree`, `profile_person`, …), so the prefixed
+    // `mcp__openhuman__<tool>` name never matches → "unknown tool" → the
+    // no-progress circuit breaker trips and the turn returns nothing. Leaving
+    // the config off forces the model onto the bare-name tool protocol from the
+    // system prompt, which the harness resolves correctly. The standalone
+    // "external Claude Code connects to OpenHuman's MCP server" product is a
+    // SEPARATE entry point (`openhuman-core mcp`) and is unaffected.
+    //
+    // Opt back in with `OPENHUMAN_CLAUDE_CODE_MCP_BRIDGE=1` (e.g. once the
+    // event_mapper learns to let CC execute MCP calls itself instead of
+    // re-routing them to the harness).
     let mut mcp_config_path: Option<PathBuf> = None;
-    match crate::openhuman::mcp_server::ensure_local_http().await {
-        Ok(endpoint) => match write_mcp_http_config(scratch.path(), endpoint.addr, &endpoint.token) {
-            Ok(p) => {
-                log::debug!(
-                    "[claude-code][driver] wrote http mcp-config path={} url=http://{}/ (authenticated)",
-                    p.display(),
-                    endpoint.addr
-                );
-                mcp_config_path = Some(p);
+    let mcp_bridge_enabled = std::env::var("OPENHUMAN_CLAUDE_CODE_MCP_BRIDGE")
+        .map(|v| v == "1")
+        .unwrap_or(false);
+    if mcp_bridge_enabled {
+        // Point CC at OpenHuman's in-process HTTP MCP server (unjailed core), so
+        // the memory bridge survives CC's `.openhuman` jail deny.
+        match crate::openhuman::mcp_server::ensure_local_http().await {
+            Ok(endpoint) => {
+                match write_mcp_http_config(scratch.path(), endpoint.addr, &endpoint.token) {
+                    Ok(p) => {
+                        log::debug!(
+                            "[claude-code][driver] wrote http mcp-config path={} url=http://{}/ (authenticated)",
+                            p.display(),
+                            endpoint.addr
+                        );
+                        mcp_config_path = Some(p);
+                    }
+                    Err(e) => log::warn!(
+                        "[claude-code][driver] failed to write mcp-config: {e}; CC will run without OpenHuman MCP tools"
+                    ),
+                }
             }
             Err(e) => log::warn!(
-                "[claude-code][driver] failed to write mcp-config: {e}; CC will run without OpenHuman MCP tools"
+                "[claude-code][driver] in-process MCP HTTP server unavailable: {e}; CC running without OpenHuman MCP tools"
             ),
-        },
-        Err(e) => log::warn!(
-            "[claude-code][driver] in-process MCP HTTP server unavailable: {e}; CC running without OpenHuman MCP tools"
-        ),
+        }
     }
 
     // The user explicitly opts into Claude Code, so we do NOT limit its toolset
