@@ -174,30 +174,8 @@ async fn process_session(
         }
     }
 
-    // Read and parse the session JSONL file.
-    let content = match std::fs::read_to_string(&session_path) {
-        Ok(c) => c,
-        Err(e) => {
-            log::warn!("[session_watcher] task={task_id} failed to read session: {e}");
-            return;
-        }
-    };
-
-    // Extract user/assistant messages.
-    let mut conversation: Vec<(String, String)> = Vec::new(); // (role, text)
-    for line in content.lines() {
-        let Ok(val) = serde_json::from_str::<Value>(line) else {
-            continue;
-        };
-        let ty = val.get("type").and_then(Value::as_str).unwrap_or("");
-        if ty == "user" || ty == "assistant" {
-            let role = ty.to_string();
-            let text = extract_message_text(&val);
-            if !text.is_empty() {
-                conversation.push((role, text));
-            }
-        }
-    }
+    // Read and parse the session JSONL file into (role, text) turns.
+    let conversation = read_conversation_from_path(&session_path);
 
     if conversation.is_empty() {
         log::debug!("[session_watcher] task={task_id} no conversation found in session");
@@ -343,6 +321,53 @@ fn resolve_session_path(workspace_dir: &str, session_uuid: &str) -> Option<PathB
     Some(project_dir.join(format!("{session_uuid}.jsonl")))
 }
 
+/// Read a Claude Code session transcript and return its user/assistant turns
+/// as `(role, text)` pairs, in order. Tool-use / tool-result blocks are
+/// dropped (only text is surfaced), so the result reads like a plain
+/// conversation. Returns an empty Vec if the path can't be resolved/read or
+/// the file has no textual turns.
+///
+/// Shared by the idle-session watcher (summarisation) and the Feishu
+/// resume-group echo (which posts the prior conversation into the new group).
+pub(crate) fn read_session_conversation(
+    workspace_dir: &str,
+    session_uuid: &str,
+) -> Vec<(String, String)> {
+    match resolve_session_path(workspace_dir, session_uuid) {
+        Some(path) => read_conversation_from_path(&path),
+        None => Vec::new(),
+    }
+}
+
+/// Parse a session JSONL file at `path` into `(role, text)` turns. Missing or
+/// unreadable files yield an empty Vec (best-effort).
+fn read_conversation_from_path(path: &std::path::Path) -> Vec<(String, String)> {
+    let content = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(e) => {
+            log::debug!(
+                "[session_watcher] could not read session transcript {}: {e}",
+                path.display()
+            );
+            return Vec::new();
+        }
+    };
+    let mut conversation: Vec<(String, String)> = Vec::new();
+    for line in content.lines() {
+        let Ok(val) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        let ty = val.get("type").and_then(Value::as_str).unwrap_or("");
+        if ty == "user" || ty == "assistant" {
+            let text = extract_message_text(&val);
+            if !text.is_empty() {
+                conversation.push((ty.to_string(), text));
+            }
+        }
+    }
+    conversation
+}
+
 // ---------------------------------------------------------------------------
 // Teams-chat notification (fire-and-forget)
 // ---------------------------------------------------------------------------
@@ -377,4 +402,58 @@ fn notify_teams_chat(
                 log::warn!("[session_watcher] teams-chat unreachable, notification skipped for task={task_id}: {e}"),
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::read_conversation_from_path;
+    use std::io::Write;
+
+    fn write_jsonl(lines: &[&str]) -> tempfile::NamedTempFile {
+        let mut f = tempfile::NamedTempFile::new().unwrap();
+        for l in lines {
+            writeln!(f, "{l}").unwrap();
+        }
+        f.flush().unwrap();
+        f
+    }
+
+    #[test]
+    fn parses_string_and_array_content() {
+        let f = write_jsonl(&[
+            r#"{"type":"user","message":{"role":"user","content":"hello"}}"#,
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hi "},{"type":"tool_use","name":"x"},{"type":"text","text":"there"}]}}"#,
+            r#"{"type":"system","message":{"content":"ignored"}}"#,
+        ]);
+        let convo = read_conversation_from_path(f.path());
+        assert_eq!(convo.len(), 2);
+        assert_eq!(convo[0], ("user".to_string(), "hello".to_string()));
+        // tool_use block dropped; text blocks joined.
+        assert_eq!(convo[1], ("assistant".to_string(), "hi there".to_string()));
+    }
+
+    #[test]
+    fn empty_or_missing_file_yields_empty() {
+        // Missing path.
+        assert!(
+            read_conversation_from_path(std::path::Path::new("/no/such/file.jsonl")).is_empty()
+        );
+        // Empty file.
+        let f = write_jsonl(&[]);
+        assert!(read_conversation_from_path(f.path()).is_empty());
+        // Only non-text / non-user-assistant lines.
+        let f2 = write_jsonl(&[r#"{"type":"summary","message":{"content":"x"}}"#]);
+        assert!(read_conversation_from_path(f2.path()).is_empty());
+    }
+
+    #[test]
+    fn skips_empty_text_turns() {
+        let f = write_jsonl(&[
+            r#"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"x"}]}}"#,
+            r#"{"type":"user","message":{"content":"real"}}"#,
+        ]);
+        let convo = read_conversation_from_path(f.path());
+        // The tool-only assistant turn has no text → dropped.
+        assert_eq!(convo, vec![("user".to_string(), "real".to_string())]);
+    }
 }

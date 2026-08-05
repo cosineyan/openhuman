@@ -603,7 +603,13 @@ async fn run_ai_task(
             status,
             response_text,
         );
-        notify_lark_completion(&config, notice, task_id.clone());
+        notify_lark_completion(&config, notice.clone(), task_id.clone());
+
+        // If this task has an open Feishu resume group, also push the result
+        // into THAT group — so a user who pulled the task back to Doing on the
+        // board sees this run's output when they return to the group. Separate
+        // from notify_lark_completion (which targets the global notify_target).
+        notify_lark_resume_group(&config, notice, task_id.clone());
     }
 
     // A slot just freed — nudge the dispatcher to pull the next queued task.
@@ -1133,6 +1139,44 @@ fn notify_lark_completion(config: &Config, notice: String, task_id: String) {
             Ok(()) => log::debug!("[projects] lark completion notice sent to {target}"),
             Err(e) => {
                 log::warn!("[projects] lark completion notice failed for {target}: {e}")
+            }
+        }
+    });
+}
+
+/// Fire-and-forget push of a completion notice into the task's Feishu resume
+/// group, if one exists. This is what lets a user who pulled the task back to
+/// Doing on the board see the new run's output when they return to the group.
+/// No-op when Lark isn't configured or the task has no bound resume chat.
+/// Never blocks or fails the task: lookup/send errors are logged only.
+fn notify_lark_resume_group(config: &Config, notice: String, task_id: String) {
+    let Some(lark) = config.channels_config.lark.as_ref() else {
+        return;
+    };
+    // Reverse-lookup the resume group bound to this task.
+    let chat_id = match store::get_binding_by_task(config, &task_id) {
+        Ok(Some(binding)) => binding.chat_id,
+        Ok(None) => return, // task has no open resume group — nothing to do
+        Err(e) => {
+            log::warn!("[projects] resume-group lookup failed for task {task_id}: {e}");
+            return;
+        }
+    };
+
+    use crate::openhuman::channels::lark::LarkChannel;
+    use crate::openhuman::channels::traits::Channel;
+    use crate::openhuman::channels::SendMessage;
+
+    let channel = LarkChannel::from_config(lark);
+    tokio::spawn(async move {
+        // Plain card (no resume button — we're already inside the resume group).
+        match channel
+            .send(&SendMessage::new(notice, chat_id.clone()))
+            .await
+        {
+            Ok(()) => log::debug!("[projects] resume-group notice sent to {chat_id}"),
+            Err(e) => {
+                log::warn!("[projects] resume-group notice failed for {chat_id}: {e}")
             }
         }
     });

@@ -1693,6 +1693,36 @@ pub fn get_binding_by_chat(
     })
 }
 
+/// Reverse lookup: find the resume-group binding for a task, if one exists.
+/// Uses the `idx_feishu_bindings_task` index. Returns the most recent binding
+/// when a task somehow has more than one (shouldn't happen — re-clicks clear
+/// the old chat first — but ORDER BY created keeps it deterministic).
+pub fn get_binding_by_task(
+    config: &Config,
+    task_id: &str,
+) -> Result<Option<crate::openhuman::projects::FeishuSessionBinding>> {
+    with_connection(config, |conn| {
+        let binding = conn
+            .query_row(
+                "SELECT chat_id, task_id, claude_session_id, claude_workspace_dir, created \
+                 FROM feishu_session_bindings WHERE task_id = ?1 ORDER BY created DESC LIMIT 1",
+                params![task_id],
+                |row| {
+                    let created_raw: String = row.get(4)?;
+                    Ok(crate::openhuman::projects::FeishuSessionBinding {
+                        chat_id: row.get(0)?,
+                        task_id: row.get(1)?,
+                        claude_session_id: row.get(2)?,
+                        claude_workspace_dir: row.get(3)?,
+                        created: parse_rfc3339(&created_raw).map_err(sql_err)?,
+                    })
+                },
+            )
+            .optional()
+            .context("Failed to read feishu session binding by task")?;
+        Ok(binding)
+    })
+}
 /// Update the persisted CC session id for a bound chat (the driver may mint a
 /// fresh real UUID on resume — keep the binding pointing at the live session).
 pub fn update_binding_session(
