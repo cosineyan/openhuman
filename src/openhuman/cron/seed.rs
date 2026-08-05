@@ -126,11 +126,19 @@ fn seed_morning_briefing(config: &Config) -> Result<()> {
         active_hours: None,
     };
 
+    // This string is the user-turn prompt for the run. The morning_briefing
+    // archetype's own system prompt (prompt.md) drives *how* to gather data —
+    // memory-tree first (cover_window over the last day + today's calendar),
+    // which is where synced Outlook/Teams/calendar data actually lands. Do NOT
+    // steer toward "connected integrations" here: M365 sources are synced into
+    // the memory tree, not exposed as Composio connections, so framing the task
+    // around live integrations makes the agent report "nothing connected" and
+    // miss the freshly-synced data.
     let prompt = concat!(
-        "You are the morning briefing agent. Prepare a concise morning ",
-        "summary for the user. Review their calendar, tasks, emails, and ",
-        "any relevant context from connected integrations. Deliver a warm, ",
-        "efficient briefing they can scan in 30 seconds over coffee."
+        "Prepare today's morning briefing. Follow your briefing instructions: ",
+        "pull recent activity from the memory tree (the synced record of the ",
+        "user's calendar, email, and messages) plus their tasks, and deliver a ",
+        "warm, concise summary they can scan in 30 seconds over coffee."
     );
 
     add_agent_job_with_definition(

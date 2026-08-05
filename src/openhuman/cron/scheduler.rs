@@ -481,6 +481,14 @@ async fn run_agent_job(config: &Config, job: &CronJob) -> (bool, String, Option<
     // its model hint, iteration cap, and prompt body so the cron job
     // runs with the definition's constraints instead of the generic
     // Agent::from_config defaults.
+    //
+    // `effective_agent_id` is set only when the definition is actually found
+    // in the registry — the agent is then built via `from_config_for_agent`
+    // so its `system_prompt` (prompt.md) and `ToolScope` take effect. Without
+    // this, every agent_id cron job silently ran as the orchestrator with the
+    // generic prompt, so e.g. morning_briefing never issued its memory-tree
+    // queries and reported "nothing synced" despite fresh data.
+    let mut effective_agent_id: Option<String> = None;
     if let Some(ref agent_id) = job.agent_id {
         if let Some(registry) =
             crate::openhuman::agent::harness::definition::AgentDefinitionRegistry::global()
@@ -540,6 +548,7 @@ async fn run_agent_job(config: &Config, job: &CronJob) -> (bool, String, Option<
                 };
                 effective.default_model = Some(resolved_model);
                 effective.agent.max_tool_iterations = def.max_iterations;
+                effective_agent_id = Some(agent_id.clone());
             } else {
                 tracing::warn!(
                     job_id = %job.id,
@@ -562,7 +571,15 @@ async fn run_agent_job(config: &Config, job: &CronJob) -> (bool, String, Option<
                 target = ?job.session_target,
                 "[cron] building isolated agent for scheduled job"
             );
-            match Agent::from_config(&effective) {
+            let agent_build = match effective_agent_id.as_deref() {
+                // Build the specific archetype so its prompt.md + ToolScope
+                // apply. Falls back to the orchestrator inside the builder if
+                // the id somehow isn't in the registry.
+                Some(agent_id) => Agent::from_config_for_agent(&effective, agent_id),
+                // No agent_id (or not found in registry): generic orchestrator.
+                None => Agent::from_config(&effective),
+            };
+            match agent_build {
                 Ok(mut agent) => {
                     // Tag events so downstream subscribers can correlate
                     // cron-triggered turns. `cron` is the channel so the
