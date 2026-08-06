@@ -191,6 +191,24 @@ fn session_transcript_path(project_dir: &std::path::Path, session_uuid: &str) ->
     )
 }
 
+/// Public entry point for sanitizing a session's thinking blocks before an
+/// **out-of-process** `--resume` (e.g. the Tauri "open in terminal" command,
+/// which launches `claude --resume <uuid>` in the user's own terminal rather
+/// than through this driver). `workspace_dir` is the cwd claude used for the
+/// task; it is combined with `session_uuid` to locate
+/// `~/.claude/projects/<sanitized-cwd>/<uuid>.jsonl`.
+///
+/// Without this, a terminal-launched resume replays model/endpoint-bound
+/// thinking signatures that the CLI's endpoint rejects with
+/// `400 Invalid signature in thinking block`. Best-effort + idempotent: a
+/// missing file or unwritable transcript is a no-op.
+pub fn sanitize_session_thinking_for_resume(
+    workspace_dir: &str,
+    session_uuid: &str,
+) -> anyhow::Result<()> {
+    sanitize_session_thinking(std::path::Path::new(workspace_dir), session_uuid)
+}
+
 /// Strip `thinking` blocks from a persisted session transcript so `--resume`
 /// doesn't replay model/endpoint-bound thinking signatures that a different
 /// model/endpoint will reject (`400 Invalid signature in thinking block`).
@@ -736,6 +754,19 @@ mod tests {
             s.contains("/.claude/projects/-Users-me-OpenHuman-projects/abc-123.jsonl"),
             "unexpected transcript path: {s}"
         );
+    }
+
+    #[test]
+    fn sanitize_for_resume_is_noop_on_missing_session() {
+        // The public wrapper used by the Tauri "open in terminal" resume must
+        // not error when the transcript doesn't exist yet (fresh session) —
+        // there's simply nothing to strip. A random UUID under a nonexistent
+        // workspace resolves to a path that doesn't exist → Ok(()).
+        let r = sanitize_session_thinking_for_resume(
+            "/no/such/workspace/dir",
+            "00000000-0000-4000-8000-000000000000",
+        );
+        assert!(r.is_ok(), "missing session should be a no-op, got: {r:?}");
     }
 
     #[test]

@@ -120,6 +120,21 @@ pub fn claude_code_resume_session(
     if !is_valid_uuid_v4(&session_id) {
         return Err(format!("invalid session id: {session_id}"));
     }
+    // Strip model/endpoint-bound `thinking` signatures from the persisted
+    // transcript BEFORE launching `claude --resume`. Without this, resuming a
+    // session whose thinking blocks were produced by a different model/endpoint
+    // fails on the first turn with `400 Invalid signature in thinking block`.
+    // The driver already does this for its own in-process resumes; the
+    // terminal-launched resume runs `claude` directly, so we must sanitize here
+    // too. Best-effort: log and continue if it fails (a fresh/missing session
+    // has nothing to strip anyway).
+    if let Some(dir) = workspace_dir.as_deref().filter(|s| !s.is_empty()) {
+        if let Err(e) = openhuman_core::openhuman::inference::provider::claude_code::driver::sanitize_session_thinking_for_resume(dir, &session_id) {
+            log::warn!(
+                "[claude_code] failed to sanitize thinking blocks for session {session_id} before terminal resume: {e}"
+            );
+        }
+    }
     // Instruct claude to signal task completion so the background watcher can
     // detect it and automatically update the task status.
     // Note: no double-quotes inside the prompt to avoid AppleScript escaping issues.
