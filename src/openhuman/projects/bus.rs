@@ -1054,16 +1054,27 @@ fn notify_teams_chat(
     let task_id = task_id.to_string();
     tokio::spawn(async move {
         let url = format!("{base}/notify");
-        match reqwest::Client::new().post(&url).json(&body).send().await {
-            Ok(resp) if resp.status().is_success() => {
-                log::debug!("[projects] teams-chat notified task={task_id}")
-            }
-            Ok(resp) => log::warn!(
-                "[projects] teams-chat /notify returned {} for task={task_id}",
-                resp.status()
-            ),
+        // Retry on transient network faults: the 08:06 miss was a DNS blip
+        // (`getaddrinfo ENOTFOUND` on the relay) + a relay 5xx surfacing as a
+        // teams-chat 500. A single seconds-long wobble otherwise permanently
+        // drops the notification. 4 attempts, 500ms base → ~3.5s worst case,
+        // all inside this detached task so the completing task never blocks.
+        let result =
+            crate::openhuman::util::retry_on_error_async("teams_chat_notify", 4, 500, || async {
+                let resp = reqwest::Client::new().post(&url).json(&body).send().await?;
+                if resp.status().is_success() {
+                    Ok(())
+                } else {
+                    // Non-2xx (incl. the relay-propagated 500): treat as
+                    // retryable — a healthy relay returns 200.
+                    anyhow::bail!("teams-chat /notify returned {}", resp.status())
+                }
+            })
+            .await;
+        match result {
+            Ok(()) => log::debug!("[projects] teams-chat notified task={task_id}"),
             Err(e) => log::warn!(
-                "[projects] teams-chat unreachable, notification skipped for task={task_id}: {e}"
+                "[projects] teams-chat notification failed for task={task_id} after retries: {e}"
             ),
         }
     });
@@ -1132,13 +1143,25 @@ fn notify_lark_completion(config: &Config, notice: String, task_id: String) {
     let channel = LarkChannel::from_config(lark);
     let target = target.to_string();
     tokio::spawn(async move {
-        match channel
-            .send_completion_card_with_resume(&target, &notice, &task_id)
-            .await
-        {
+        // Retry transient network faults (the 08:06 miss couldn't even fetch
+        // `tenant_access_token` from open.feishu.cn). 4 attempts, 500ms base.
+        let result = crate::openhuman::util::retry_on_error_async(
+            "lark_completion_notice",
+            4,
+            500,
+            || async {
+                channel
+                    .send_completion_card_with_resume(&target, &notice, &task_id)
+                    .await
+            },
+        )
+        .await;
+        match result {
             Ok(()) => log::debug!("[projects] lark completion notice sent to {target}"),
             Err(e) => {
-                log::warn!("[projects] lark completion notice failed for {target}: {e}")
+                log::warn!(
+                    "[projects] lark completion notice failed for {target} after retries: {e}"
+                )
             }
         }
     });
@@ -1170,13 +1193,22 @@ fn notify_lark_resume_group(config: &Config, notice: String, task_id: String) {
     let channel = LarkChannel::from_config(lark);
     tokio::spawn(async move {
         // Plain card (no resume button — we're already inside the resume group).
-        match channel
-            .send(&SendMessage::new(notice, chat_id.clone()))
-            .await
-        {
+        // Retry transient network faults, same as the other notifiers.
+        let result = crate::openhuman::util::retry_on_error_async(
+            "lark_resume_group_notice",
+            4,
+            500,
+            || async {
+                channel
+                    .send(&SendMessage::new(notice.clone(), chat_id.clone()))
+                    .await
+            },
+        )
+        .await;
+        match result {
             Ok(()) => log::debug!("[projects] resume-group notice sent to {chat_id}"),
             Err(e) => {
-                log::warn!("[projects] resume-group notice failed for {chat_id}: {e}")
+                log::warn!("[projects] resume-group notice failed for {chat_id} after retries: {e}")
             }
         }
     });

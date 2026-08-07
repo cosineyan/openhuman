@@ -415,8 +415,74 @@ mod tests {
         );
     }
 
-    // ── is_transient_fs_error ──────────────────────────────────────
+    // ── retry_on_error_async ───────────────────────────────────────
 
+    #[tokio::test]
+    async fn retry_on_error_async_rejects_zero_attempts() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        let calls = AtomicU32::new(0);
+        let result = retry_on_error_async("zero_net", 0, 1, || async {
+            calls.fetch_add(1, Ordering::SeqCst);
+            Ok::<i32, anyhow::Error>(42)
+        })
+        .await;
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("requires attempts > 0"),
+            "unexpected error message: {err}"
+        );
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            0,
+            "closure must not run when attempts == 0"
+        );
+    }
+
+    #[tokio::test]
+    async fn retry_on_error_async_retries_any_error_then_succeeds() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        // Unlike the fs variant, this retries a *plain* anyhow error (no IO
+        // chain) — modelling a network fault like `getaddrinfo ENOTFOUND`.
+        // base_ms=0 keeps the test instant.
+        let calls = AtomicU32::new(0);
+        let result = retry_on_error_async("net_flaky", 4, 0, || async {
+            let n = calls.fetch_add(1, Ordering::SeqCst);
+            if n < 2 {
+                anyhow::bail!("transient network wobble");
+            }
+            Ok::<u32, anyhow::Error>(n)
+        })
+        .await;
+        assert_eq!(result.unwrap(), 2, "should succeed on the 3rd attempt");
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            3,
+            "should have retried twice before the successful 3rd call"
+        );
+    }
+
+    #[tokio::test]
+    async fn retry_on_error_async_exhausts_and_wraps_last_error() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        let calls = AtomicU32::new(0);
+        let result = retry_on_error_async("net_dead", 3, 0, || async {
+            calls.fetch_add(1, Ordering::SeqCst);
+            anyhow::bail!("still down")
+        })
+        .await;
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("failed after 3 attempts"),
+            "error should be context-wrapped with attempt count: {err}"
+        );
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            3,
+            "all 3 attempts must run before giving up"
+        );
+    }
+
+    // ── is_transient_fs_error ──────────────────────────────────────
     /// The test-cfg backdoor: any error containing `__TEST_TRANSIENT__` is
     /// treated as transient so retry logic can be exercised on non-Windows
     /// CI runners without faking OS error codes.
@@ -598,6 +664,69 @@ where
                     error = %e,
                     retry_in_ms = sleep_ms,
                     "[util] transient fs retry"
+                );
+
+                tokio::time::sleep(std::time::Duration::from_millis(sleep_ms)).await;
+            }
+        }
+    }
+
+    Err(last_err
+        .expect("attempts > 0")
+        .context(format!("{} failed after {} attempts", op_name, attempts)))
+}
+
+/// Retry an async operation with exponential backoff, retrying on **any**
+/// error (unlike [`retry_with_backoff_async`], which only retries transient
+/// *filesystem* errors).
+///
+/// Intended for **network** side-effects where the operation is idempotent and
+/// the likely failures are transient — DNS blips (`getaddrinfo ENOTFOUND`),
+/// connect timeouts, TLS resets, upstream 5xx. Used by the fire-and-forget
+/// channel notifiers (Feishu/Lark completion cards, the teams-chat `/notify`
+/// relay): a single seconds-long network wobble at delivery time otherwise
+/// permanently drops the notification, because each notifier logs-and-forgets
+/// on first failure.
+///
+/// Sleep `base_ms * 2^i` between attempts (capped at 30s). Logs at `warn!` on
+/// each retry and `info!` on success-after-retry. Returns the last error,
+/// context-wrapped, if all attempts fail.
+pub async fn retry_on_error_async<T, F, Fut>(
+    op_name: &str,
+    attempts: u32,
+    base_ms: u64,
+    mut f: F,
+) -> anyhow::Result<T>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = anyhow::Result<T>>,
+{
+    anyhow::ensure!(attempts > 0, "{} requires attempts > 0", op_name);
+
+    let mut last_err: Option<anyhow::Error> = None;
+
+    for i in 0..attempts {
+        match f().await {
+            Ok(val) => {
+                if i > 0 {
+                    tracing::info!(op = op_name, retries = i, "[util] succeeded after retries");
+                }
+                return Ok(val);
+            }
+            Err(e) => {
+                if i == attempts - 1 {
+                    last_err = Some(e);
+                    break;
+                }
+
+                let sleep_ms = base_ms.saturating_mul(2u64.saturating_pow(i)).min(30_000);
+                tracing::warn!(
+                    op = op_name,
+                    attempt = i + 1,
+                    max_attempts = attempts,
+                    error = %e,
+                    retry_in_ms = sleep_ms,
+                    "[util] transient error retry"
                 );
 
                 tokio::time::sleep(std::time::Duration::from_millis(sleep_ms)).await;
