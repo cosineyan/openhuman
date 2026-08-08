@@ -4,7 +4,7 @@
  * The two-pane settings restructure retired breadcrumb navigation (the
  * `breadcrumbs` field is now always empty — the sidebar replaced the trail) and
  * collapsed the old section-hub pages (`ai`, `agents-settings`, `features`,
- * `notifications-hub`, `crypto`) into leaf panels reachable from the sidebar.
+ * `notifications-hub`) into leaf panels reachable from the sidebar.
  * These tests now cover:
  *  - Exact-match route resolution (no substring collisions).
  *  - Leaf routes resolving to their own registry id.
@@ -80,13 +80,6 @@ describe('notifications', () => {
     expectRoute('/settings/notifications', 'notifications'));
 });
 
-describe('crypto section leaves', () => {
-  test('recovery-phrase resolves to recovery-phrase', () =>
-    expectRoute('/settings/recovery-phrase', 'recovery-phrase'));
-  test('wallet-balances resolves to wallet-balances', () =>
-    expectRoute('/settings/wallet-balances', 'wallet-balances'));
-});
-
 describe('developer section leaves', () => {
   test('cron-jobs resolves to cron-jobs', () => expectRoute('/settings/cron-jobs', 'cron-jobs'));
   test('intelligence resolves to intelligence', () =>
@@ -106,7 +99,6 @@ describe('retired hub slugs resolve to home', () => {
   test('features (retired hub) resolves to home', () => expectRoute('/settings/features', 'home'));
   test('notifications-hub (retired hub) resolves to home', () =>
     expectRoute('/settings/notifications-hub', 'home'));
-  test('crypto (retired hub) resolves to home', () => expectRoute('/settings/crypto', 'home'));
 });
 
 describe('unknown / removed routes', () => {

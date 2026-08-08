@@ -61,9 +61,6 @@ export const SETTINGS_NAV_ICONS: Record<string, ReactNode> = {
       'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'
     )
   ),
-  'wallet-balances': icon(
-    stroke('M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z')
-  ),
   integrations: icon(stroke('M13 10V3L4 14h7v7l9-11h-7z')),
   'screen-intelligence': icon(stroke('M3 5h18v12H3zM8 21h8m-4-4v4')),
   'desktop-agent': icon(

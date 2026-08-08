@@ -41,12 +41,10 @@ const messages: TranslationMap = {
   'nav.noAgentProfiles': 'Профили агентов не найдены',
   'nav.activity': 'Активность',
   'nav.brain': 'Мозг',
-  'nav.wallet': 'Кошелёк',
   'nav.avatarMenu.account': 'Аккаунт',
   'nav.avatarMenu.billing': 'Оплата',
   'nav.avatarMenu.rewards': 'Награды',
   'nav.avatarMenu.invites': 'Пригласить друга',
-  'nav.avatarMenu.wallet': 'Кошелёк',
 
   // Brain — full-page memory knowledge-graph surface
   'brain.subtitle': 'Ваш граф знаний, источники памяти и элементы управления.',
@@ -212,8 +210,6 @@ const messages: TranslationMap = {
   'settings.account.teamMembersDesc': 'Управляйте доступом команды и ролями участников',
   'settings.account.dataMigration': 'Данные и миграция',
   'settings.account.dataMigrationDesc': 'Импорт памяти из другого ассистента',
-  'settings.account.recoveryPhrase': 'Фраза восстановления',
-  'settings.account.recoveryPhraseDesc': 'Просмотр и резервное копирование фразы восстановления',
   'settings.account.team': 'Команда',
   'settings.account.teamDesc': 'Управление участниками команды и правами',
   'settings.account.connections': 'Подключения',
@@ -904,14 +900,6 @@ const messages: TranslationMap = {
   'misc.beta':
     'OpenHuman находится в стадии раннего бета-тестирования. Делись отзывами и сообщай об ошибках — каждый репорт помогает нам двигаться быстрее.',
   'misc.betaFeedback': 'Отправить отзыв',
-  'mnemonic.title': 'Фраза восстановления',
-  'mnemonic.warning': 'Запиши эти слова по порядку и храни в надёжном месте.',
-  'mnemonic.copyWarning':
-    'Никогда не делись фразой восстановления. Любой, кто её знает, получит доступ к твоему аккаунту.',
-  'mnemonic.copied': 'Фраза восстановления скопирована в буфер обмена',
-  'mnemonic.reveal': 'Показать фразу',
-  'mnemonic.revealPhrase': 'Показать фразу восстановления',
-  'mnemonic.hidden': 'Фраза восстановления скрыта',
   'privacy.title': 'Конфиденциальность и безопасность',
   'privacy.description': 'Отчёт о данных, отправляемых во внешние сервисы.',
   'privacy.empty': 'Передачи данных во внешние сервисы не обнаружены.',
@@ -1513,16 +1501,6 @@ const messages: TranslationMap = {
   'connections.configured': 'Настроено',
   'connections.unavailable': 'Недоступно',
   'connections.checking': 'Проверка…',
-  'connections.walletConfigured':
-    'Локальные идентификаторы EVM, BTC, Solana и Tron настроены на основе твоей фразы восстановления.',
-  'connections.walletReady':
-    'Настрой локальные идентификаторы EVM, BTC, Solana и Tron из одной фразы восстановления.',
-  'connections.walletError':
-    'Не удалось проверить статус кошелька. Нажми, чтобы повторить в панели фразы восстановления.',
-  'connections.walletChecking': 'Проверка статуса кошелька...',
-  'connections.walletIdentities': 'Идентификаторы кошелька',
-  'connections.walletDerived':
-    'Вычислено локально из фразы восстановления и хранится только как безопасные метаданные.',
   'connections.privacySecurity': 'Конфиденциальность и безопасность',
   'connections.privacySecurityDesc':
     'Все данные и учётные данные хранятся локально по политике нулевого хранения. Информация зашифрована и никогда не передаётся третьим лицам.',
@@ -1557,39 +1535,6 @@ const messages: TranslationMap = {
   'devOptions.appLogsDesc':
     'Открыть папку с ежедневными лог-файлами. Прикрепляй последний файл при сообщении об ошибке.',
   'devOptions.openLogsFolder': 'Открыть папку с логами',
-  'mnemonic.phraseSaved': 'Фраза восстановления сохранена',
-  'mnemonic.walletReady': 'Мультичейн-идентификаторы готовы. Возврат к настройкам...',
-  'mnemonic.writeDownWords': 'Запиши эти',
-  'mnemonic.wordsInOrder':
-    'слова по порядку и храни в надёжном месте. Эта фраза защищает твой локальный ключ шифрования и идентификаторы кошельков EVM, BTC, Solana и Tron.',
-  'mnemonic.cannotRecover':
-    'Эту фразу невозможно восстановить при потере — она должна оставаться только на твоём устройстве.',
-  'mnemonic.copyToClipboard': 'Скопировать в буфер обмена',
-  'mnemonic.alreadyHavePhrase': 'У меня уже есть фраза восстановления',
-  'mnemonic.consentSaved':
-    'Я сохранил эту фразу и соглашаюсь использовать её для настройки локального кошелька',
-  'mnemonic.enterPhraseToRestore':
-    'Введи фразу восстановления ниже для восстановления идентификаторов кошелька, или вставь полную фразу в любое поле (12 слов для новых бэкапов; фразы из 24 слов от старых версий тоже работают).',
-  'mnemonic.words': 'Слова',
-  'mnemonic.validPhrase': 'Верная фраза восстановления',
-  'mnemonic.generateNewPhrase': 'Сгенерировать новую фразу восстановления',
-  'mnemonic.securingData': 'Защита данных...',
-  'mnemonic.saveRecoveryPhrase': 'Сохранить фразу восстановления',
-  'mnemonic.userNotLoaded': 'Пользователь не загружен. Войди снова или обнови страницу.',
-  'mnemonic.invalidPhrase': 'Неверная фраза восстановления. Проверь слова и попробуй снова.',
-  'mnemonic.somethingWentWrong': 'Что-то пошло не так. Попробуй ещё раз.',
-  'mnemonic.walletAlreadyConfigured': 'Ваш кошелёк уже настроен.',
-  'mnemonic.walletSource': 'Источник',
-  'mnemonic.walletWordCount': 'Длина фразы восстановления',
-  'mnemonic.walletLastUpdated': 'Последнее обновление',
-  'mnemonic.replaceWallet': 'Заменить кошелёк',
-  'mnemonic.replaceWalletWarning':
-    'Это навсегда заменит ваш текущий кошелёк. Убедитесь, что вы сделали резервную копию фразы восстановления, прежде чем продолжить.',
-  'mnemonic.replaceWalletConfirm': 'Я понимаю, заменить мой кошелёк',
-  'mnemonic.loadingWalletStatus': 'Проверка статуса кошелька...',
-  'mnemonic.viewAccounts': 'Счета кошелька',
-  'mnemonic.revealRecoveryPhrase': 'Показать фразу восстановления',
-  'mnemonic.hidePhrase': 'Скрыть фразу',
   'team.failedToCreate': 'Не удалось создать команду',
   'team.invalidInviteCode': 'Неверный или устаревший код приглашения',
   'team.failedToSwitch': 'Не удалось переключить команду',
@@ -3248,8 +3193,6 @@ const messages: TranslationMap = {
     'Перенесите память и заметки из OpenClaw (а вскоре и Hermes) в это рабочее пространство.',
   'pages.settings.account.privacy': 'Конфиденциальность',
   'pages.settings.account.privacyDesc': 'Описание конфиденциальности',
-  'pages.settings.account.recoveryPhrase': 'Фраза восстановления',
-  'pages.settings.account.recoveryPhraseDesc': 'Описание фразы восстановления',
   'pages.settings.account.team': 'Команда',
   'pages.settings.account.teamDesc': 'Описание команды',
   'pages.settings.accountSection.description':
@@ -3759,8 +3702,6 @@ const messages: TranslationMap = {
   'settings.billing.subscription.billedAnnually': 'Оплата раз в год',
   'settings.billing.subscription.chooseSubtitle': 'Подзаголовок выбора',
   'settings.billing.subscription.chooseTitle': 'Заголовок выбора',
-  'settings.billing.subscription.cryptoDesc': 'Описание крипто',
-  'settings.billing.subscription.cryptoQuestion': 'Вопрос о крипто',
   'settings.billing.subscription.current': 'Текущий',
   'settings.billing.subscription.currentPlan': 'Текущий план',
   'settings.billing.subscription.monthly': 'Ежемесячная',
@@ -5030,49 +4971,6 @@ const messages: TranslationMap = {
   'settings.appearanceDesc': 'Выберите светлую, темную или соответствующую теме вашей системы.',
   'settings.mascot': 'Талисман',
   'settings.mascotDesc': 'Выберите цвет талисмана, используемый в приложении.',
-  'pages.settings.account.walletBalances': 'Баланс кошелька',
-  'pages.settings.account.walletBalancesDesc':
-    'Просмотр мультичейн-балансов вашего локального кошелька',
-  'walletBalances.title': 'Баланс кошелька',
-  'walletBalances.refresh': 'Refresh',
-  'walletBalances.loading': 'Загрузка балансов…',
-  'walletBalances.retry': 'Retry',
-  'walletBalances.emptyState':
-    'Аккаунтов кошелька пока нет — настройте кошелёк в разделе «Фраза восстановления».',
-  'walletBalances.copyAddress': 'Копировать адрес',
-  'walletBalances.providerMissing': 'провайдер недоступен',
-  'walletBalances.rawBalance': 'Исходный: {raw}',
-  'walletBalances.errorGeneric':
-    'Не удалось загрузить балансы кошелька. Настройте кошелёк в разделе «Фраза восстановления» и повторите попытку.',
-  'walletBalances.setupHint':
-    'Ваша фраза восстановления ещё не настроена. Настройте её, чтобы включить кошелёк и видеть актуальные балансы.',
-  'walletBalances.setupCta': 'Настроить фразу восстановления',
-  'walletBalances.notSetUp': 'Не настроено',
-  'walletBalances.send': 'Отправить',
-  'walletBalances.receive': 'Получить',
-  'walletReceive.scanHint':
-    'Отсканируйте этот код или скопируйте адрес ниже, чтобы получить средства.',
-  'walletReceive.addressLabel': 'Адрес {network}',
-  'walletReceive.onlyChainWarning':
-    'Отправляйте на этот адрес только активы сети {network}. Отправка активов из другой сети может привести к безвозвратной потере.',
-  'walletSend.available': 'Доступно',
-  'walletSend.recipient': 'Адрес получателя',
-  'walletSend.recipientPlaceholder': 'Вставьте адрес назначения',
-  'walletSend.recipientRequired': 'Введите адрес получателя',
-  'walletSend.amount': 'Сумма',
-  'walletSend.invalidAmount': 'Введите корректную сумму',
-  'walletSend.review': 'Проверить',
-  'walletSend.preparing': 'Подготовка…',
-  'walletSend.confirmHint':
-    'Проверьте детали ниже. Подпись выполняется локально — ничего не отправляется, пока вы не подтвердите.',
-  'walletSend.estimatedFee': 'Ориентировочная комиссия сети',
-  'walletSend.confirmSend': 'Подтвердить и отправить',
-  'walletSend.sending': 'Отправка…',
-  'walletSend.sent': 'Транзакция отправлена',
-  'walletSend.txHash': 'Хеш транзакции',
-  'walletSend.viewExplorer': 'Открыть в обозревателе',
-  'walletSend.done': 'Готово',
-  'walletSend.genericError': 'Не удалось выполнить перевод. Повторите попытку.',
   'settings.taskSources.title': 'Источники задач',
   'settings.integrations.title': 'Интеграции',
   'settings.integrations.menuDesc': 'Источники задач, маршрутизация Composio и веб-хук триггеры',
@@ -5218,10 +5116,6 @@ const messages: TranslationMap = {
   'settings.agentsSection.description':
     'Управляйте агентами, их автономностью и доступом к ресурсам компьютера.',
   'settings.agentsSection.menuDesc': 'Реестр, автономность и доступ к ОС',
-  'settings.cryptoSection.title': 'Крипто',
-  'settings.cryptoSection.description':
-    'Управляйте секретной фразой восстановления и просматривайте балансы своих кошельковых счетов.',
-  'settings.cryptoSection.menuDesc': 'Фраза восстановления и балансы кошелька',
   'settings.notificationsHub.title': 'Уведомления',
   'settings.notificationsHub.description':
     'Просматривайте папку оповещений и управляйте настройками уведомлений и маршрутизацией.',

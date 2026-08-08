@@ -7,10 +7,8 @@ interface BillingPlansTabProps {
   isPurchasing: boolean;
   onUpgrade: (tier: PlanTier) => void;
   paymentConfirmed: boolean;
-  paymentMethod: 'card' | 'crypto';
   purchasingTier: PlanTier | null;
   setBillingInterval: (value: 'monthly' | 'annual') => void;
-  setPaymentMethod: (value: 'card' | 'crypto') => void;
 }
 
 export default function BillingPlansTab({
@@ -19,18 +17,14 @@ export default function BillingPlansTab({
   isPurchasing,
   onUpgrade,
   paymentConfirmed,
-  paymentMethod,
   purchasingTier,
   setBillingInterval,
-  setPaymentMethod,
 }: BillingPlansTabProps) {
   return (
     <SubscriptionPlans
       currentTier={currentTier}
       billingInterval={billingInterval}
       setBillingInterval={setBillingInterval}
-      paymentMethod={paymentMethod}
-      setPaymentMethod={setPaymentMethod}
       isPurchasing={isPurchasing}
       purchasingTier={purchasingTier}
       paymentConfirmed={paymentConfirmed}

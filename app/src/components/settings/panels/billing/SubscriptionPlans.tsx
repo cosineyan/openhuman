@@ -1,15 +1,12 @@
 import { useT } from '../../../../lib/i18n/I18nContext';
 import type { PlanTier } from '../../../../types/api';
 import { Spinner } from '../../../ui';
-import { SettingsSwitch } from '../../controls';
 import { annualSavings, isUpgrade as checkIsUpgrade, displayPrice, PLANS } from '../billingHelpers';
 
 interface SubscriptionPlansProps {
   currentTier: PlanTier;
   billingInterval: 'monthly' | 'annual';
   setBillingInterval: (v: 'monthly' | 'annual') => void;
-  paymentMethod: 'card' | 'crypto';
-  setPaymentMethod: (v: 'card' | 'crypto') => void;
   isPurchasing: boolean;
   purchasingTier: PlanTier | null;
   paymentConfirmed: boolean;
@@ -20,8 +17,6 @@ const SubscriptionPlans = ({
   currentTier,
   billingInterval,
   setBillingInterval,
-  paymentMethod,
-  setPaymentMethod,
   isPurchasing,
   purchasingTier,
   paymentConfirmed,
@@ -37,37 +32,18 @@ const SubscriptionPlans = ({
         <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
           {t('settings.billing.subscription.chooseSubtitle')}
         </p>
-
-        <div className="flex items-center justify-between mt-4">
-          <div>
-            <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-              {t('settings.billing.subscription.cryptoQuestion')}
-            </p>
-            <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
-              {t('settings.billing.subscription.cryptoDesc')}
-            </p>
-          </div>
-          <SettingsSwitch
-            id="subscription-crypto-toggle"
-            checked={paymentMethod === 'crypto'}
-            onCheckedChange={next => setPaymentMethod(next ? 'crypto' : 'card')}
-          />
-        </div>
       </div>
 
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="mx-auto inline-flex w-fit rounded-full bg-white dark:bg-neutral-900 p-1 shadow-sm ring-1 ring-neutral-950/5 lg:mx-0">
             <button
-              onClick={() => {
-                if (paymentMethod !== 'crypto') setBillingInterval('monthly');
-              }}
-              disabled={paymentMethod === 'crypto'}
+              onClick={() => setBillingInterval('monthly')}
               className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
                 billingInterval === 'monthly'
                   ? 'bg-primary-600 text-white'
                   : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-100 dark:text-neutral-100'
-              } ${paymentMethod === 'crypto' ? 'cursor-not-allowed opacity-40' : ''}`}>
+              }`}>
               {t('settings.billing.subscription.monthly')}
             </button>
             <button

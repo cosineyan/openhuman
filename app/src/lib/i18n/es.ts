@@ -41,12 +41,10 @@ const messages: TranslationMap = {
   'nav.noAgentProfiles': 'No se encontraron perfiles de agente',
   'nav.activity': 'Actividad',
   'nav.brain': 'Cerebro',
-  'nav.wallet': 'Cartera',
   'nav.avatarMenu.account': 'Cuenta',
   'nav.avatarMenu.billing': 'Facturación',
   'nav.avatarMenu.rewards': 'Recompensas',
   'nav.avatarMenu.invites': 'Invitar a un amigo',
-  'nav.avatarMenu.wallet': 'Cartera',
 
   // Brain — full-page memory knowledge-graph surface
   'brain.subtitle': 'Tu grafo de conocimiento, fuentes de memoria y controles.',
@@ -213,8 +211,6 @@ const messages: TranslationMap = {
   'settings.account.teamMembersDesc': 'Gestionar acceso al equipo y roles de miembros',
   'settings.account.dataMigration': 'Datos y migración',
   'settings.account.dataMigrationDesc': 'Importar memoria desde otro asistente',
-  'settings.account.recoveryPhrase': 'Frase de recuperación',
-  'settings.account.recoveryPhraseDesc': 'Ver y respaldar tu frase de recuperación de cuenta',
   'settings.account.team': 'Equipo',
   'settings.account.teamDesc': 'Administrar miembros del equipo y permisos',
   'settings.account.connections': 'Conexiones',
@@ -915,14 +911,6 @@ const messages: TranslationMap = {
   'misc.beta':
     'OpenHuman está en beta temprana. No dudes en compartir comentarios o reportar cualquier error que encuentres — cada reporte nos ayuda a mejorar más rápido.',
   'misc.betaFeedback': 'Enviar comentarios',
-  'mnemonic.title': 'Frase de recuperación',
-  'mnemonic.warning': 'Escribe estas palabras en orden y guárdalas en un lugar seguro.',
-  'mnemonic.copyWarning':
-    'Nunca compartas tu frase de recuperación. Cualquiera con estas palabras puede acceder a tu cuenta.',
-  'mnemonic.copied': 'Frase de recuperación copiada al portapapeles',
-  'mnemonic.reveal': 'Mostrar frase',
-  'mnemonic.revealPhrase': 'Mostrar frase de recuperación',
-  'mnemonic.hidden': 'La frase de recuperación está oculta',
   'privacy.title': 'Privacidad y seguridad',
   'privacy.description': 'Informe de transparencia de datos enviados a servicios externos.',
   'privacy.empty': 'No se detectaron transferencias de datos externas.',
@@ -1530,16 +1518,6 @@ const messages: TranslationMap = {
   'connections.configured': 'Configurado',
   'connections.unavailable': 'No disponible',
   'connections.checking': 'Verificando…',
-  'connections.walletConfigured':
-    'Las identidades locales de EVM, BTC, Solana y Tron están configuradas desde tu frase de recuperación.',
-  'connections.walletReady':
-    'Configura identidades locales de EVM, BTC, Solana y Tron desde una sola frase de recuperación.',
-  'connections.walletError':
-    'No se pudo verificar el estado de la billetera. Toca para reintentar desde el panel de Frase de recuperación.',
-  'connections.walletChecking': 'Verificando estado de la billetera...',
-  'connections.walletIdentities': 'Identidades de billetera',
-  'connections.walletDerived':
-    'Derivadas localmente desde tu frase de recuperación y almacenadas solo como metadatos seguros.',
   'connections.privacySecurity': 'Privacidad y seguridad',
   'connections.privacySecurityDesc':
     'Todos los datos y credenciales se almacenan localmente con política de cero retención de datos. Tu información está cifrada y nunca se comparte con terceros.',
@@ -1575,41 +1553,6 @@ const messages: TranslationMap = {
   'devOptions.appLogsDesc':
     'Abre la carpeta que contiene los archivos de registro diarios. Adjunta el archivo más reciente al reportar un problema.',
   'devOptions.openLogsFolder': 'Abrir carpeta de registros',
-  'mnemonic.phraseSaved': 'Frase de recuperación guardada',
-  'mnemonic.walletReady':
-    'Las identidades de billetera multicadena están listas. Volviendo a configuración...',
-  'mnemonic.writeDownWords': 'Anota estas',
-  'mnemonic.wordsInOrder':
-    'palabras en orden y guárdalas en un lugar seguro. Esta frase protege tu clave de cifrado local y tus identidades de billetera EVM, BTC, Solana y Tron.',
-  'mnemonic.cannotRecover':
-    'Esta frase no puede recuperarse si se pierde y debe permanecer completamente local en tu dispositivo.',
-  'mnemonic.copyToClipboard': 'Copiar al portapapeles',
-  'mnemonic.alreadyHavePhrase': 'Ya tengo una frase de recuperación',
-  'mnemonic.consentSaved':
-    'Guardé esta frase y consiento usarla para la configuración de billetera local',
-  'mnemonic.enterPhraseToRestore':
-    'Ingresa tu frase de recuperación a continuación para restaurar tus identidades de billetera local, o pega la frase completa en cualquier campo (12 palabras para respaldos nuevos; las frases de 24 palabras de versiones anteriores aún funcionan).',
-  'mnemonic.words': 'Palabras',
-  'mnemonic.validPhrase': 'Frase de recuperación válida',
-  'mnemonic.generateNewPhrase': 'Generar una nueva frase de recuperación',
-  'mnemonic.securingData': 'Protegiendo tus datos...',
-  'mnemonic.saveRecoveryPhrase': 'Guardar frase de recuperación',
-  'mnemonic.userNotLoaded': 'Usuario no cargado. Inicia sesión de nuevo o recarga la página.',
-  'mnemonic.invalidPhrase':
-    'Frase de recuperación inválida. Revisa las palabras e inténtalo de nuevo.',
-  'mnemonic.somethingWentWrong': 'Algo salió mal. Inténtalo de nuevo.',
-  'mnemonic.walletAlreadyConfigured': 'Tu billetera ya está configurada.',
-  'mnemonic.walletSource': 'Origen',
-  'mnemonic.walletWordCount': 'Longitud de la frase de recuperación',
-  'mnemonic.walletLastUpdated': 'Última actualización',
-  'mnemonic.replaceWallet': 'Reemplazar billetera',
-  'mnemonic.replaceWalletWarning':
-    'Esto reemplazará permanentemente tu billetera actual. Asegúrate de haber guardado tu frase de recuperación antes de continuar.',
-  'mnemonic.replaceWalletConfirm': 'Entiendo, reemplazar mi billetera',
-  'mnemonic.loadingWalletStatus': 'Verificando estado de la billetera...',
-  'mnemonic.viewAccounts': 'Cuentas de la billetera',
-  'mnemonic.revealRecoveryPhrase': 'Revelar frase de recuperación',
-  'mnemonic.hidePhrase': 'Ocultar frase',
   'team.failedToCreate': 'No se pudo crear el equipo',
   'team.invalidInviteCode': 'Código de invitación inválido o expirado',
   'team.failedToSwitch': 'No se pudo cambiar de equipo',
@@ -3278,8 +3221,6 @@ const messages: TranslationMap = {
     'Migra memoria y notas desde OpenClaw (y pronto Hermes) a este espacio de trabajo.',
   'pages.settings.account.privacy': 'Privacidad',
   'pages.settings.account.privacyDesc': 'Descripción de privacidad',
-  'pages.settings.account.recoveryPhrase': 'Frase de recuperación',
-  'pages.settings.account.recoveryPhraseDesc': 'Descripción de frase de recuperación',
   'pages.settings.account.team': 'Equipo',
   'pages.settings.account.teamDesc': 'Descripción de equipo',
   'pages.settings.accountSection.description':
@@ -3791,8 +3732,6 @@ const messages: TranslationMap = {
   'settings.billing.subscription.billedAnnually': 'Facturado anualmente',
   'settings.billing.subscription.chooseSubtitle': 'Elegir subtítulo',
   'settings.billing.subscription.chooseTitle': 'Elegir título',
-  'settings.billing.subscription.cryptoDesc': 'Descripción de cripto',
-  'settings.billing.subscription.cryptoQuestion': 'Pregunta de cripto',
   'settings.billing.subscription.current': 'Actual',
   'settings.billing.subscription.currentPlan': 'Plan actual',
   'settings.billing.subscription.monthly': 'Mensual',
@@ -5078,49 +5017,6 @@ const messages: TranslationMap = {
   'settings.appearanceDesc': 'Elija claro, oscuro o combine el tema de su sistema',
   'settings.mascot': 'mascota',
   'settings.mascotDesc': 'Elija el color de mascota utilizado en la aplicación',
-  'pages.settings.account.walletBalances': 'Saldos de billetera',
-  'pages.settings.account.walletBalancesDesc':
-    'Ver saldos en múltiples cadenas de tu billetera local',
-  'walletBalances.title': 'Saldos de billetera',
-  'walletBalances.refresh': 'Refresh',
-  'walletBalances.loading': 'Cargando saldos…',
-  'walletBalances.retry': 'Retry',
-  'walletBalances.emptyState':
-    'Aún no hay cuentas de billetera — configura una billetera en Frase de recuperación.',
-  'walletBalances.copyAddress': 'Copiar dirección',
-  'walletBalances.providerMissing': 'proveedor no disponible',
-  'walletBalances.rawBalance': 'Bruto: {raw}',
-  'walletBalances.errorGeneric':
-    'No se pueden cargar los saldos de la billetera. Configura tu billetera en Frase de recuperación e inténtalo de nuevo.',
-  'walletBalances.setupHint':
-    'Tu frase de recuperación aún no está configurada. Configúrala para activar tu monedero y ver los saldos en vivo.',
-  'walletBalances.setupCta': 'Configurar frase de recuperación',
-  'walletBalances.notSetUp': 'Sin configurar',
-  'walletBalances.send': 'Enviar',
-  'walletBalances.receive': 'Recibir',
-  'walletReceive.scanHint':
-    'Escanea este código o copia la dirección de abajo para recibir fondos.',
-  'walletReceive.addressLabel': 'Dirección de {network}',
-  'walletReceive.onlyChainWarning':
-    'Envía solo activos de {network} a esta dirección. Enviar activos de otra red puede provocar una pérdida permanente.',
-  'walletSend.available': 'Disponible',
-  'walletSend.recipient': 'Dirección del destinatario',
-  'walletSend.recipientPlaceholder': 'Pega la dirección de destino',
-  'walletSend.recipientRequired': 'Introduce una dirección de destinatario',
-  'walletSend.amount': 'Importe',
-  'walletSend.invalidAmount': 'Introduce un importe válido',
-  'walletSend.review': 'Revisar',
-  'walletSend.preparing': 'Preparando…',
-  'walletSend.confirmHint':
-    'Revisa los detalles a continuación. La firma se realiza localmente; no se transmite nada hasta que confirmes.',
-  'walletSend.estimatedFee': 'Comisión de red estimada',
-  'walletSend.confirmSend': 'Confirmar y enviar',
-  'walletSend.sending': 'Enviando…',
-  'walletSend.sent': 'Transacción enviada',
-  'walletSend.txHash': 'Hash de la transacción',
-  'walletSend.viewExplorer': 'Ver en el explorador',
-  'walletSend.done': 'Hecho',
-  'walletSend.genericError': 'No se pudo completar la transferencia. Inténtalo de nuevo.',
   'settings.taskSources.title': 'Fuentes de tareas',
   'settings.integrations.title': 'Integraciones',
   'settings.integrations.menuDesc':
@@ -5269,10 +5165,6 @@ const messages: TranslationMap = {
   'settings.agentsSection.description':
     'Administra tus agentes, su autonomía y a qué pueden acceder en este equipo.',
   'settings.agentsSection.menuDesc': 'Registro, autonomía y acceso al SO',
-  'settings.cryptoSection.title': 'Cripto',
-  'settings.cryptoSection.description':
-    'Gestiona tu frase de recuperación y consulta los saldos de tus cuentas de monedero.',
-  'settings.cryptoSection.menuDesc': 'Frase de recuperación y saldos del monedero',
   'settings.notificationsHub.title': 'Notificaciones',
   'settings.notificationsHub.description':
     'Consulta tu bandeja de alertas y gestiona las preferencias de notificación y el enrutamiento.',

@@ -48,7 +48,6 @@ const SECTION_KEY: Record<SettingsSection, string> = {
   ai: 'pages.settings.aiSection.title',
   agents: 'settings.agentsSection.title',
   features: 'pages.settings.featuresSection.title',
-  crypto: 'settings.cryptoSection.title',
   notifications: 'settings.groups.notifications',
   developer: 'settings.developerDiagnostics',
 };
@@ -61,7 +60,6 @@ const SECTION_BADGE_OVERRIDES: Record<string, string> = {
   devices: 'settings.groups.account',
   'memory-sync': 'settings.groups.account',
   'notifications-hub': 'settings.groups.notifications',
-  crypto: 'settings.cryptoSection.title',
   about: 'settings.about',
   ai: 'nav.settings',
   'agents-settings': 'nav.settings',

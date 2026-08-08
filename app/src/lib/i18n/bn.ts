@@ -41,12 +41,10 @@ const messages: TranslationMap = {
   'nav.noAgentProfiles': 'কোনো এজেন্ট প্রোফাইল পাওয়া যায়নি',
   'nav.activity': 'কার্যকলাপ',
   'nav.brain': 'ব্রেইন',
-  'nav.wallet': 'ওয়ালেট',
   'nav.avatarMenu.account': 'অ্যাকাউন্ট',
   'nav.avatarMenu.billing': 'বিলিং',
   'nav.avatarMenu.rewards': 'পুরস্কার',
   'nav.avatarMenu.invites': 'বন্ধুকে আমন্ত্রণ জানান',
-  'nav.avatarMenu.wallet': 'ওয়ালেট',
 
   // Brain — full-page memory knowledge-graph surface
   'brain.subtitle': 'আপনার জ্ঞান গ্রাফ, মেমরি উৎস এবং নিয়ন্ত্রণ।',
@@ -208,8 +206,6 @@ const messages: TranslationMap = {
   'settings.account.teamMembersDesc': 'টিম অ্যাক্সেস ও সদস্য ভূমিকা পরিচালনা করুন',
   'settings.account.dataMigration': 'ডেটা ও মাইগ্রেশন',
   'settings.account.dataMigrationDesc': 'অন্য অ্যাসিস্ট্যান্ট থেকে মেমরি আমদানি করুন',
-  'settings.account.recoveryPhrase': 'রিকভারি ফ্রেজ',
-  'settings.account.recoveryPhraseDesc': 'আপনার অ্যাকাউন্ট রিকভারি ফ্রেজ দেখুন ও ব্যাকআপ করুন',
   'settings.account.team': 'টিম',
   'settings.account.teamDesc': 'টিম সদস্য ও অনুমতি পরিচালনা করুন',
   'settings.account.connections': 'সংযোগ',
@@ -893,14 +889,6 @@ const messages: TranslationMap = {
   'misc.beta':
     'OpenHuman এখন আর্লি বেটায় আছে। যেকোনো মতামত বা বাগ রিপোর্ট করুন — প্রতিটি রিপোর্ট আমাদের দ্রুত এগিয়ে যেতে সাহায্য করে।',
   'misc.betaFeedback': 'ফিডব্যাক পাঠান',
-  'mnemonic.title': 'রিকভারি ফ্রেজ',
-  'mnemonic.warning': 'এই শব্দগুলো ক্রমানুসারে লিখে নিরাপদ স্থানে সংরক্ষণ করুন।',
-  'mnemonic.copyWarning':
-    'আপনার রিকভারি ফ্রেজ কখনো শেয়ার করবেন না। এই শব্দগুলো দিয়ে যে কেউ আপনার অ্যাকাউন্টে প্রবেশ করতে পারবে।',
-  'mnemonic.copied': 'রিকভারি ফ্রেজ ক্লিপবোর্ডে কপি হয়েছে',
-  'mnemonic.reveal': 'ফ্রেজ দেখুন',
-  'mnemonic.revealPhrase': 'পুনরুদ্ধার বাক্যাংশ দেখান',
-  'mnemonic.hidden': 'রিকভারি ফ্রেজ লুকানো আছে',
   'privacy.title': 'গোপনীয়তা ও নিরাপত্তা',
   'privacy.description': 'বাহ্যিক সার্ভিসে পাঠানো ডেটার স্বচ্ছতা রিপোর্ট।',
   'privacy.empty': 'কোনো বাহ্যিক ডেটা স্থানান্তর শনাক্ত হয়নি।',
@@ -1498,16 +1486,6 @@ const messages: TranslationMap = {
   'connections.configured': 'কনফিগার করা হয়েছে',
   'connections.unavailable': 'পাওয়া যাচ্ছে না',
   'connections.checking': 'পরীক্ষা হচ্ছে…',
-  'connections.walletConfigured':
-    'আপনার রিকভারি ফ্রেজ থেকে লোকাল EVM, BTC, Solana এবং Tron পরিচয় কনফিগার করা হয়েছে।',
-  'connections.walletReady':
-    'একটি রিকভারি ফ্রেজ থেকে লোকাল EVM, BTC, Solana এবং Tron পরিচয় সেটআপ করুন।',
-  'connections.walletError':
-    'ওয়ালেট স্ট্যাটাস পরীক্ষা করা যায়নি। রিকভারি ফ্রেজ প্যানেল থেকে আবার চেষ্টা করতে ট্যাপ করুন।',
-  'connections.walletChecking': 'ওয়ালেট স্ট্যাটাস পরীক্ষা হচ্ছে...',
-  'connections.walletIdentities': 'ওয়ালেট পরিচয়',
-  'connections.walletDerived':
-    'আপনার রিকভারি ফ্রেজ থেকে লোকালি ডেরাইভ করা এবং শুধু নিরাপদ মেটাডেটা হিসেবে সংরক্ষিত।',
   'connections.privacySecurity': 'গোপনীয়তা ও নিরাপত্তা',
   'connections.privacySecurityDesc':
     'সব ডেটা ও ক্রেডেনশিয়াল জিরো-ডেটা রিটেনশন নীতি সহ লোকালে সংরক্ষিত। আপনার তথ্য এনক্রিপ্ট করা এবং তৃতীয় পক্ষের সাথে কখনো শেয়ার করা হয় না।',
@@ -1542,40 +1520,6 @@ const messages: TranslationMap = {
   'devOptions.appLogsDesc':
     'রোলিং ডেইলি লগ ফাইল ধারণকারী ফোল্ডার খুলুন। ইস্যু রিপোর্ট করার সময় সর্বশেষ ফাইলটি সংযুক্ত করুন।',
   'devOptions.openLogsFolder': 'লগ ফোল্ডার খুলুন',
-  'mnemonic.phraseSaved': 'রিকভারি ফ্রেজ সংরক্ষিত',
-  'mnemonic.walletReady': 'মাল্টি-চেইন ওয়ালেট পরিচয় প্রস্তুত। সেটিংসে ফিরছে...',
-  'mnemonic.writeDownWords': 'এই',
-  'mnemonic.wordsInOrder':
-    'শব্দগুলো ক্রমানুসারে লিখে নিরাপদ স্থানে সংরক্ষণ করুন। এই ফ্রেজটি আপনার লোকাল এনক্রিপশন কী এবং EVM, BTC, Solana ও Tron ওয়ালেট পরিচয় সুরক্ষিত করে।',
-  'mnemonic.cannotRecover':
-    'এই ফ্রেজ হারালে কখনো পুনরুদ্ধার করা যাবে না এবং সম্পূর্ণ আপনার ডিভাইসে রাখা উচিত।',
-  'mnemonic.copyToClipboard': 'ক্লিপবোর্ডে কপি করুন',
-  'mnemonic.alreadyHavePhrase': 'আমার কাছে ইতিমধ্যে একটি রিকভারি ফ্রেজ আছে',
-  'mnemonic.consentSaved':
-    'আমি এই ফ্রেজটি সংরক্ষণ করেছি এবং লোকাল ওয়ালেট সেটআপের জন্য এটি ব্যবহারে সম্মতি দিচ্ছি',
-  'mnemonic.enterPhraseToRestore':
-    'আপনার লোকাল ওয়ালেট পরিচয় পুনরুদ্ধার করতে নিচে আপনার রিকভারি ফ্রেজ দিন, বা যেকোনো ফিল্ডে পুরো ফ্রেজ পেস্ট করুন (নতুন ব্যাকআপের জন্য ১২টি শব্দ; পুরনো ভার্সনের ২৪ শব্দের ফ্রেজও কাজ করে)।',
-  'mnemonic.words': 'শব্দ',
-  'mnemonic.validPhrase': 'বৈধ রিকভারি ফ্রেজ',
-  'mnemonic.generateNewPhrase': 'পরিবর্তে একটি নতুন রিকভারি ফ্রেজ তৈরি করুন',
-  'mnemonic.securingData': 'আপনার ডেটা সুরক্ষিত হচ্ছে...',
-  'mnemonic.saveRecoveryPhrase': 'রিকভারি ফ্রেজ সংরক্ষণ করুন',
-  'mnemonic.userNotLoaded':
-    'ব্যবহারকারী লোড হয়নি। দয়া করে আবার সাইন ইন করুন বা পেজ রিফ্রেশ করুন।',
-  'mnemonic.invalidPhrase': 'অবৈধ রিকভারি ফ্রেজ। আপনার শব্দগুলো পরীক্ষা করে আবার চেষ্টা করুন।',
-  'mnemonic.somethingWentWrong': 'কিছু একটা ভুল হয়েছে। আবার চেষ্টা করুন।',
-  'mnemonic.walletAlreadyConfigured': 'আপনার ওয়ালেট ইতিমধ্যে সেট আপ করা আছে।',
-  'mnemonic.walletSource': 'উৎস',
-  'mnemonic.walletWordCount': 'রিকভারি ফ্রেজের দৈর্ঘ্য',
-  'mnemonic.walletLastUpdated': 'সর্বশেষ আপডেট',
-  'mnemonic.replaceWallet': 'ওয়ালেট প্রতিস্থাপন করুন',
-  'mnemonic.replaceWalletWarning':
-    'এটি আপনার বর্তমান ওয়ালেটকে স্থায়ীভাবে প্রতিস্থাপন করবে। এগিয়ে যাওয়ার আগে নিশ্চিত করুন যে আপনি আপনার রিকভারি ফ্রেজ ব্যাকআপ করেছেন।',
-  'mnemonic.replaceWalletConfirm': 'আমি বুঝতে পারছি, আমার ওয়ালেট প্রতিস্থাপন করুন',
-  'mnemonic.loadingWalletStatus': 'ওয়ালেটের স্থিতি পরীক্ষা করা হচ্ছে...',
-  'mnemonic.viewAccounts': 'ওয়ালেট অ্যাকাউন্ট',
-  'mnemonic.revealRecoveryPhrase': 'পুনরুদ্ধার বাক্যাংশ প্রকাশ করুন',
-  'mnemonic.hidePhrase': 'বাক্যাংশ লুকান',
   'team.failedToCreate': 'টিম তৈরি করতে ব্যর্থ',
   'team.invalidInviteCode': 'অবৈধ বা মেয়াদোত্তীর্ণ আমন্ত্রণ কোড',
   'team.failedToSwitch': 'টিম পরিবর্তন করতে ব্যর্থ',
@@ -3221,8 +3165,6 @@ const messages: TranslationMap = {
     'OpenClaw (এবং শীঘ্রই Hermes) থেকে মেমরি ও নোট এই ওয়ার্কস্পেসে স্থানান্তর করুন।',
   'pages.settings.account.privacy': 'গোপনীয়তা',
   'pages.settings.account.privacyDesc': 'গোপনীয়তার বিবরণ',
-  'pages.settings.account.recoveryPhrase': 'রিকভারি ফ্রেজ',
-  'pages.settings.account.recoveryPhraseDesc': 'রিকভারি ফ্রেজের বিবরণ',
   'pages.settings.account.team': 'টিম',
   'pages.settings.account.teamDesc': 'টিমের বিবরণ',
   'pages.settings.accountSection.description': 'রিকভারি ফ্রেজ, টিম, সংযোগ এবং গোপনীয়তা সেটিংস।',
@@ -3724,8 +3666,6 @@ const messages: TranslationMap = {
   'settings.billing.subscription.billedAnnually': 'বার্ষিক বিল',
   'settings.billing.subscription.chooseSubtitle': 'সাবটাইটেল বেছে নিন',
   'settings.billing.subscription.chooseTitle': 'শিরোনাম বেছে নিন',
-  'settings.billing.subscription.cryptoDesc': 'ক্রিপ্টো বিবরণ',
-  'settings.billing.subscription.cryptoQuestion': 'ক্রিপ্টো প্রশ্ন',
   'settings.billing.subscription.current': 'বর্তমান',
   'settings.billing.subscription.currentPlan': 'বর্তমান প্ল্যান',
   'settings.billing.subscription.monthly': 'মাসিক',
@@ -4977,48 +4917,6 @@ const messages: TranslationMap = {
   'settings.appearanceDesc': 'হালকা, অন্ধকার বাছুন বা আপনার সিস্টেম থিমের সাথে মেলে',
   'settings.mascot': 'মাসকট',
   'settings.mascotDesc': 'অ্যাপের মাস্কট রঙ জুড়ে ব্যবহার করুন',
-  'pages.settings.account.walletBalances': 'ওয়ালেট ব্যালেন্স',
-  'pages.settings.account.walletBalancesDesc':
-    'আপনার স্থানীয় ওয়ালেটের মাল্টি-চেইন ব্যালেন্স দেখুন',
-  'walletBalances.title': 'ওয়ালেট ব্যালেন্স',
-  'walletBalances.refresh': 'Refresh',
-  'walletBalances.loading': 'ব্যালেন্স লোড হচ্ছে…',
-  'walletBalances.retry': 'Retry',
-  'walletBalances.emptyState':
-    'এখনো কোনো ওয়ালেট অ্যাকাউন্ট নেই — Recovery Phrase-এ একটি ওয়ালেট সেটআপ করুন।',
-  'walletBalances.copyAddress': 'ঠিকানা কপি করুন',
-  'walletBalances.providerMissing': 'প্রোভাইডার অনুপলব্ধ',
-  'walletBalances.rawBalance': 'কাঁচা: {raw}',
-  'walletBalances.errorGeneric':
-    'ওয়ালেট ব্যালেন্স লোড করতে অক্ষম। Recovery Phrase-এ আপনার ওয়ালেট সেটআপ করুন এবং আবার চেষ্টা করুন।',
-  'walletBalances.setupHint':
-    'আপনার রিকভারি ফ্রেজ এখনও সেট আপ করা হয়নি। আপনার ওয়ালেট সক্রিয় করতে এবং লাইভ ব্যালেন্স দেখতে এটি সেট আপ করুন।',
-  'walletBalances.setupCta': 'রিকভারি ফ্রেজ সেট আপ করুন',
-  'walletBalances.notSetUp': 'সেট আপ করা হয়নি',
-  'walletBalances.send': 'পাঠান',
-  'walletBalances.receive': 'গ্রহণ করুন',
-  'walletReceive.scanHint': 'তহবিল গ্রহণ করতে এই কোডটি স্ক্যান করুন বা নিচের ঠিকানাটি কপি করুন।',
-  'walletReceive.addressLabel': '{network} ঠিকানা',
-  'walletReceive.onlyChainWarning':
-    'এই ঠিকানায় শুধুমাত্র {network} সম্পদ পাঠান। অন্য নেটওয়ার্কের সম্পদ পাঠালে স্থায়ীভাবে ক্ষতি হতে পারে।',
-  'walletSend.available': 'উপলব্ধ',
-  'walletSend.recipient': 'প্রাপকের ঠিকানা',
-  'walletSend.recipientPlaceholder': 'গন্তব্য ঠিকানা পেস্ট করুন',
-  'walletSend.recipientRequired': 'একটি প্রাপকের ঠিকানা লিখুন',
-  'walletSend.amount': 'পরিমাণ',
-  'walletSend.invalidAmount': 'একটি বৈধ পরিমাণ লিখুন',
-  'walletSend.review': 'পর্যালোচনা',
-  'walletSend.preparing': 'প্রস্তুত করা হচ্ছে…',
-  'walletSend.confirmHint':
-    'নিচের বিবরণ পর্যালোচনা করুন। স্বাক্ষর স্থানীয়ভাবে হয় — আপনি নিশ্চিত না করা পর্যন্ত কিছুই সম্প্রচার হয় না।',
-  'walletSend.estimatedFee': 'আনুমানিক নেটওয়ার্ক ফি',
-  'walletSend.confirmSend': 'নিশ্চিত করে পাঠান',
-  'walletSend.sending': 'পাঠানো হচ্ছে…',
-  'walletSend.sent': 'লেনদেন পাঠানো হয়েছে',
-  'walletSend.txHash': 'লেনদেন হ্যাশ',
-  'walletSend.viewExplorer': 'এক্সপ্লোরারে দেখুন',
-  'walletSend.done': 'সম্পন্ন',
-  'walletSend.genericError': 'স্থানান্তর সম্পূর্ণ করা যায়নি। অনুগ্রহ করে আবার চেষ্টা করুন।',
   'settings.taskSources.title': 'কাজের উৎস',
   'settings.integrations.title': 'ইন্টিগ্রেশন',
   'settings.integrations.menuDesc': 'টাস্ক সোর্স, Composio রাউটিং এবং ওয়েবহুক ট্রিগার',
@@ -5163,10 +5061,6 @@ const messages: TranslationMap = {
   'settings.agentsSection.description':
     'আপনার এজেন্ট, তাদের স্বায়ত্তশাসন এবং এই কম্পিউটারে তারা কী অ্যাক্সেস করতে পারে তা পরিচালনা করুন।',
   'settings.agentsSection.menuDesc': 'রেজিস্ট্রি, স্বায়ত্তশাসন ও ওএস অ্যাক্সেস',
-  'settings.cryptoSection.title': 'ক্রিপ্টো',
-  'settings.cryptoSection.description':
-    'আপনার রিকভারি ফ্রেজ পরিচালনা করুন এবং আপনার ওয়ালেট অ্যাকাউন্টগুলির ব্যালেন্স দেখুন।',
-  'settings.cryptoSection.menuDesc': 'রিকভারি ফ্রেজ ও ওয়ালেট ব্যালেন্স',
   'settings.notificationsHub.title': 'বিজ্ঞপ্তি',
   'settings.notificationsHub.description':
     'আপনার অ্যালার্ট ইনবক্স দেখুন এবং বিজ্ঞপ্তির পছন্দ ও রাউটিং পরিচালনা করুন।',

@@ -41,12 +41,10 @@ const messages: TranslationMap = {
   'nav.noAgentProfiles': 'Nie znaleziono profili agentów',
   'nav.activity': 'Aktywność',
   'nav.brain': 'Mózg',
-  'nav.wallet': 'Portfel',
   'nav.avatarMenu.account': 'Konto',
   'nav.avatarMenu.billing': 'Rozliczenia',
   'nav.avatarMenu.rewards': 'Nagrody',
   'nav.avatarMenu.invites': 'Zaproś znajomego',
-  'nav.avatarMenu.wallet': 'Portfel',
 
   // Brain — full-page memory knowledge-graph surface
   'brain.subtitle': 'Twój graf wiedzy, źródła pamięci i ustawienia.',
@@ -209,8 +207,6 @@ const messages: TranslationMap = {
   'settings.account.teamMembersDesc': 'Zarządzaj dostępem do zespołu i rolami członków',
   'settings.account.dataMigration': 'Dane i migracja',
   'settings.account.dataMigrationDesc': 'Importuj pamięć z innego asystenta',
-  'settings.account.recoveryPhrase': 'Fraza odzyskiwania',
-  'settings.account.recoveryPhraseDesc': 'Wyświetl i zabezpiecz swoją frazę odzyskiwania',
   'settings.account.team': 'Zespół',
   'settings.account.teamDesc': 'Zarządzaj członkami i uprawnieniami zespołu',
   'settings.account.connections': 'Połączenia',
@@ -906,14 +902,6 @@ const messages: TranslationMap = {
   'misc.beta':
     'OpenHuman jest we wczesnej fazie beta. Chętnie poznamy Twoje uwagi — każdy zgłoszony błąd pomaga nam szybciej wydać poprawki.',
   'misc.betaFeedback': 'Wyślij uwagi',
-  'mnemonic.title': 'Fraza odzyskiwania',
-  'mnemonic.warning': 'Zapisz te słowa w kolejności i przechowuj je w bezpiecznym miejscu.',
-  'mnemonic.copyWarning':
-    'Nigdy nie udostępniaj swojej frazy odzyskiwania. Każdy, kto ma te słowa, może uzyskać dostęp do Twojego konta.',
-  'mnemonic.copied': 'Fraza odzyskiwania skopiowana do schowka',
-  'mnemonic.reveal': 'Pokaż frazę',
-  'mnemonic.revealPhrase': 'Pokaż frazę odzyskiwania',
-  'mnemonic.hidden': 'Fraza odzyskiwania jest ukryta',
   'privacy.title': 'Prywatność i bezpieczeństwo',
   'privacy.description': 'Raport o danych wysyłanych do usług zewnętrznych.',
   'privacy.empty': 'Nie wykryto żadnych zewnętrznych transferów danych.',
@@ -1518,16 +1506,6 @@ const messages: TranslationMap = {
   'connections.configured': 'Skonfigurowano',
   'connections.unavailable': 'Niedostępne',
   'connections.checking': 'Sprawdzanie…',
-  'connections.walletConfigured':
-    'Lokalne tożsamości EVM, BTC, Solana i Tron są skonfigurowane z Twojej frazy odzyskiwania.',
-  'connections.walletReady':
-    'Skonfiguruj lokalne tożsamości EVM, BTC, Solana i Tron z jednej frazy odzyskiwania.',
-  'connections.walletError':
-    'Nie można sprawdzić stanu portfela. Dotknij, aby ponowić z panelu Frazy odzyskiwania.',
-  'connections.walletChecking': 'Sprawdzanie stanu portfela...',
-  'connections.walletIdentities': 'Tożsamości portfela',
-  'connections.walletDerived':
-    'Wyprowadzone lokalnie z Twojej frazy odzyskiwania i przechowywane tylko jako bezpieczne metadane.',
   'connections.privacySecurity': 'Prywatność i bezpieczeństwo',
   'connections.privacySecurityDesc':
     'Wszystkie dane i poświadczenia są przechowywane lokalnie z polityką zerowego retencji. Twoje informacje są szyfrowane i nigdy nie są udostępniane stronom trzecim.',
@@ -1562,39 +1540,6 @@ const messages: TranslationMap = {
   'devOptions.appLogsDesc':
     'Otwórz folder z rotacyjnymi dziennikami dziennymi. Dołącz najnowszy plik podczas zgłaszania błędu.',
   'devOptions.openLogsFolder': 'Otwórz folder dzienników',
-  'mnemonic.phraseSaved': 'Fraza odzyskiwania zapisana',
-  'mnemonic.walletReady': 'Wielołańcuchowe tożsamości portfela są gotowe. Powrót do ustawień...',
-  'mnemonic.writeDownWords': 'Zapisz te',
-  'mnemonic.wordsInOrder':
-    'słów w kolejności i przechowuj je w bezpiecznym miejscu. Ta fraza zabezpiecza Twój lokalny klucz szyfrowania oraz tożsamości portfeli EVM, BTC, Solana i Tron.',
-  'mnemonic.cannotRecover':
-    'Tej frazy nie da się odzyskać, jeśli ją utracisz, i powinna pozostać wyłącznie lokalna na Twoim urządzeniu.',
-  'mnemonic.copyToClipboard': 'Skopiuj do schowka',
-  'mnemonic.alreadyHavePhrase': 'Mam już frazę odzyskiwania',
-  'mnemonic.consentSaved':
-    'Zapisałem(am) tę frazę i wyrażam zgodę na jej użycie do konfiguracji lokalnego portfela',
-  'mnemonic.enterPhraseToRestore':
-    'Wprowadź swoją frazę odzyskiwania poniżej, aby przywrócić lokalne tożsamości portfela, lub wklej pełną frazę w dowolne pole (12 słów dla nowych kopii zapasowych; 24-słowne frazy ze starszych wersji nadal działają).',
-  'mnemonic.words': 'Słowa',
-  'mnemonic.validPhrase': 'Prawidłowa fraza odzyskiwania',
-  'mnemonic.generateNewPhrase': 'Wygeneruj zamiast tego nową frazę odzyskiwania',
-  'mnemonic.securingData': 'Zabezpieczanie Twoich danych...',
-  'mnemonic.saveRecoveryPhrase': 'Zapisz frazę odzyskiwania',
-  'mnemonic.userNotLoaded': 'Użytkownik nie wczytany. Zaloguj się ponownie lub odśwież stronę.',
-  'mnemonic.invalidPhrase': 'Nieprawidłowa fraza odzyskiwania. Sprawdź słowa i spróbuj ponownie.',
-  'mnemonic.somethingWentWrong': 'Coś poszło nie tak. Spróbuj ponownie.',
-  'mnemonic.walletAlreadyConfigured': 'Twój portfel jest już skonfigurowany.',
-  'mnemonic.walletSource': 'Źródło',
-  'mnemonic.walletWordCount': 'Długość frazy odzyskiwania',
-  'mnemonic.walletLastUpdated': 'Ostatnia aktualizacja',
-  'mnemonic.replaceWallet': 'Zastąp portfel',
-  'mnemonic.replaceWalletWarning':
-    'Spowoduje to trwałe zastąpienie Twojego obecnego portfela. Upewnij się, że masz kopię zapasową frazy odzyskiwania przed kontynuowaniem.',
-  'mnemonic.replaceWalletConfirm': 'Rozumiem, zastąp mój portfel',
-  'mnemonic.loadingWalletStatus': 'Sprawdzanie statusu portfela...',
-  'mnemonic.viewAccounts': 'Konta portfela',
-  'mnemonic.revealRecoveryPhrase': 'Ujawnij frazę odzyskiwania',
-  'mnemonic.hidePhrase': 'Ukryj frazę',
   'team.failedToCreate': 'Nie udało się utworzyć zespołu',
   'team.invalidInviteCode': 'Nieprawidłowy lub wygasły kod zaproszenia',
   'team.failedToSwitch': 'Nie udało się przełączyć zespołu',
@@ -3263,9 +3208,6 @@ const messages: TranslationMap = {
   'pages.settings.account.privacy': 'Prywatność',
   'pages.settings.account.privacyDesc':
     'Zarządzaj udostępnianiem danych i anonimowymi preferencjami użycia',
-  'pages.settings.account.recoveryPhrase': 'Fraza odzyskiwania',
-  'pages.settings.account.recoveryPhraseDesc':
-    'Zarządzaj swoją frazą odzyskiwania BIP39 do szyfrowania i dostępu do portfela',
   'pages.settings.account.team': 'Zespół',
   'pages.settings.account.teamDesc': 'Zarządzaj zespołem, członkami i zaproszeniami',
   'pages.settings.accountSection.description':
@@ -3785,9 +3727,6 @@ const messages: TranslationMap = {
   'settings.billing.subscription.billedAnnually': 'Rozliczane rocznie',
   'settings.billing.subscription.chooseSubtitle': 'Wybierz plan dopasowany do Twoich potrzeb.',
   'settings.billing.subscription.chooseTitle': 'Wybierz plan',
-  'settings.billing.subscription.cryptoDesc':
-    'Możesz zapłacić również w kryptowalucie — skontaktuj się z nami.',
-  'settings.billing.subscription.cryptoQuestion': 'Wolisz zapłacić kryptowalutą?',
   'settings.billing.subscription.current': 'Bieżący',
   'settings.billing.subscription.currentPlan': 'Bieżący plan',
   'settings.billing.subscription.monthly': 'Miesięczna',
@@ -5059,48 +4998,6 @@ const messages: TranslationMap = {
   'settings.appearanceDesc': 'Wybierz tryb jasny, ciemny lub zgodny z systemem',
   'settings.mascot': 'Maskotka',
   'settings.mascotDesc': 'Wybierz kolor maskotki używany w aplikacji',
-  'pages.settings.account.walletBalances': 'Salda portfela',
-  'pages.settings.account.walletBalancesDesc':
-    'Przeglądaj salda wielu sieci dla swojego lokalnego portfela',
-  'walletBalances.title': 'Salda portfela',
-  'walletBalances.refresh': 'Refresh',
-  'walletBalances.loading': 'Ładowanie sald…',
-  'walletBalances.retry': 'Retry',
-  'walletBalances.emptyState':
-    'Brak kont portfela — skonfiguruj portfel w sekcji Fraza odzyskiwania.',
-  'walletBalances.copyAddress': 'Kopiuj adres',
-  'walletBalances.providerMissing': 'dostawca niedostępny',
-  'walletBalances.rawBalance': 'Nieprzetworzone: {raw}',
-  'walletBalances.errorGeneric':
-    'Nie można załadować sald portfela. Skonfiguruj portfel w sekcji Fraza odzyskiwania i spróbuj ponownie.',
-  'walletBalances.setupHint':
-    'Twoja fraza odzyskiwania nie jest jeszcze skonfigurowana. Skonfiguruj ją, aby włączyć portfel i widzieć salda na żywo.',
-  'walletBalances.setupCta': 'Skonfiguruj frazę odzyskiwania',
-  'walletBalances.notSetUp': 'Nie skonfigurowano',
-  'walletBalances.send': 'Wyślij',
-  'walletBalances.receive': 'Odbierz',
-  'walletReceive.scanHint': 'Zeskanuj ten kod lub skopiuj adres poniżej, aby otrzymać środki.',
-  'walletReceive.addressLabel': 'Adres {network}',
-  'walletReceive.onlyChainWarning':
-    'Wysyłaj na ten adres wyłącznie aktywa {network}. Wysłanie aktywów z innej sieci może spowodować trwałą utratę.',
-  'walletSend.available': 'Dostępne',
-  'walletSend.recipient': 'Adres odbiorcy',
-  'walletSend.recipientPlaceholder': 'Wklej adres docelowy',
-  'walletSend.recipientRequired': 'Wprowadź adres odbiorcy',
-  'walletSend.amount': 'Kwota',
-  'walletSend.invalidAmount': 'Wprowadź prawidłową kwotę',
-  'walletSend.review': 'Przejrzyj',
-  'walletSend.preparing': 'Przygotowywanie…',
-  'walletSend.confirmHint':
-    'Sprawdź poniższe szczegóły. Podpisywanie odbywa się lokalnie — nic nie zostanie wysłane, dopóki nie potwierdzisz.',
-  'walletSend.estimatedFee': 'Szacowana opłata sieciowa',
-  'walletSend.confirmSend': 'Potwierdź i wyślij',
-  'walletSend.sending': 'Wysyłanie…',
-  'walletSend.sent': 'Transakcja wysłana',
-  'walletSend.txHash': 'Hash transakcji',
-  'walletSend.viewExplorer': 'Zobacz w eksploratorze',
-  'walletSend.done': 'Gotowe',
-  'walletSend.genericError': 'Nie udało się zrealizować transferu. Spróbuj ponownie.',
   'settings.taskSources.title': 'Źródła zadań',
   'settings.integrations.title': 'Integracje',
   'settings.integrations.menuDesc': 'Źródła zadań, routing Composio i wyzwalacze webhooków',
@@ -5245,10 +5142,6 @@ const messages: TranslationMap = {
   'settings.agentsSection.description':
     'Zarządzaj agentami, ich autonomią i tym, do czego mogą uzyskać dostęp na tym komputerze.',
   'settings.agentsSection.menuDesc': 'Rejestr, autonomia i dostęp do systemu',
-  'settings.cryptoSection.title': 'Krypto',
-  'settings.cryptoSection.description':
-    'Zarządzaj frazą odzyskiwania i sprawdzaj salda na kontach portfela.',
-  'settings.cryptoSection.menuDesc': 'Fraza odzyskiwania i salda portfela',
   'settings.notificationsHub.title': 'Powiadomienia',
   'settings.notificationsHub.description':
     'Przeglądaj skrzynkę alertów oraz zarządzaj preferencjami powiadomień i routingiem.',

@@ -20,33 +20,11 @@ vi.mock('../../../lib/i18n/I18nContext', () => ({ useT: () => ({ t: (k: string) 
 describe('SidebarHeader', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('renders Home, Wallet, Settings, and Collapse buttons', () => {
+  it('renders Home, Settings, and Collapse buttons', () => {
     renderWithProviders(<SidebarHeader />, { initialEntries: ['/home'] });
     expect(screen.getByRole('button', { name: 'nav.home' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'nav.wallet' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'nav.settings' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'chat.hideSidebar' })).toBeInTheDocument();
-  });
-
-  it('wallet button navigates to /settings/wallet-balances', () => {
-    renderWithProviders(<SidebarHeader />, { initialEntries: ['/home'] });
-    fireEvent.click(screen.getByRole('button', { name: 'nav.wallet' }));
-    expect(mockNavigate).toHaveBeenCalledWith('/settings/wallet-balances');
-  });
-
-  it('wallet button has correct data-analytics-id', () => {
-    renderWithProviders(<SidebarHeader />, { initialEntries: ['/home'] });
-    expect(screen.getByRole('button', { name: 'nav.wallet' })).toHaveAttribute(
-      'data-analytics-id',
-      'sidebar-header-wallet'
-    );
-  });
-
-  it('wallet button has matching aria-label and title', () => {
-    renderWithProviders(<SidebarHeader />, { initialEntries: ['/home'] });
-    const btn = screen.getByRole('button', { name: 'nav.wallet' });
-    expect(btn).toHaveAttribute('aria-label', 'nav.wallet');
-    expect(btn).toHaveAttribute('title', 'nav.wallet');
   });
 
   it('settings button navigates to /settings', () => {

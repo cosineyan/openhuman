@@ -14,7 +14,6 @@ import debug from 'debug';
 //   'ai'        → Settings → AI & Models
 //   'agents'    → Settings → Agents
 //   'features'  → Settings → Features
-//   'crypto'    → Settings → Crypto
 //   'notifications' → Settings → Notifications
 //   'developer' → Settings → Developer & Diagnostics (devOnly entries)
 //
@@ -27,7 +26,6 @@ export type SettingsSection =
   | 'ai'
   | 'agents'
   | 'features'
-  | 'crypto'
   | 'notifications'
   | 'developer';
 
@@ -250,8 +248,8 @@ export const SETTINGS_ROUTE_REGISTRY: SettingsRegistryEntry[] = [
     navOrder: 0,
   },
 
-  // Notifications-hub and crypto hub pages are retired — their slugs redirect
-  // to /settings/notifications and /settings/wallet-balances.
+  // Notifications-hub page is retired — its slug redirects to
+  // /settings/notifications.
 
   // --- About ---
   {
@@ -515,27 +513,6 @@ export const SETTINGS_ROUTE_REGISTRY: SettingsRegistryEntry[] = [
     searchKeywords: ['alerts', 'push', 'preferences', 'routing'],
     navGroup: 'general',
     navOrder: 2,
-  },
-
-  // =========================================================================
-  // CRYPTO section leaf panels
-  // =========================================================================
-  {
-    id: 'recovery-phrase',
-    titleKey: 'pages.settings.account.recoveryPhrase',
-    descriptionKey: 'pages.settings.account.recoveryPhraseDesc',
-    section: 'crypto',
-    searchKeywords: ['mnemonic', 'seed', 'backup', 'recovery', 'wallet'],
-    navParent: 'wallet-balances',
-  },
-  {
-    id: 'wallet-balances',
-    titleKey: 'pages.settings.account.walletBalances',
-    descriptionKey: 'pages.settings.account.walletBalancesDesc',
-    section: 'crypto',
-    searchKeywords: ['wallet', 'balance', 'tokens', 'crypto'],
-    navGroup: 'data',
-    navOrder: 1,
   },
 
   // =========================================================================

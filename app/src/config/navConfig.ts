@@ -80,7 +80,7 @@ export interface AvatarMenuItem {
 
 /**
  * Avatar dropdown menu items shown beneath the agent-profile list.
- * Order: Account → Billing → Rewards → Invites → Wallet.
+ * Order: Account → Billing → Rewards → Invites.
  */
 export const AVATAR_MENU_ITEMS: AvatarMenuItem[] = [
   {
@@ -110,11 +110,5 @@ export const AVATAR_MENU_ITEMS: AvatarMenuItem[] = [
     target: '/invites',
     kind: 'navigate',
     cloudOnly: true,
-  },
-  {
-    id: 'wallet',
-    labelKey: 'nav.avatarMenu.wallet',
-    target: '/settings/wallet-balances',
-    kind: 'navigate',
   },
 ];

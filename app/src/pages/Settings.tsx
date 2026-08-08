@@ -39,7 +39,6 @@ import PersonalityPanel from '../components/settings/panels/PersonalityPanel';
 import PrivacyPanel from '../components/settings/panels/PrivacyPanel';
 import ProfileEditorPage from '../components/settings/panels/ProfileEditorPage';
 import ProfilesPanel from '../components/settings/panels/ProfilesPanel';
-import RecoveryPhrasePanel from '../components/settings/panels/RecoveryPhrasePanel';
 import SandboxSettingsPanel from '../components/settings/panels/SandboxSettingsPanel';
 import ScreenAwarenessDebugPanel from '../components/settings/panels/ScreenAwarenessDebugPanel';
 import ScreenIntelligencePanel from '../components/settings/panels/ScreenIntelligencePanel';
@@ -53,7 +52,6 @@ import ToolPolicyDiagnosticsPanel from '../components/settings/panels/ToolPolicy
 import ToolsPanel from '../components/settings/panels/ToolsPanel';
 import UsagePanel from '../components/settings/panels/UsagePanel';
 import VoiceDebugPanel from '../components/settings/panels/VoiceDebugPanel';
-import WalletBalancesPanel from '../components/settings/panels/WalletBalancesPanel';
 import WebhooksDebugPanel from '../components/settings/panels/WebhooksDebugPanel';
 import WorkflowRunnerPanel from '../components/settings/panels/WorkflowRunnerPanel';
 
@@ -135,8 +133,6 @@ const Settings = () => {
 
           {/* ── Data ────────────────────────────────────────────────── */}
           <Route path="memory-sync" element={wrapSettingsPage(<MemorySyncPanel />)} />
-          <Route path="wallet-balances" element={wrapSettingsPage(<WalletBalancesPanel />)} />
-          <Route path="recovery-phrase" element={wrapSettingsPage(<RecoveryPhrasePanel />)} />
 
           {/* ── Connections ─────────────────────────────────────────── */}
           <Route path="integrations" element={wrapSettingsPage(<IntegrationsPanel />)} />
@@ -198,7 +194,6 @@ const Settings = () => {
             path="features"
             element={<Navigate to="/settings/screen-intelligence" replace />}
           />
-          <Route path="crypto" element={<Navigate to="/settings/wallet-balances" replace />} />
           <Route
             path="notifications-hub"
             element={<Navigate to="/settings/notifications" replace />}

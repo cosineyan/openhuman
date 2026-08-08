@@ -41,12 +41,10 @@ const messages: TranslationMap = {
   'nav.noAgentProfiles': "Aucun profil d'agent trouvé",
   'nav.activity': 'Activité',
   'nav.brain': 'Cerveau',
-  'nav.wallet': 'Portefeuille',
   'nav.avatarMenu.account': 'Compte',
   'nav.avatarMenu.billing': 'Facturation',
   'nav.avatarMenu.rewards': 'Récompenses',
   'nav.avatarMenu.invites': 'Inviter un ami',
-  'nav.avatarMenu.wallet': 'Portefeuille',
 
   // Brain — full-page memory knowledge-graph surface
   'brain.subtitle': 'Votre graphe de connaissances, vos sources de mémoire et vos commandes.',
@@ -215,8 +213,6 @@ const messages: TranslationMap = {
   'settings.account.teamMembersDesc': "Gérer l'accès à l'équipe et les rôles des membres",
   'settings.account.dataMigration': 'Données & migration',
   'settings.account.dataMigrationDesc': 'Importer la mémoire depuis un autre assistant',
-  'settings.account.recoveryPhrase': 'Phrase de récupération',
-  'settings.account.recoveryPhraseDesc': 'Voir et sauvegarder ta phrase de récupération',
   'settings.account.team': 'Équipe',
   'settings.account.teamDesc': "Gérer les membres et les permissions de l'équipe",
   'settings.account.connections': 'Connexions',
@@ -917,14 +913,6 @@ const messages: TranslationMap = {
   'misc.beta':
     "OpenHuman est en bêta anticipée. N'hésite pas à partager tes retours ou signaler des bugs — chaque rapport nous aide à avancer plus vite.",
   'misc.betaFeedback': 'Envoyer un retour',
-  'mnemonic.title': 'Phrase de récupération',
-  'mnemonic.warning': "Note ces mots dans l'ordre et conserve-les en lieu sûr.",
-  'mnemonic.copyWarning':
-    'Ne partage jamais ta phrase de récupération. Toute personne disposant de ces mots peut accéder à ton compte.',
-  'mnemonic.copied': 'Phrase de récupération copiée dans le presse-papiers',
-  'mnemonic.reveal': 'Afficher la phrase',
-  'mnemonic.revealPhrase': 'Révéler la phrase de récupération',
-  'mnemonic.hidden': 'La phrase de récupération est masquée',
   'privacy.title': 'Confidentialité & Sécurité',
   'privacy.description': 'Rapport de transparence sur les données envoyées aux services externes.',
   'privacy.empty': 'Aucun transfert de données externe détecté.',
@@ -1540,16 +1528,6 @@ const messages: TranslationMap = {
   'connections.configured': 'Configuré',
   'connections.unavailable': 'Indisponible',
   'connections.checking': 'Vérification…',
-  'connections.walletConfigured':
-    'Les identités locales EVM, BTC, Solana et Tron sont configurées depuis ta phrase de récupération.',
-  'connections.walletReady':
-    'Configure les identités locales EVM, BTC, Solana et Tron depuis une seule phrase de récupération.',
-  'connections.walletError':
-    "Impossible de vérifier l'état du portefeuille. Appuie pour réessayer depuis le panneau de phrase de récupération.",
-  'connections.walletChecking': "Vérification de l'état du portefeuille…",
-  'connections.walletIdentities': 'Identités de portefeuille',
-  'connections.walletDerived':
-    'Dérivé localement depuis ta phrase de récupération et stocké comme métadonnées sécurisées uniquement.',
   'connections.privacySecurity': 'Confidentialité & Sécurité',
   'connections.privacySecurityDesc':
     "Toutes les données et informations d'identification sont stockées localement avec une politique de zéro rétention de données. Tes informations sont chiffrées et ne sont jamais partagées avec des tiers.",
@@ -1586,40 +1564,6 @@ const messages: TranslationMap = {
   'devOptions.appLogsDesc':
     'Ouvrir le dossier contenant les fichiers journaux quotidiens. Joins le fichier le plus récent quand tu signales un problème.',
   'devOptions.openLogsFolder': 'Ouvrir le dossier des journaux',
-  'mnemonic.phraseSaved': 'Phrase de récupération enregistrée',
-  'mnemonic.walletReady':
-    'Les identités de portefeuille multi-chaîne sont prêtes. Retour aux paramètres…',
-  'mnemonic.writeDownWords': 'Note ces',
-  'mnemonic.wordsInOrder':
-    "mots dans l'ordre et conserve-les en lieu sûr. Cette phrase sécurise ta clé de chiffrement locale et tes identités de portefeuille EVM, BTC, Solana et Tron.",
-  'mnemonic.cannotRecover':
-    'Cette phrase ne peut jamais être récupérée si elle est perdue et doit rester entièrement locale sur ton appareil.',
-  'mnemonic.copyToClipboard': 'Copier dans le presse-papiers',
-  'mnemonic.alreadyHavePhrase': "J'ai déjà une phrase de récupération",
-  'mnemonic.consentSaved':
-    "J'ai sauvegardé cette phrase et j'accepte de l'utiliser pour la configuration du portefeuille local",
-  'mnemonic.enterPhraseToRestore':
-    "Saisis ta phrase de récupération ci-dessous pour restaurer tes identités de portefeuille locales, ou colle la phrase complète dans n'importe quel champ (12 mots pour les nouvelles sauvegardes ; les phrases de 24 mots des versions antérieures fonctionnent toujours).",
-  'mnemonic.words': 'Mots',
-  'mnemonic.validPhrase': 'Phrase de récupération valide',
-  'mnemonic.generateNewPhrase': 'Générer une nouvelle phrase de récupération à la place',
-  'mnemonic.securingData': 'Sécurisation de tes données…',
-  'mnemonic.saveRecoveryPhrase': 'Enregistrer la phrase de récupération',
-  'mnemonic.userNotLoaded': 'Utilisateur non chargé. Reconnecte-toi ou actualise la page.',
-  'mnemonic.invalidPhrase': 'Phrase de récupération invalide. Vérifie tes mots et réessaie.',
-  'mnemonic.somethingWentWrong': "Une erreur s'est produite. Réessaie.",
-  'mnemonic.walletAlreadyConfigured': 'Ton portefeuille est déjà configuré.',
-  'mnemonic.walletSource': 'Source',
-  'mnemonic.walletWordCount': 'Nombre de mots',
-  'mnemonic.walletLastUpdated': 'Dernière mise à jour',
-  'mnemonic.replaceWallet': 'Remplacer le portefeuille',
-  'mnemonic.replaceWalletWarning':
-    "Cela remplacera définitivement ton portefeuille actuel. Assure-toi d'avoir sauvegardé ta phrase de récupération avant de continuer.",
-  'mnemonic.replaceWalletConfirm': 'Je comprends, remplacer mon portefeuille',
-  'mnemonic.loadingWalletStatus': 'Vérification du statut du portefeuille...',
-  'mnemonic.viewAccounts': 'Voir les comptes du portefeuille',
-  'mnemonic.revealRecoveryPhrase': 'Révéler la phrase de récupération',
-  'mnemonic.hidePhrase': 'Masquer la phrase',
   'team.failedToCreate': "Échec de la création de l'équipe",
   'team.invalidInviteCode': "Code d'invitation invalide ou expiré",
   'team.failedToSwitch': "Échec du changement d'équipe",
@@ -3291,8 +3235,6 @@ const messages: TranslationMap = {
     'Migrez la mémoire et les notes depuis OpenClaw (et bientôt Hermes) vers cet espace de travail.',
   'pages.settings.account.privacy': 'Confidentialité',
   'pages.settings.account.privacyDesc': 'Description de la confidentialité',
-  'pages.settings.account.recoveryPhrase': 'Phrase de récupération',
-  'pages.settings.account.recoveryPhraseDesc': 'Description de la phrase de récupération',
   'pages.settings.account.team': 'Équipe',
   'pages.settings.account.teamDesc': "Description de l'équipe",
   'pages.settings.accountSection.description':
@@ -3808,8 +3750,6 @@ const messages: TranslationMap = {
   'settings.billing.subscription.billedAnnually': 'Facturé annuellement',
   'settings.billing.subscription.chooseSubtitle': 'Sous-titre du choix',
   'settings.billing.subscription.chooseTitle': 'Titre du choix',
-  'settings.billing.subscription.cryptoDesc': 'Description crypto',
-  'settings.billing.subscription.cryptoQuestion': 'Question crypto',
   'settings.billing.subscription.current': 'Actuel',
   'settings.billing.subscription.currentPlan': 'Plan actuel',
   'settings.billing.subscription.monthly': 'Mensuel',
@@ -5097,49 +5037,6 @@ const messages: TranslationMap = {
   'settings.appearanceDesc': 'Choisissez clair, sombre ou assorti à votre thème système',
   'settings.mascot': 'Mascotte',
   'settings.mascotDesc': "Choisissez la couleur de la mascotte utilisée dans l'application",
-  'pages.settings.account.walletBalances': 'Soldes du portefeuille',
-  'pages.settings.account.walletBalancesDesc':
-    'Afficher les soldes multi-chaînes de votre portefeuille local',
-  'walletBalances.title': 'Soldes du portefeuille',
-  'walletBalances.refresh': 'Refresh',
-  'walletBalances.loading': 'Chargement des soldes…',
-  'walletBalances.retry': 'Retry',
-  'walletBalances.emptyState':
-    "Aucun compte de portefeuille pour l'instant — configurez un portefeuille dans Phrase de récupération.",
-  'walletBalances.copyAddress': "Copier l'adresse",
-  'walletBalances.providerMissing': 'fournisseur indisponible',
-  'walletBalances.rawBalance': 'Brut : {raw}',
-  'walletBalances.errorGeneric':
-    'Impossible de charger les soldes du portefeuille. Configurez votre portefeuille dans Phrase de récupération et réessayez.',
-  'walletBalances.setupHint':
-    'Votre phrase de récupération n’est pas encore configurée. Configurez-la pour activer votre portefeuille et voir les soldes en direct.',
-  'walletBalances.setupCta': 'Configurer la phrase de récupération',
-  'walletBalances.notSetUp': 'Non configuré',
-  'walletBalances.send': 'Envoyer',
-  'walletBalances.receive': 'Recevoir',
-  'walletReceive.scanHint':
-    'Scannez ce code ou copiez l’adresse ci-dessous pour recevoir des fonds.',
-  'walletReceive.addressLabel': 'Adresse {network}',
-  'walletReceive.onlyChainWarning':
-    'N’envoyez que des actifs {network} à cette adresse. Envoyer des actifs d’un autre réseau peut entraîner une perte définitive.',
-  'walletSend.available': 'Disponible',
-  'walletSend.recipient': 'Adresse du destinataire',
-  'walletSend.recipientPlaceholder': 'Collez l’adresse de destination',
-  'walletSend.recipientRequired': 'Saisissez une adresse de destinataire',
-  'walletSend.amount': 'Montant',
-  'walletSend.invalidAmount': 'Saisissez un montant valide',
-  'walletSend.review': 'Vérifier',
-  'walletSend.preparing': 'Préparation…',
-  'walletSend.confirmHint':
-    'Vérifiez les détails ci-dessous. La signature a lieu localement ; rien n’est diffusé tant que vous ne confirmez pas.',
-  'walletSend.estimatedFee': 'Frais de réseau estimés',
-  'walletSend.confirmSend': 'Confirmer et envoyer',
-  'walletSend.sending': 'Envoi…',
-  'walletSend.sent': 'Transaction envoyée',
-  'walletSend.txHash': 'Hash de la transaction',
-  'walletSend.viewExplorer': 'Voir dans l’explorateur',
-  'walletSend.done': 'Terminé',
-  'walletSend.genericError': 'Impossible de finaliser le transfert. Veuillez réessayer.',
   'settings.taskSources.title': 'Sources de tâches',
   'settings.integrations.title': 'Intégrations',
   'settings.integrations.menuDesc':
@@ -5286,10 +5183,6 @@ const messages: TranslationMap = {
   'settings.agentsSection.description':
     'Gérez vos agents, leur autonomie et ce à quoi ils peuvent accéder sur cet ordinateur.',
   'settings.agentsSection.menuDesc': 'Registre, autonomie et accès au système',
-  'settings.cryptoSection.title': 'Crypto',
-  'settings.cryptoSection.description':
-    'Gérez votre phrase de récupération et consultez les soldes de vos comptes de portefeuille.',
-  'settings.cryptoSection.menuDesc': 'Phrase de récupération et soldes du portefeuille',
   'settings.notificationsHub.title': 'Notifications',
   'settings.notificationsHub.description':
     'Consultez votre boîte de réception des alertes et gérez les préférences de notification et le routage.',

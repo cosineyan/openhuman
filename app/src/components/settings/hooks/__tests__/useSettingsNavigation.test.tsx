@@ -23,8 +23,6 @@ describe('useSettingsNavigation breadcrumbs (retired — always empty)', () => {
     '/settings/tasks',
     '/settings/developer-options',
     '/settings/personality',
-    '/settings/recovery-phrase',
-    '/settings/wallet-balances',
     '/settings/notification-routing',
   ];
 

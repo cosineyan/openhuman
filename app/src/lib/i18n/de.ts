@@ -41,12 +41,10 @@ const messages: TranslationMap = {
   'nav.noAgentProfiles': 'Keine Agentenprofile gefunden',
   'nav.activity': 'Aktivität',
   'nav.brain': 'Gehirn',
-  'nav.wallet': 'Wallet',
   'nav.avatarMenu.account': 'Konto',
   'nav.avatarMenu.billing': 'Abrechnung',
   'nav.avatarMenu.rewards': 'Prämien',
   'nav.avatarMenu.invites': 'Freund einladen',
-  'nav.avatarMenu.wallet': 'Wallet',
 
   // Brain — full-page memory knowledge-graph surface
   'brain.subtitle': 'Dein Wissensgraph, deine Speicherquellen und Steuerelemente.',
@@ -212,9 +210,6 @@ const messages: TranslationMap = {
   'settings.account.teamMembersDesc': 'Teamzugang und Mitgliederrollen verwalten',
   'settings.account.dataMigration': 'Daten & Migration',
   'settings.account.dataMigrationDesc': 'Erinnerungen aus einem anderen Assistenten importieren',
-  'settings.account.recoveryPhrase': 'Wiederherstellungssatz',
-  'settings.account.recoveryPhraseDesc':
-    'Sieh dir deinen Kontowiederherstellungssatz an und sichere ihn',
   'settings.account.team': 'Team',
   'settings.account.teamDesc': 'Verwalte Teammitglieder und Berechtigungen',
   'settings.account.connections': 'Verbindungen',
@@ -918,15 +913,6 @@ const messages: TranslationMap = {
   'misc.beta':
     'OpenHuman befindet sich in der frühen Betaphase. Teile uns gerne dein Feedback mit oder melde Fehler, auf die du stößt – jede Meldung hilft uns, schneller zu liefern.',
   'misc.betaFeedback': 'Feedback senden',
-  'mnemonic.title': 'Wiederherstellungssatz',
-  'mnemonic.warning':
-    'Schreibe diese Wörter der Reihe nach auf und bewahre sie an einem sicheren Ort auf.',
-  'mnemonic.copyWarning':
-    'Gib niemals deine Wiederherstellungsphrase weiter. Jeder mit diesen Wörtern kann auf dein Konto zugreifen.',
-  'mnemonic.copied': 'Wiederherstellungsphrase in die Zwischenablage kopiert',
-  'mnemonic.reveal': 'Satz enthüllen',
-  'mnemonic.revealPhrase': 'Wiederherstellungsphrase anzeigen',
-  'mnemonic.hidden': 'Die Wiederherstellungsphrase ist ausgeblendet',
   'privacy.title': 'Datenschutz und Sicherheit',
   'privacy.description': 'Transparenzbericht der an externe Dienste gesendeten Daten.',
   'privacy.empty': 'Keine externen Datenübertragungen erkannt.',
@@ -1539,16 +1525,6 @@ const messages: TranslationMap = {
   'connections.configured': 'Konfiguriert',
   'connections.unavailable': 'Nicht verfügbar',
   'connections.checking': 'Überprüfen…',
-  'connections.walletConfigured':
-    'Lokale EVM-, BTC-, Solana- und Tron-Identitäten werden anhand deiner Wiederherstellungsphrase konfiguriert.',
-  'connections.walletReady':
-    'Richte lokale EVM-, BTC-, Solana- und Tron-Identitäten aus einer Wiederherstellungsphrase ein.',
-  'connections.walletError':
-    'Der Wallet-Status konnte nicht überprüft werden. Tippe im Bedienfeld „Wiederherstellungsphrase“ auf , um es noch einmal zu versuchen.',
-  'connections.walletChecking': 'Wallet-Status wird überprüft...',
-  'connections.walletIdentities': 'Wallet-Identitäten',
-  'connections.walletDerived':
-    'Wird lokal von deiner Wiederherstellungsphrase abgeleitet und nur als sichere Metadaten gespeichert.',
   'connections.privacySecurity': 'Datenschutz und Sicherheit',
   'connections.privacySecurityDesc':
     'Alle Daten und Anmeldeinformationen werden lokal mit einer Null-Datenaufbewahrungsrichtlinie gespeichert. Deine Daten werden verschlüsselt und niemals an Dritte weitergegeben.',
@@ -1583,42 +1559,6 @@ const messages: TranslationMap = {
   'devOptions.appLogsDesc':
     'Öffne den Ordner mit den fortlaufenden täglichen Protokolldateien. Hänge die aktuellste Datei an, wenn du ein Problem meldest.',
   'devOptions.openLogsFolder': 'Öffne den Protokollordner',
-  'mnemonic.phraseSaved': 'Wiederherstellungsphrase gespeichert',
-  'mnemonic.walletReady':
-    'Multi-Chain-Wallet-Identitäten sind bereit. Zurück zu den Einstellungen...',
-  'mnemonic.writeDownWords': 'Schreibe diese auf',
-  'mnemonic.wordsInOrder':
-    'Sortiere die Wörter in der richtigen Reihenfolge und bewahre sie an einem sicheren Ort auf. Dieser Satz sichert deinen lokalen Verschlüsselungsschlüssel und deine EVM-, BTC-, Solana- und Tron-Wallet-Identitäten.',
-  'mnemonic.cannotRecover':
-    'Dieser Satz kann bei Verlust niemals wiederhergestellt werden und sollte vollständig lokal auf deinem Gerät bleiben.',
-  'mnemonic.copyToClipboard': 'In die Zwischenablage kopieren',
-  'mnemonic.alreadyHavePhrase': 'Ich habe bereits einen Wiederherstellungssatz',
-  'mnemonic.consentSaved':
-    'Ich habe diesen Satz gespeichert und bin damit einverstanden, ihn für die lokale Wallet-Einrichtung zu verwenden',
-  'mnemonic.enterPhraseToRestore':
-    'Gib unten deine Wiederherstellungsphrase ein, um deine lokalen Wallet-Identitäten wiederherzustellen, oder füge die vollständige Phrase in ein beliebiges Feld ein (12 Wörter für neue Backups; 24-Wort-Phrasen aus älteren Versionen funktionieren weiterhin).',
-  'mnemonic.words': 'Worte',
-  'mnemonic.validPhrase': 'Gültige Wiederherstellungsphrase',
-  'mnemonic.generateNewPhrase': 'Generiere stattdessen eine neue Wiederherstellungsphrase',
-  'mnemonic.securingData': 'Sicherung deiner Daten...',
-  'mnemonic.saveRecoveryPhrase': 'Speichere die Wiederherstellungsphrase',
-  'mnemonic.userNotLoaded':
-    'Benutzer nicht geladen. Bitte melde dich erneut an oder aktualisiere die Seite.',
-  'mnemonic.invalidPhrase':
-    'Ungültige Wiederherstellungsphrase. Bitte prüfe deine Wörter und versuche es erneut.',
-  'mnemonic.somethingWentWrong': 'Etwas ist schief gelaufen. Bitte versuche es erneut.',
-  'mnemonic.walletAlreadyConfigured': 'Deine Wallet ist bereits eingerichtet.',
-  'mnemonic.walletSource': 'Quelle',
-  'mnemonic.walletWordCount': 'Länge der Recovery-Phrase',
-  'mnemonic.walletLastUpdated': 'Zuletzt aktualisiert',
-  'mnemonic.replaceWallet': 'Wallet ersetzen',
-  'mnemonic.replaceWalletWarning':
-    'Dies wird deine aktuelle Wallet dauerhaft ersetzen. Stelle sicher, dass du deine Recovery-Phrase gesichert hast, bevor du fortfährst.',
-  'mnemonic.replaceWalletConfirm': 'Ich verstehe, meine Wallet ersetzen',
-  'mnemonic.loadingWalletStatus': 'Wallet-Status wird geprüft...',
-  'mnemonic.viewAccounts': 'Wallet-Konten',
-  'mnemonic.revealRecoveryPhrase': 'Wiederherstellungsphrase anzeigen',
-  'mnemonic.hidePhrase': 'Phrase ausblenden',
   'team.failedToCreate': 'Team konnte nicht erstellt werden',
   'team.invalidInviteCode': 'Ungültiger oder abgelaufener Einladungscode',
   'team.failedToSwitch': 'Teamwechsel fehlgeschlagen',
@@ -3299,9 +3239,6 @@ const messages: TranslationMap = {
   'pages.settings.account.privacy': 'Privatsphäre',
   'pages.settings.account.privacyDesc':
     'Verwalte die Datenfreigabe und anonymisierte Nutzungspräferenzen',
-  'pages.settings.account.recoveryPhrase': 'Wiederherstellungssatz',
-  'pages.settings.account.recoveryPhraseDesc':
-    'Verwalte deine BIP39-Wiederherstellungsphrase für Verschlüsselung und Wallet-Zugriff',
   'pages.settings.account.team': 'Team',
   'pages.settings.account.teamDesc': 'Verwalte dein Team, deine Mitglieder und Einladungen',
   'pages.settings.accountSection.description':
@@ -3818,8 +3755,6 @@ const messages: TranslationMap = {
   'settings.billing.subscription.billedAnnually': 'Jährliche Abrechnung',
   'settings.billing.subscription.chooseSubtitle': 'Untertitel wählen',
   'settings.billing.subscription.chooseTitle': 'Titel wählen',
-  'settings.billing.subscription.cryptoDesc': 'Krypto-Beschreibung',
-  'settings.billing.subscription.cryptoQuestion': 'Krypto-Frage',
   'settings.billing.subscription.current': 'Aktuell',
   'settings.billing.subscription.currentPlan': 'Aktueller Plan',
   'settings.billing.subscription.monthly': 'Monatlich',
@@ -5110,50 +5045,6 @@ const messages: TranslationMap = {
   'settings.appearanceDesc': 'Wähle hell, dunkel oder passend zu deinem Systemthema',
   'settings.mascot': 'Maskottchen',
   'settings.mascotDesc': 'Wähle die Maskottchenfarbe aus, die in der gesamten App verwendet wird',
-  'pages.settings.account.walletBalances': 'Wallet-Guthaben',
-  'pages.settings.account.walletBalancesDesc':
-    'Multi-Chain-Guthaben deiner lokalen Wallet anzeigen',
-  'walletBalances.title': 'Wallet-Guthaben',
-  'walletBalances.refresh': 'Refresh',
-  'walletBalances.loading': 'Guthaben wird geladen…',
-  'walletBalances.retry': 'Retry',
-  'walletBalances.emptyState':
-    "Noch keine Wallet-Konten – richte eine Wallet unter 'Wiederherstellungsphrase' ein.",
-  'walletBalances.copyAddress': 'Adresse kopieren',
-  'walletBalances.providerMissing': 'Anbieter nicht verfügbar',
-  'walletBalances.rawBalance': 'Roh: {raw}',
-  'walletBalances.errorGeneric':
-    "Wallet-Guthaben konnten nicht geladen werden. Richte deine Wallet unter 'Wiederherstellungsphrase' ein und versuche es erneut.",
-  'walletBalances.setupHint':
-    'Deine Wiederherstellungsphrase ist noch nicht eingerichtet. Richte sie ein, um deine Wallet zu aktivieren und Live-Guthaben zu sehen.',
-  'walletBalances.setupCta': 'Wiederherstellungsphrase einrichten',
-  'walletBalances.notSetUp': 'Nicht eingerichtet',
-  'walletBalances.send': 'Senden',
-  'walletBalances.receive': 'Empfangen',
-  'walletReceive.scanHint':
-    'Scanne diesen Code oder kopiere die Adresse unten, um Gelder zu empfangen.',
-  'walletReceive.addressLabel': '{network}-Adresse',
-  'walletReceive.onlyChainWarning':
-    'Sende nur {network}-Assets an diese Adresse. Das Senden von Assets aus einem anderen Netzwerk kann zu einem dauerhaften Verlust führen.',
-  'walletSend.available': 'Verfügbar',
-  'walletSend.recipient': 'Empfängeradresse',
-  'walletSend.recipientPlaceholder': 'Zieladresse einfügen',
-  'walletSend.recipientRequired': 'Gib eine Empfängeradresse ein',
-  'walletSend.amount': 'Betrag',
-  'walletSend.invalidAmount': 'Gib einen gültigen Betrag ein',
-  'walletSend.review': 'Überprüfen',
-  'walletSend.preparing': 'Wird vorbereitet…',
-  'walletSend.confirmHint':
-    'Überprüfe die Details unten. Die Signierung erfolgt lokal — nichts wird gesendet, bis du bestätigst.',
-  'walletSend.estimatedFee': 'Geschätzte Netzwerkgebühr',
-  'walletSend.confirmSend': 'Bestätigen und senden',
-  'walletSend.sending': 'Wird gesendet…',
-  'walletSend.sent': 'Transaktion gesendet',
-  'walletSend.txHash': 'Transaktions-Hash',
-  'walletSend.viewExplorer': 'Im Explorer ansehen',
-  'walletSend.done': 'Fertig',
-  'walletSend.genericError':
-    'Überweisung konnte nicht abgeschlossen werden. Bitte versuche es erneut.',
   'settings.taskSources.title': 'Aufgabenquellen',
   'settings.integrations.title': 'Integrationen',
   'settings.integrations.menuDesc': 'Aufgabenquellen, Composio-Routing und Webhook-Trigger',
@@ -5299,10 +5190,6 @@ const messages: TranslationMap = {
   'settings.agentsSection.description':
     'Verwalten Sie Ihre Agenten, deren Autonomie und worauf sie auf diesem Computer zugreifen dürfen.',
   'settings.agentsSection.menuDesc': 'Registrierung, Autonomie & BS-Zugriff',
-  'settings.cryptoSection.title': 'Krypto',
-  'settings.cryptoSection.description':
-    'Verwalte deine Wiederherstellungsphrase und sieh dir die Guthaben deiner Wallet-Konten an.',
-  'settings.cryptoSection.menuDesc': 'Wiederherstellungsphrase & Wallet-Guthaben',
   'settings.notificationsHub.title': 'Benachrichtigungen',
   'settings.notificationsHub.description':
     'Sieh dir deinen Hinweise-Posteingang an und verwalte Benachrichtigungseinstellungen und Routing.',

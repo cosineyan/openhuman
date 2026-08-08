@@ -71,21 +71,15 @@ describe('NAV_TABS', () => {
 });
 
 describe('AVATAR_MENU_ITEMS', () => {
-  it('has exactly 5 entries', () => {
-    expect(AVATAR_MENU_ITEMS).toHaveLength(5);
+  it('has exactly 4 entries', () => {
+    expect(AVATAR_MENU_ITEMS).toHaveLength(4);
   });
 
   it('has the correct ids in order', () => {
-    expect(AVATAR_MENU_ITEMS.map(i => i.id)).toEqual([
-      'account',
-      'billing',
-      'rewards',
-      'invites',
-      'wallet',
-    ]);
+    expect(AVATAR_MENU_ITEMS.map(i => i.id)).toEqual(['account', 'billing', 'rewards', 'invites']);
   });
 
-  it('billing, rewards, and invites are cloudOnly; account and wallet are not', () => {
+  it('billing, rewards, and invites are cloudOnly; account is not', () => {
     const cloudOnly = AVATAR_MENU_ITEMS.filter(i => i.cloudOnly).map(i => i.id);
     expect(cloudOnly).toEqual(['billing', 'rewards', 'invites']);
   });

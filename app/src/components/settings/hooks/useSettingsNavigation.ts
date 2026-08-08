@@ -34,8 +34,6 @@ export type SettingsRoute =
   | 'memory-data'
   | 'memory-sync'
   | 'memory-debug'
-  | 'recovery-phrase'
-  | 'wallet-balances'
   | 'webhooks-debug'
   | 'agent-chat'
   | 'screen-awareness-debug'

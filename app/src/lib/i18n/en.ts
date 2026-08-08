@@ -25,12 +25,10 @@ const en: TranslationMap = {
   'nav.noAgentProfiles': 'No agent profiles found',
   'nav.activity': 'Activity',
   'nav.brain': 'Brain',
-  'nav.wallet': 'Wallet',
   'nav.avatarMenu.account': 'Account',
   'nav.avatarMenu.billing': 'Billing',
   'nav.avatarMenu.rewards': 'Rewards',
   'nav.avatarMenu.invites': 'Invite a friend',
-  'nav.avatarMenu.wallet': 'Wallet',
 
   // Brain — full-page memory knowledge-graph surface
   'brain.subtitle': 'Your knowledge graph, memory sources, and controls.',
@@ -210,8 +208,6 @@ const en: TranslationMap = {
   'settings.account.dataMigrationDesc': 'Import memory from another assistant',
 
   // Settings: Account
-  'settings.account.recoveryPhrase': 'Recovery Phrase',
-  'settings.account.recoveryPhraseDesc': 'View and back up your account recovery phrase',
   'settings.account.team': 'Team',
   'settings.account.teamDesc': 'Manage team members and permissions',
   'settings.account.connections': 'Connections',
@@ -1230,16 +1226,6 @@ const en: TranslationMap = {
     'OpenHuman is in early beta. Feel free to share feedback or report any bugs you run into — every report helps us ship faster.',
   'misc.betaFeedback': 'Send feedback',
 
-  // Mnemonic / Recovery
-  'mnemonic.title': 'Recovery Phrase',
-  'mnemonic.warning': 'Write down these words in order and store them somewhere safe.',
-  'mnemonic.copyWarning':
-    'Never share your recovery phrase. Anyone with these words can access your account.',
-  'mnemonic.copied': 'Recovery phrase copied to clipboard',
-  'mnemonic.reveal': 'Reveal phrase',
-  'mnemonic.revealPhrase': 'Reveal recovery phrase',
-  'mnemonic.hidden': 'Recovery phrase is hidden',
-
   // What Leaves My Computer
   'privacy.title': 'Privacy & Security',
   'privacy.description': 'Transparency report of data sent to external services.',
@@ -1849,16 +1835,6 @@ const en: TranslationMap = {
   'connections.configured': 'Configured',
   'connections.unavailable': 'Unavailable',
   'connections.checking': 'Checking…',
-  'connections.walletConfigured':
-    'Local EVM, BTC, Solana, and Tron identities are configured from your recovery phrase.',
-  'connections.walletReady':
-    'Set up local EVM, BTC, Solana, and Tron identities from one recovery phrase.',
-  'connections.walletError':
-    'Could not check wallet status. Tap to retry from the Recovery Phrase panel.',
-  'connections.walletChecking': 'Checking wallet status...',
-  'connections.walletIdentities': 'Wallet identities',
-  'connections.walletDerived':
-    'Derived locally from your recovery phrase and stored as safe metadata only.',
   'connections.privacySecurity': 'Privacy & Security',
   'connections.privacySecurityDesc':
     'All data and credentials are stored locally with zero-data retention policy. Your information is encrypted and never shared with third parties.',
@@ -1897,40 +1873,6 @@ const en: TranslationMap = {
   'devOptions.appLogsDesc':
     'Open the folder containing rolling daily log files. Attach the most recent file when reporting an issue.',
   'devOptions.openLogsFolder': 'Open logs folder',
-
-  // Mnemonic
-  'mnemonic.phraseSaved': 'Recovery phrase saved',
-  'mnemonic.walletReady': 'Multi-chain wallet identities are ready. Returning to settings...',
-  'mnemonic.writeDownWords': 'Write down these',
-  'mnemonic.wordsInOrder':
-    'words in order and store them somewhere safe. This phrase secures your local encryption key and your EVM, BTC, Solana, and Tron wallet identities.',
-  'mnemonic.cannotRecover':
-    'This phrase can never be recovered if lost and should stay fully local to your device.',
-  'mnemonic.copyToClipboard': 'Copy to Clipboard',
-  'mnemonic.alreadyHavePhrase': 'I already have a recovery phrase',
-  'mnemonic.consentSaved': 'I saved this phrase and consent to using it for local wallet setup',
-  'mnemonic.enterPhraseToRestore':
-    'Enter your recovery phrase below to restore your local wallet identities, or paste the full phrase into any field (12 words for new backups; 24-word phrases from older versions still work).',
-  'mnemonic.words': 'Words',
-  'mnemonic.validPhrase': 'Valid recovery phrase',
-  'mnemonic.generateNewPhrase': 'Generate a new recovery phrase instead',
-  'mnemonic.securingData': 'Securing Your Data...',
-  'mnemonic.saveRecoveryPhrase': 'Save Recovery Phrase',
-  'mnemonic.userNotLoaded': 'User not loaded. Please sign in again or refresh the page.',
-  'mnemonic.invalidPhrase': 'Invalid recovery phrase. Please check your words and try again.',
-  'mnemonic.somethingWentWrong': 'Something went wrong. Please try again.',
-  'mnemonic.walletAlreadyConfigured': 'Your wallet is already set up.',
-  'mnemonic.walletSource': 'Source',
-  'mnemonic.walletWordCount': 'Recovery phrase length',
-  'mnemonic.walletLastUpdated': 'Last updated',
-  'mnemonic.replaceWallet': 'Replace wallet',
-  'mnemonic.replaceWalletWarning':
-    'This will permanently replace your current wallet. Make sure you have backed up your recovery phrase before proceeding.',
-  'mnemonic.replaceWalletConfirm': 'I understand, replace my wallet',
-  'mnemonic.loadingWalletStatus': 'Checking wallet status...',
-  'mnemonic.viewAccounts': 'Wallet accounts',
-  'mnemonic.revealRecoveryPhrase': 'Reveal recovery phrase',
-  'mnemonic.hidePhrase': 'Hide phrase',
 
   // Team
   'team.failedToCreate': 'Failed to create team',
@@ -3823,8 +3765,6 @@ const en: TranslationMap = {
     'Bring memory and notes over from OpenClaw (Hermes coming soon)',
   'pages.settings.account.privacy': 'Privacy',
   'pages.settings.account.privacyDesc': 'Control what data leaves your computer',
-  'pages.settings.account.recoveryPhrase': 'Recovery phrase',
-  'pages.settings.account.recoveryPhraseDesc': 'View and back up your account recovery phrase',
   'pages.settings.account.team': 'Team',
   'pages.settings.account.teamDesc': 'Manage team members and permissions',
   'pages.settings.accountSection.description':
@@ -4330,8 +4270,6 @@ const en: TranslationMap = {
   'settings.billing.subscription.billedAnnually': 'Billed annually',
   'settings.billing.subscription.chooseSubtitle': 'Upgrade to unlock more usage and features.',
   'settings.billing.subscription.chooseTitle': 'Choose a Plan',
-  'settings.billing.subscription.cryptoDesc': 'Pay with cryptocurrency via our payment gateway.',
-  'settings.billing.subscription.cryptoQuestion': 'Want to pay with crypto?',
   'settings.billing.subscription.current': 'Current',
   'settings.billing.subscription.currentPlan': 'Current plan',
   'settings.billing.subscription.monthly': 'Monthly',
@@ -5596,50 +5534,6 @@ const en: TranslationMap = {
   'settings.appearanceDesc': 'Pick light, dark, or match your system theme',
   'settings.mascot': 'Mascot',
   'settings.mascotDesc': 'Pick the mascot color used across the app',
-  // Settings > Account > Wallet Balances
-  'pages.settings.account.walletBalances': 'Wallet Balances',
-  'pages.settings.account.walletBalancesDesc': 'View multi-chain balances for your local wallet',
-  // WalletBalancesPanel strings
-  'walletBalances.title': 'Wallet Balances',
-  'walletBalances.refresh': 'Refresh',
-  'walletBalances.loading': 'Loading balances…',
-  'walletBalances.retry': 'Retry',
-  'walletBalances.emptyState': 'No wallet accounts yet — set up a wallet in Recovery Phrase.',
-  'walletBalances.copyAddress': 'Copy address',
-  'walletBalances.providerMissing': 'provider unavailable',
-  'walletBalances.rawBalance': 'Raw: {raw}',
-  'walletBalances.errorGeneric':
-    'Unable to load wallet balances. Set up your wallet in Recovery Phrase and try again.',
-  'walletBalances.setupHint':
-    "Your recovery phrase isn't set up yet. Set it up to enable your wallet and see live balances.",
-  'walletBalances.setupCta': 'Set up recovery phrase',
-  'walletBalances.notSetUp': 'Not set up',
-  'walletBalances.send': 'Send',
-  'walletBalances.receive': 'Receive',
-  // Receive modal
-  'walletReceive.scanHint': 'Scan this code or copy the address below to receive funds.',
-  'walletReceive.addressLabel': '{network} address',
-  'walletReceive.onlyChainWarning':
-    'Only send {network} assets to this address. Sending assets from another network may result in permanent loss.',
-  // Send modal
-  'walletSend.available': 'Available',
-  'walletSend.recipient': 'Recipient address',
-  'walletSend.recipientPlaceholder': 'Paste the destination address',
-  'walletSend.recipientRequired': 'Enter a recipient address',
-  'walletSend.amount': 'Amount',
-  'walletSend.invalidAmount': 'Enter a valid amount',
-  'walletSend.review': 'Review',
-  'walletSend.preparing': 'Preparing…',
-  'walletSend.confirmHint':
-    'Review the details below. Signing happens locally — nothing is broadcast until you confirm.',
-  'walletSend.estimatedFee': 'Estimated network fee',
-  'walletSend.confirmSend': 'Confirm & send',
-  'walletSend.sending': 'Sending…',
-  'walletSend.sent': 'Transaction sent',
-  'walletSend.txHash': 'Transaction hash',
-  'walletSend.viewExplorer': 'View on explorer',
-  'walletSend.done': 'Done',
-  'walletSend.genericError': 'Could not complete the transfer. Please try again.',
   // Task sources (#task-sources)
   'settings.taskSources.title': 'Task Sources',
   'settings.integrations.title': 'Integrations',
@@ -5840,10 +5734,6 @@ const en: TranslationMap = {
   'settings.agentsSection.description':
     'Manage your agents, their autonomy, and what they can access on this computer.',
   'settings.agentsSection.menuDesc': 'Registry, autonomy & OS access',
-  'settings.cryptoSection.title': 'Crypto',
-  'settings.cryptoSection.description':
-    'Manage your recovery phrase and view balances across your wallet accounts.',
-  'settings.cryptoSection.menuDesc': 'Recovery phrase & wallet balances',
   'settings.notificationsHub.title': 'Notifications',
   'settings.notificationsHub.description':
     'View your alerts inbox and manage notification preferences and routing.',
