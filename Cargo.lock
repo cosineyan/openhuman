@@ -5225,7 +5225,6 @@ dependencies = [
  "tar",
  "tempfile",
  "thiserror 2.0.18",
- "tinyplace",
  "tokio",
  "tokio-rustls",
  "tokio-stream",
@@ -7910,35 +7909,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c9d3793400a45f954c52e73d068316d76b6f4e36977e3fcebb13a2721e80237"
 dependencies = [
  "crunchy",
-]
-
-[[package]]
-name = "tinyplace"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "abf658d89a0e986a4dc5cabfbd005ba63455c70348aca60d836e333010acc9e2"
-dependencies = [
- "aes",
- "async-trait",
- "base64 0.22.1",
- "bs58",
- "cbc",
- "chrono",
- "curve25519-dalek",
- "ed25519-dalek",
- "futures-util",
- "hkdf",
- "hmac 0.12.1",
- "rand 0.8.6",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "thiserror 2.0.18",
- "tokio",
- "tokio-tungstenite 0.24.0",
- "url",
- "x25519-dalek",
 ]
 
 [[package]]
