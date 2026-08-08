@@ -11,7 +11,6 @@ import { PersistGate } from 'redux-persist/integration/react';
 
 import AppRoutes from './AppRoutes';
 import AppBackground from './components/AppBackground';
-import AppUpdatePrompt from './components/AppUpdatePrompt';
 import BootCheckGate from './components/BootCheckGate/BootCheckGate';
 import CommandProvider from './components/commands/CommandProvider';
 import ServiceBlockingGate from './components/daemon/ServiceBlockingGate';
@@ -120,7 +119,6 @@ function App() {
                             {!onMobile && <DictationHotkeyManager />}
                             {!onMobile && <PttHotkeyManager />}
                             {!onMobile && <LocalAIDownloadSnackbar />}
-                            {!onMobile && <AppUpdatePrompt />}
                             <KeyringConsentOverlay />
                             <SecretPromptDialog />
                           </ServiceBlockingGate>
