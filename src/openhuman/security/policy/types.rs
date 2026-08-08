@@ -185,7 +185,6 @@ pub(super) const WORKSPACE_INTERNAL_DIRS: &[&str] = &[
     "redirect_links",
     "codegraph",
     ".openhuman",
-    "tinyplace", // Signal session store + future tinyplace state; agent-write forbidden
 ];
 
 /// Files directly under `workspace_dir` that hold secrets or persona config

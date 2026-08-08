@@ -13,24 +13,17 @@ function tabButton(label: string): HTMLButtonElement {
 }
 
 describe('SidebarNav active matching', () => {
-  it('keeps Tiny.Place active on its redirected /agent-world/explore route', () => {
-    // The tab links to /agent-world but the index immediately redirects to
-    // /agent-world/explore — an exact match would never light up.
-    renderWithProviders(<SidebarNav />, { initialEntries: ['/agent-world/explore'] });
+  it('keeps Chat active on any nested /chat route', () => {
+    // /chat matches by prefix so deep links keep the tab highlighted.
+    renderWithProviders(<SidebarNav />, { initialEntries: ['/chat/some-thread'] });
 
-    expect(tabButton('Tiny.Place')).toHaveAttribute('aria-current', 'page');
-  });
-
-  it('keeps Tiny.Place active on a nested section route', () => {
-    renderWithProviders(<SidebarNav />, { initialEntries: ['/agent-world/messaging'] });
-
-    expect(tabButton('Tiny.Place')).toHaveAttribute('aria-current', 'page');
-  });
-
-  it('does not mark Tiny.Place active on an unrelated route', () => {
-    renderWithProviders(<SidebarNav />, { initialEntries: ['/chat'] });
-
-    expect(tabButton('Tiny.Place')).not.toHaveAttribute('aria-current');
     expect(tabButton('Chat')).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('does not mark Chat active on an unrelated route', () => {
+    renderWithProviders(<SidebarNav />, { initialEntries: ['/brain'] });
+
+    expect(tabButton('Chat')).not.toHaveAttribute('aria-current');
+    expect(tabButton('Brain')).toHaveAttribute('aria-current', 'page');
   });
 });

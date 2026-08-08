@@ -27,7 +27,6 @@ describe('CollapsedNavRail', () => {
       'nav.chat',
       'nav.human',
       'nav.brain',
-      'nav.agentWorld',
       'nav.connections',
     ]) {
       expect(screen.getByRole('button', { name: key })).toBeInTheDocument();
@@ -68,8 +67,8 @@ describe('CollapsedNavRail', () => {
   });
 
   it('marks the active destination with aria-current', () => {
-    renderWithProviders(<CollapsedNavRail />, { initialEntries: ['/agent-world'] });
-    expect(screen.getByRole('button', { name: 'nav.agentWorld' })).toHaveAttribute(
+    renderWithProviders(<CollapsedNavRail />, { initialEntries: ['/connections'] });
+    expect(screen.getByRole('button', { name: 'nav.connections' })).toHaveAttribute(
       'aria-current',
       'page'
     );
