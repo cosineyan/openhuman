@@ -10,9 +10,8 @@ pub mod search;
 pub use browser::{BrowserComputerUseConfig, BrowserConfig};
 pub use http::{CurlConfig, HttpRequestConfig};
 pub use integrations::{
-    ComposioConfig, ComputerControlConfig, IntegrationToggle, IntegrationsConfig,
-    PolymarketClobCredentials, PolymarketConfig, SecretsConfig, COMPOSIO_MODE_BACKEND,
-    COMPOSIO_MODE_DIRECT, INTEGRATION_MODE_BYO, INTEGRATION_MODE_MANAGED,
+    ComposioConfig, ComputerControlConfig, IntegrationToggle, IntegrationsConfig, SecretsConfig,
+    COMPOSIO_MODE_BACKEND, COMPOSIO_MODE_DIRECT, INTEGRATION_MODE_BYO, INTEGRATION_MODE_MANAGED,
 };
 pub use mcp::{
     GitbooksConfig, HttpHeader, McpAuthConfig, McpClientConfig, McpClientIdentityConfig,

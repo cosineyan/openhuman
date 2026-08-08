@@ -160,6 +160,28 @@ pub fn add_profile(
         path,
     };
     registry.profiles.push(profile.clone());
+
+    // Keep the fallback ladder (and, transitively, the concurrency-limits UI
+    // which renders one row per ladder rung) in sync with the profile set.
+    //
+    // When the stored ladder is empty, `get_ladder`/`resolve_fallback_chain`
+    // auto-prefill from ALL profiles, so the new profile already shows up — do
+    // nothing. When it is non-empty (the user has customized order), that
+    // customization is authoritative and no longer auto-derives, so append the
+    // new profile's available tiers to the end (in TIER_ORDER). Without this,
+    // a profile added after any ladder edit never appears in either section.
+    if !registry.ladder.is_empty() {
+        let appended = profile_steps(&profile);
+        if !appended.is_empty() {
+            log::debug!(
+                "[claude-profiles] appending {} ladder step(s) for new profile {}",
+                appended.len(),
+                profile.id
+            );
+            registry.ladder.extend(appended);
+        }
+    }
+
     store::save(&workspace, &registry).map_err(|e| format!("failed to save registry: {e}"))?;
     Ok(enrich(profile))
 }
@@ -210,23 +232,27 @@ pub fn resolve_model(models: &ProfileModels, requested: &str) -> Option<String> 
 
 // --- Fallback ladder --------------------------------------------------------
 
+/// Build the ladder steps for a single profile: every available tier, in
+/// TIER_ORDER. A profile whose settings.json is missing/unreadable yields no
+/// steps. Shared by [`autofill_steps`] and the append-on-add path so both use
+/// identical ordering.
+fn profile_steps(profile: &ClaudeProfile) -> Vec<LadderStep> {
+    let models = parse_profile_models(&PathBuf::from(&profile.path));
+    TIER_ORDER
+        .iter()
+        .filter(|tier| tier_model(&models, tier).is_some())
+        .map(|tier| LadderStep {
+            profile_id: profile.id.clone(),
+            tier: tier.to_string(),
+        })
+        .collect()
+}
+
 /// Auto-prefill a ladder from the registered profiles: every available tier of
 /// every profile, in registration order then TIER_ORDER. Used when the stored
 /// ladder is empty.
 fn autofill_steps(profiles: &[ClaudeProfile]) -> Vec<LadderStep> {
-    let mut steps = Vec::new();
-    for p in profiles {
-        let models = parse_profile_models(&PathBuf::from(&p.path));
-        for tier in TIER_ORDER {
-            if tier_model(&models, tier).is_some() {
-                steps.push(LadderStep {
-                    profile_id: p.id.clone(),
-                    tier: tier.to_string(),
-                });
-            }
-        }
-    }
-    steps
+    profiles.iter().flat_map(profile_steps).collect()
 }
 
 /// Resolve a list of ladder steps into display/execution form (profile name +
@@ -586,6 +612,68 @@ mod tests {
         assert_eq!(steps.len(), 2);
         assert_eq!(steps[0].tier, "opus");
         assert_eq!(steps[1].tier, "haiku");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn profile_steps_lists_available_tiers_in_order() {
+        let dir = std::env::temp_dir().join("oh_cp_profile_steps_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = write_settings(
+            &dir,
+            "settings.json.x",
+            r#"{"env":{"ANTHROPIC_DEFAULT_SONNET_MODEL":"s","ANTHROPIC_MODEL":"d"}}"#,
+        );
+        let profile = ClaudeProfile {
+            id: "p1".into(),
+            name: "X".into(),
+            path: path.to_string_lossy().to_string(),
+        };
+        let steps = profile_steps(&profile);
+        // sonnet + default present, opus/haiku absent → [sonnet, default] in TIER_ORDER.
+        assert_eq!(
+            steps.iter().map(|s| s.tier.as_str()).collect::<Vec<_>>(),
+            vec!["sonnet", "default"]
+        );
+        assert!(steps.iter().all(|s| s.profile_id == "p1"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn add_profile_appends_tiers_to_nonempty_ladder() {
+        // A non-empty ladder is authoritative (no longer auto-derives), so a
+        // newly added profile must have its tiers appended to the end — else it
+        // vanishes from both the ladder and the concurrency-limits UI.
+        let dir = std::env::temp_dir().join("oh_cp_add_appends_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = write_settings(
+            &dir,
+            "settings.json.new",
+            r#"{"env":{"ANTHROPIC_DEFAULT_OPUS_MODEL":"o","ANTHROPIC_DEFAULT_SONNET_MODEL":"s"}}"#,
+        );
+        let new_profile = ClaudeProfile {
+            id: "new".into(),
+            name: "New".into(),
+            path: path.to_string_lossy().to_string(),
+        };
+
+        // Mirror the add_profile ladder-append branch on a customized ladder.
+        let mut ladder = vec![LadderStep {
+            profile_id: "existing".into(),
+            tier: "opus".into(),
+        }];
+        assert!(!ladder.is_empty());
+        ladder.extend(profile_steps(&new_profile));
+
+        assert_eq!(ladder.len(), 3);
+        assert_eq!(
+            (ladder[1].profile_id.as_str(), ladder[1].tier.as_str()),
+            ("new", "opus")
+        );
+        assert_eq!(
+            (ladder[2].profile_id.as_str(), ladder[2].tier.as_str()),
+            ("new", "sonnet")
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

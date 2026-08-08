@@ -83,18 +83,6 @@ const COMPOSIO_DIRECT_CREDENTIALS: Option<CapabilityPrivacy> = Some(CapabilityPr
     destinations: &["Composio (backend.composio.dev)"],
 });
 
-const POLYMARKET_MARKET_DATA: Option<CapabilityPrivacy> = Some(CapabilityPrivacy {
-    leaves_device: true,
-    data_kind: PrivacyDataKind::Metadata,
-    destinations: &["Polymarket Gamma API", "Polymarket CLOB API"],
-});
-
-const POLYMARKET_TRADING_DATA: Option<CapabilityPrivacy> = Some(CapabilityPrivacy {
-    leaves_device: true,
-    data_kind: PrivacyDataKind::Derived,
-    destinations: &["Polymarket CLOB API"],
-});
-
 // "Test Connection" on the Embeddings settings panel routes a small probe
 // payload to *whichever provider the user has selected* — not just the
 // managed cloud default. `DERIVED_TO_BACKEND` only enumerates the managed
@@ -750,76 +738,6 @@ pub(super) const CAPABILITIES: &[Capability] = &[
         privacy: LOCAL_CREDENTIALS,
     },
     Capability {
-        id: "workflows.connect_web3_wallet",
-        name: "Connect Web3 Wallet",
-        domain: "workflows",
-        category: CapabilityCategory::Workflows,
-        description: "Set up local EVM, BTC, Solana, and Tron wallet identities from one recovery phrase.",
-        how_to: "Settings > Crypto > Recovery Phrase or Settings > Connections",
-        status: CapabilityStatus::Beta,
-        privacy: LOCAL_CREDENTIALS,
-    },
-    Capability {
-        id: "workflows.wallet_execution",
-        name: "Wallet Execution Tools",
-        domain: "wallet",
-        category: CapabilityCategory::Workflows,
-        description: "Read addresses and balances, prepare/confirm/execute native + token transfers (ERC20/SPL/TRC20/BEP20), and inspect transactions (status, receipt, lookup) across the connected wallet (EVM, BTC, Solana, Tron). Quote-first; signing stays local.",
-        how_to: "Use wallet.* RPC methods (balances, prepare_transfer, execute_prepared, tx_status, tx_receipt, lookup_tx) via the agent or core_rpc_relay, or via Settings > Crypto > Wallet Balances.",
-        status: CapabilityStatus::Beta,
-        privacy: LOCAL_CREDENTIALS,
-    },
-    Capability {
-        id: "workflows.web3_defi",
-        name: "Web3 Swaps & Bridges",
-        domain: "web3",
-        category: CapabilityCategory::Workflows,
-        description: "Quote and execute cross-chain swaps and bridges (deBridge) plus generic EVM dapp contract calls, built on the local wallet's signing. EVM/Solana(/BTC); signing stays local.",
-        how_to: "Use web3_swap.* / web3_bridge.* / web3_dapp.* RPC methods (quote/execute, web3_swap.routes) via the agent or core_rpc_relay.",
-        status: CapabilityStatus::Beta,
-        privacy: LOCAL_CREDENTIALS,
-    },
-    Capability {
-        id: "workflows.x402_payments",
-        name: "x402 Machine Payments",
-        domain: "x402",
-        category: CapabilityCategory::Workflows,
-        description: "Automatic HTTP 402 payment handling for machine-payable APIs via the x402 protocol. When an API returns 402 Payment Required, the agent pays with USDC on Solana using the local wallet and retries. Budget enforcement with per-request, daily, and monthly caps.",
-        how_to: "Use x402.* RPC methods (get_summary, list_payments, update_budget) to manage spending. Payments happen automatically when the http_request tool encounters a 402 with a PAYMENT-REQUIRED header.",
-        status: CapabilityStatus::Beta,
-        privacy: LOCAL_CREDENTIALS,
-    },
-    Capability {
-        id: "workflows.connect_crypto_exchange",
-        name: "Connect Crypto Exchange",
-        domain: "workflows",
-        category: CapabilityCategory::Workflows,
-        description: "Connect supported exchanges for trading and portfolio workflows.",
-        how_to: "Settings > Connections",
-        status: CapabilityStatus::ComingSoon,
-        privacy: None,
-    },
-    Capability {
-        id: "workflows.polymarket_readonly",
-        name: "Polymarket Read-Only Browse",
-        domain: "workflows",
-        category: CapabilityCategory::Workflows,
-        description: "Browse Polymarket markets, events, orderbooks, and prices via Gamma + CLOB APIs.",
-        how_to: "Conversations > ask the assistant to browse Polymarket (tool: polymarket).",
-        status: CapabilityStatus::Beta,
-        privacy: POLYMARKET_MARKET_DATA,
-    },
-    Capability {
-        id: "workflows.polymarket_trading",
-        name: "Polymarket Trading",
-        domain: "workflows",
-        category: CapabilityCategory::Workflows,
-        description: "Place and cancel Polymarket limit orders with EIP-712 signing, authenticated account reads, and explicit approval for writes.",
-        how_to: "Conversations > ask the assistant to trade on Polymarket (tool: polymarket; set `approved=true` for write actions).",
-        status: CapabilityStatus::Beta,
-        privacy: POLYMARKET_TRADING_DATA,
-    },
-    Capability {
         id: "local_ai.download_model",
         name: "Download Local Models",
         domain: "local_ai",
@@ -1433,21 +1351,6 @@ pub(super) const CAPABILITIES: &[Capability] = &[
         how_to: "Automatic after onboarding (runs daily at 7 AM). Adjust schedule via Settings > Cron Jobs.",
         status: CapabilityStatus::Beta,
         privacy: None,
-    },
-    Capability {
-        id: "automation.crypto_agent",
-        name: "Crypto Agent",
-        domain: "automation",
-        category: CapabilityCategory::Automation,
-        description: "Dedicated wallet & market specialist sub-agent. The orchestrator \
-                      routes transfers, swaps, contract calls, balance lookups, and \
-                      exchange trading requests here. The agent enforces a read → \
-                      simulate → confirm → execute flow, refuses to fabricate chain ids \
-                      or token addresses, and gates every write call behind explicit \
-                      user confirmation.",
-        how_to: "Automatic — invoked by the orchestrator when a crypto wallet or market action is requested. Connect a wallet via Settings > Recovery Phrase first.",
-        status: CapabilityStatus::Beta,
-        privacy: LOCAL_CREDENTIALS,
     },
     // ── Update ──────────────────────────────────────────────────────────────
     // ── Meet ────────────────────────────────────────────────────────────────

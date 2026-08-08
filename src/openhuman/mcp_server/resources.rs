@@ -74,18 +74,6 @@ const RESOURCE_CATALOG: &[PromptResource] = &[
         content: include_str!("../agent_registry/agents/integrations_agent/prompt.md"),
     },
     PromptResource {
-        uri: "openhuman://prompts/agents/crypto_agent",
-        name: "crypto_agent",
-        description: "Specialist worker for wallet and on-chain operations.",
-        content: include_str!("../agent_registry/agents/crypto_agent/prompt.md"),
-    },
-    PromptResource {
-        uri: "openhuman://prompts/agents/markets_agent",
-        name: "markets_agent",
-        description: "Specialist worker for prediction-market venues (Polymarket, Kalshi).",
-        content: include_str!("../agent_registry/agents/markets_agent/prompt.md"),
-    },
-    PromptResource {
         uri: "openhuman://prompts/agents/tools_agent",
         name: "tools_agent",
         description: "Generalist worker with access to the full tool surface.",

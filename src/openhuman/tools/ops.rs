@@ -238,14 +238,6 @@ pub fn all_tools_with_runtime(
         Box::new(crate::openhuman::projects::tools::ProjectsMoveTaskTool::new(config.clone())),
         Box::new(crate::openhuman::projects::tools::ProjectsCompleteTaskTool::new(config.clone())),
         Box::new(crate::openhuman::projects::tools::ProjectsListTaskRunsTool::new(config.clone())),
-        // Wallet tools — expose wallet operations to the agent tool-call pipeline
-        // so the crypto sub-agent can prepare transfers, check status, etc.
-        Box::new(WalletStatusTool::new()),
-        Box::new(WalletChainStatusTool::new()),
-        Box::new(WalletPrepareTransferTool::new()),
-        Box::new(WalletTxStatusTool::new()),
-        Box::new(WalletTxReceiptTool::new()),
-        Box::new(WalletLookupTxTool::new()),
         Box::new(MemoryStoreTool::new(memory.clone(), security.clone())),
         Box::new(MemoryRecallTool::new(memory.clone())),
         Box::new(MemoryForgetTool::new(memory.clone(), security.clone())),
@@ -584,13 +576,6 @@ pub fn all_tools_with_runtime(
         http_config.timeout_secs,
     )));
 
-    // x402 — dedicated tool for making paid HTTP requests to x402-enabled
-    // APIs (Base USDC / Solana USDC). Handles the 402 challenge, EIP-3009
-    // or SPL payment signing, and ledger recording.
-    tools.push(Box::new(
-        crate::openhuman::x402::tools::X402RequestTool::new(),
-    ));
-
     // Coding-harness baseline `web_fetch` (issue #1205) — single-purpose
     // GET-and-read primitive that reuses the same allowed-domains gate
     // as `http_request`. Use this for docs/READMEs; reach for
@@ -680,11 +665,6 @@ pub fn all_tools_with_runtime(
     }
 
     tools.extend(crate::openhuman::search::build_search_tools(root_config));
-
-    // High-level web3 tools (swaps / bridges / dapp calls) built on the wallet.
-    // They call the backend deBridge proxy per-invocation and error gracefully
-    // when the user is not signed in, so they register unconditionally.
-    tools.extend(crate::openhuman::web3::all_web3_agent_tools());
 
     // Managed Node.js exec tools — gated on `root_config.node.enabled`.
     // Both share the same `NodeBootstrap` as ShellTool so the download +
@@ -832,16 +812,6 @@ pub fn all_tools_with_runtime(
         tracing::debug!(
             "[integrations] build_client returned None — integration tools not registered"
         );
-    }
-
-    if root_config.integrations.polymarket.enabled {
-        tools.push(Box::new(PolymarketTool::new(
-            &root_config.integrations.polymarket,
-            security.clone(),
-        )));
-        tracing::debug!("[integrations] registered polymarket tool (read + trading)");
-    } else {
-        tracing::debug!("[integrations] polymarket disabled — skipping");
     }
 
     // Coding-harness `lsp` tool (issue #1205) — capability-gated by the
